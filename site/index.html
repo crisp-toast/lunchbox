@@ -372,9 +372,9 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       <div class="amount"><strong>$14.99</strong><span>USD, one-time</span></div>
       <span class="lifetime">Lifetime updates included</span>
       <ul class="checks">
-        <li>Automatic tiling, spotlight and three instant spaces</li>
-        <li>The ⇧Space launcher for apps, files and new windows</li>
-        <li>Every shortcut searchable with Left ⌘⇧Space</li>
+        <li>Automatic tiling, Focus, and three instant Spaces</li>
+        <li>Summon (⇧Space) for apps, files, the web and new windows</li>
+        <li>The Cheat Sheet: every shortcut, searchable</li>
         <li>Multi-display support, or main display only</li>
         <li>All future updates, free, forever</li>
       </ul>
@@ -387,9 +387,10 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   <section class="faq" id="faq">
     <h2>Questions</h2>
     <div>
-      <details><summary>What does Tessel need permission for?</summary><p>Accessibility, so it can move and resize other apps' windows and listen for its shortcuts. Screen Recording is optional: allow it and the spotlight shelf shows live previews of your windows instead of app icons.</p></details>
-      <details><summary>Will it take over my keyboard?</summary><p>Only the left ⌘ key's arrow shortcuts, plus the few combinations listed in the help. Right ⌘ keeps doing what it always did, so ⌘← still jumps to the start of a line. Esc only goes to Tessel while spotlight is on.</p></details>
-      <details><summary>How do the three spaces work?</summary><p>On first launch Tessel asks you to press three keys you rarely use, like Page Up, Page Down and End. ⌘ plus one of them switches spaces instantly; add ⇧ to take the focused window with you.</p></details>
+      <details><summary>What does Tessel need permission for?</summary><p>Accessibility, so it can move and resize other apps' windows and listen for its shortcuts. Screen Recording is optional: allow it and the Shelf in Focus shows live previews of your windows instead of app icons.</p></details>
+      <details><summary>Will it take over my keyboard?</summary><p>Only the left ⌘ key's arrow shortcuts, plus the few combinations listed in the help. Right ⌘ keeps doing what it always did, so ⌘← still jumps to the start of a line. Esc only goes to Tessel while Focus is on.</p></details>
+      <details><summary>How do I set it up?</summary><p>Tessel walks you through it the first time it opens: allow Accessibility, tap the three keys you want for your Spaces, and try the essentials once. It takes about a minute, and you can run it again from the menu bar.</p></details>
+      <details><summary>How do the three Spaces work?</summary><p>During setup you tap three keys you never use, ideally out of the way on the right, like Page Up, Page Down and End. ⌘ plus one of them switches Spaces instantly; add ⇧ to take the focused window with you. Stash (⌘⇧H) sends a window to Space 3 without leaving.</p></details>
       <details><summary>Does it work with more than one display?</summary><p>Yes. Each display has its own layout and focus crosses between them at the edges. If a second display is a dummy plug or you only want your main screen tiled, turn off Use All Displays in Settings.</p></details>
       <details><summary>What does "lifetime updates" mean?</summary><p>You buy Tessel once and every future version is included. No upgrade fees, no subscription, no catch.</p></details>
     </div>
@@ -498,16 +499,16 @@ const CHECKOUT_URL = "";
     const L = step.launcher;
     mac.launcher.hidden = !L;
     if (L) {
-      const rows = (L.rows || []).map((r, i) => `<div class="row ${i === (L.sel ?? 0) ? "sel" : ""}"><span class="ic" style="${r.ic || ""}"></span><span class="t">${r.t}</span><span class="mini-kc ret">↩</span><span class="s">${r.s}</span>${r.sub ? `<div class="sub"><span>＋ ${r.sub}</span><span class="mini-kc">⇧↩</span></div>` : ""}</div>`).join("");
-      mac.launcher.innerHTML = `<div class="q">${L.q ? L.q : '<span class="ph">Open an app or file</span>'}<span class="caret"></span></div>${rows}`;
+      const rows = (L.rows || []).map((r, i) => `<div class="row ${i === (L.sel ?? 0) ? "sel" : ""}"><span class="ic" style="${r.ic || ""}"></span><span class="t">${r.t}</span><span class="mini-kc ret">↩</span><span class="s">${r.s}</span>${r.sub ? `<div class="sub"><span>＋ ${r.sub}</span><span class="mini-kc">⌘↩</span></div>` : ""}</div>`).join("");
+      mac.launcher.innerHTML = `<div class="q">${L.q ? L.q : '<span class="ph">Summon an app, file or website</span>'}<span class="caret"></span></div>${rows}`;
     }
     const H = step.help;
     mac.help.hidden = !H;
     if (H) {
       const all = [
-        ["WINDOWS", [["Left ⌘", "←→"], "Focus the next window"], [["Left ⌘⇧", "←→"], "Move the window"], [["Left ⌘⇧", "F"], "Spotlight"], [["Left ⌘⇧", "0"], "Normalize"]],
-        ["SPACES", [["⌘", "Page Up"], "Go to space 1"], [["⌘⇧", "Page Down"], "Move the window to space 2"], [["Left ⌘⇧", "H"], "Hide in space 3"]],
-        ["LAUNCHER", [["⇧", "Space"], "Open the launcher"]],
+        ["WINDOWS", [["Left ⌘", "←→"], "Focus the next window"], [["Left ⌘⇧", "←→"], "Move the window"], [["Left ⌘⇧", "F"], "Focus"], [["Left ⌘⇧", "0"], "Tidy"]],
+        ["SPACES", [["⌘", "Page Up"], "Go to space 1"], [["⌘⇧", "Page Down"], "Move the window to space 2"], [["Left ⌘⇧", "H"], "Stash in Space 3"]],
+        ["SUMMON", [["⇧", "Space"], "Summon an app, file or website"]],
       ];
       const q = (H.q || "").toLowerCase();
       let html = `<div class="q">${H.q || '<span class="ph">Search shortcuts</span>'}<span class="caret"></span></div>`;
@@ -546,33 +547,33 @@ const CHECKOUT_URL = "";
       { win: { A: R.c1, B: R.c2t, D: R.c2b, C: R.c3 }, focus: "D", keys: ["Left ⌘", "⇧", "→"], cap: "Any layout is a few presses away." },
       { win: { A: R.c1, D: R.c2t, B: R.c2b, C: R.c3 }, focus: "D", keys: ["Left ⌘", "⇧", "↑"], cap: "↑ and ↓ swap places in a stack." },
     ]},
-    { title: "Resize", hint: "left ⌘⇧ + − / 0", steps: [
+    { title: "Resize & Tidy", hint: "left ⌘⇧ + − / 0", steps: [
       { win: four, focus: "B", keys: [], cap: "Give the focused window more room when it needs it." },
       { win: { A: [1.5, 2, 24, 96], B: [27, 2, 44, 96], C: [72.5, 2, 26, 47.25], D: [72.5, 50.75, 26, 47.25] }, focus: "B", keys: ["Left ⌘", "⇧", "+"], cap: "Its neighbors make space." },
       { win: { A: [1.5, 2, 19, 96], B: [22, 2, 54, 96], C: [77.5, 2, 21, 47.25], D: [77.5, 50.75, 21, 47.25] }, focus: "B", keys: ["Left ⌘", "⇧", "+"], cap: "A bit more." },
-      { win: four, focus: "B", keys: ["Left ⌘", "⇧", "0"], cap: "Normalize puts every split back to even." },
+      { win: four, focus: "B", keys: ["Left ⌘", "⇧", "0"], cap: "Tidy puts every split back to even." },
     ]},
-    { title: "Spotlight", hint: "left ⌘⇧F, Esc", steps: [
+    { title: "Focus", hint: "left ⌘⇧F, Esc", steps: [
       { win: four, focus: "A", keys: [], cap: "Need to concentrate on one window?" },
-      { win: { A: R.single, B: shelf(R.s1), C: shelf(R.s2), D: shelf(R.s3) }, focus: "A", keys: ["Left ⌘", "⇧", "F"], cap: "It takes the center. The rest wait on a tilted shelf." },
-      { win: four, focus: "A", keys: ["Esc"], cap: "Esc, ⌘⇧F again, or a click on any card brings it all back." },
+      { win: { A: R.single, B: shelf(R.s1), C: shelf(R.s2), D: shelf(R.s3) }, focus: "A", keys: ["Left ⌘", "⇧", "F"], cap: "It takes the center. The rest wait on the Shelf, tilted out of the way." },
+      { win: four, focus: "A", keys: ["Esc"], cap: "Esc, ⌘⇧F again, or a click on any card on the Shelf brings it all back." },
     ]},
     { title: "Three spaces", hint: "⌘ + your space keys", steps: [
       { win: four, focus: "C", space: 1, keys: [], cap: "Pick three keys you never use, like Page Up, Page Down and End." },
       { win: { A: away(R.c1), B: away(R.c2), C: away(R.c3t), D: away(R.c3b), E: R.single }, focus: "E", space: 2, keys: ["⌘", "Page Down"], cap: "⌘ plus a space key switches instantly. No slide, no wait." },
       { win: four, focus: "C", space: 1, keys: ["⌘", "Page Up"], cap: "Back again, focused on the rightmost window." },
       { win: { A: away(R.c1), B: away(R.c2), D: away(R.c3b), E: R.halfL, C: R.halfR }, focus: "C", space: 2, keys: ["⌘", "⇧", "Page Down"], cap: "Add ⇧ and the window comes with you." },
-      { win: { A: away(R.c1), B: away(R.c2), D: away(R.c3b), E: R.single }, focus: "E", space: 2, keys: ["Left ⌘", "⇧", "H"], cap: "⌘⇧H tucks a window away in space 3." },
+      { win: { A: away(R.c1), B: away(R.c2), D: away(R.c3b), E: R.single }, focus: "E", space: 2, keys: ["Left ⌘", "⇧", "H"], cap: "Stash (⌘⇧H) tucks a window away in Space 3." },
     ]},
-    { title: "Launcher", hint: "⇧ Space", steps: [
+    { title: "Summon", hint: "⇧ Space", steps: [
       { win: four, focus: "B", keys: [], cap: "Faster than Spotlight for the apps you use every day." },
-      { win: four, focus: "B", keys: ["⇧", "Space"], launcher: { q: "", rows: [] }, cap: "Shift, then Space. It's there instantly." },
-      { win: four, focus: "B", keys: ["A", "R"], launcher: { q: "ar", rows: arcRows, sel: 0 }, cap: "Apps first. An open app offers two choices." },
-      { win: { A: R.c1t, F: R.c1b, B: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: ["⇧", "↩"], cap: "↩ goes to its window. ⇧↩ opens a new one, tiled and focused." },
+      { win: four, focus: "B", keys: ["⇧", "Space"], launcher: { q: "", rows: [] }, cap: "Shift, then Space, and Summon is there instantly." },
+      { win: four, focus: "B", keys: ["A", "R"], launcher: { q: "ar", rows: arcRows, sel: 0 }, cap: "Apps first, then files, then the web. An open app offers two choices." },
+      { win: { A: R.c1t, F: R.c1b, B: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: ["⌘", "↩"], cap: "↩ goes to its window. ⌘↩ opens a new one, tiled and focused." },
     ]},
-    { title: "Every shortcut", hint: "left ⌘⇧ Space", steps: [
+    { title: "Cheat Sheet", hint: "left ⌘⇧ Space", steps: [
       { win: four, focus: "C", keys: [], cap: "Forget a shortcut? There's one to show them all." },
-      { win: four, focus: "C", keys: ["Left ⌘", "⇧", "Space"], help: { q: "" }, cap: "Every shortcut, grouped." },
+      { win: four, focus: "C", keys: ["Left ⌘", "⇧", "Space"], help: { q: "" }, cap: "The Cheat Sheet: every shortcut, grouped." },
       { win: four, focus: "C", keys: ["M", "O", "V", "E"], help: { q: "move" }, cap: "Type to find one." },
       { win: four, focus: "C", keys: ["Esc"], cap: "Esc to close. Back to work." },
     ]},
