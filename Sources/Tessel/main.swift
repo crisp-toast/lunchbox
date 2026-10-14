@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 import TesselCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -29,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if AXIsProcessTrustedWithOptions(options) {
             begin()
         } else {
-            log.info("waiting for Accessibility access")
+            log.notice("waiting for Accessibility access")
             menu.refresh()
             trustPoll = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
                 guard AXIsProcessTrusted() else { return }
@@ -53,6 +54,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tap.enabled = true
         tiler.start()
         menu.refresh()
+        // Start at login by default, once; the menu can turn it off and that sticks.
+        if !UserDefaults.standard.bool(forKey: "loginItemConfigured") {
+            do {
+                try SMAppService.mainApp.register()
+                UserDefaults.standard.set(true, forKey: "loginItemConfigured")
+            } catch {
+                log.error("launch at login: \(error.localizedDescription, privacy: .public)")
+            }
+        }
         if tap.spaceKeys.count != 3 {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.teacher.begin() }
         }
@@ -72,7 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func saveSpaceKeys(_ keys: [Int64]) {
         tap.spaceKeys = keys
         UserDefaults.standard.set(keys.map(Int.init), forKey: "spaceKeys")
-        log.info("space keys set to \(keys.map(String.init).joined(separator: ","), privacy: .public)")
+        log.notice("space keys set to \(keys.map(String.init).joined(separator: ","), privacy: .public)")
     }
 
     static func openAccessibilitySettings() {

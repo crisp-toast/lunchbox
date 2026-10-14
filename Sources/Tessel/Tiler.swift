@@ -119,7 +119,7 @@ final class Tiler {
 
         for app in NSWorkspace.shared.runningApplications { track(app, scan: false) }
         initialScan()
-        log.info("started with \(self.displays.count) displays, space \(self.currentSpace + 1)")
+        log.notice("started with \(self.displays.count) displays, space \(self.currentSpace + 1)")
     }
 
     /// Stops managing windows and brings every parked window back into view.
@@ -332,7 +332,7 @@ final class Tiler {
         let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
         layout.insert(window.id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
         spaces[space][display.uuid] = layout
-        log.info("tiling window \(window.id) (\(window.handle.app.bundleID ?? "?")) in space \(space + 1)")
+        log.notice("tiling window \(window.id) (\(window.handle.app.bundleID ?? "?")) in space \(space + 1)")
     }
 
     private func forget(_ id: CGWindowID) {
@@ -603,7 +603,7 @@ final class Tiler {
         case .sendToSpace(let i): send(toSpace: i)
         }
         let ms = (CACurrentMediaTime() - t0) * 1000
-        log.info("\(String(describing: action), privacy: .public) handled in \(ms, format: .fixed(precision: 2)) ms")
+        log.notice("\(String(describing: action), privacy: .public) handled in \(ms, format: .fixed(precision: 2)) ms")
     }
 
     private func focusedFrame(in visible: [CGWindowID: CGRect]) -> CGRect {
