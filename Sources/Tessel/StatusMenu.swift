@@ -50,7 +50,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             }
             float.isEnabled = tiler.enabled && tiler.focusedID != nil
             menu.addItem(float)
-            let even = action("Even Out Sizes") { [weak self] in self?.tiler.balance() }
+            let even = action("Normalize Windows") { [weak self] in self?.tiler.normalize() }
             even.isEnabled = tiler.enabled
             menu.addItem(even)
             let retile = action("Re-tile All Windows") { [weak self] in self?.tiler.retile() }
@@ -68,6 +68,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             "Left ⌘⇧ + Delete: close the window",
             "Left ⌘⇧ + H: hide the window in space 3",
             "Left ⌘⇧ + F: spotlight the window, the rest shelved at the side",
+            "Left ⌘⇧ + 0: normalize every window in this space",
             "⌘ + space key: go to space 1, 2 or 3",
             "⌘⇧ + space key: move the window to that space and go with it",
             "⇧ Space: open the launcher (apps, then files)",

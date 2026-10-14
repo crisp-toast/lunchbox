@@ -179,10 +179,15 @@ func layout(_ columns: [[WindowID]]) -> Layout {
     }
 
     @Test func balanceResets() {
-        var l = layout([[1], [2]])
+        var l = layout([[1], [2, 3]])
         l.resize(1, by: 0.2)
+        l.resize(3, by: 0.2)
+        l.toggleSpotlight(2)
         l.balance()
         #expect(l.columns.map(\.weight) == [1, 1])
+        #expect(l.columns[1].weights == [1, 1])
+        #expect(l.spotlight == nil)
+        #expect(l.shelved.isEmpty)
     }
 
     @Test func maxColumnsByWidth() {
@@ -242,6 +247,13 @@ func layout(_ columns: [[WindowID]]) -> Layout {
             #expect(small.width < center.width / 2)
         }
         #expect(!frames[1]!.intersects(frames[3]!))
+    }
+
+    @Test func shelvedIsEverythingButTheSpotlight() {
+        var l = layout([[1], [2, 3]])
+        #expect(l.shelved.isEmpty)
+        l.toggleSpotlight(3)
+        #expect(l.shelved == [1, 2])
     }
 
     @Test func toggleEndsItAndLoneWindowsIgnoreIt() {

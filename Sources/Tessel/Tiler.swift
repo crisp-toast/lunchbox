@@ -88,6 +88,11 @@ final class Tiler {
     init() {
         Tiler.shared = self
         animator.onSettled = { [weak self] id, actual, _ in self?.settled(id, at: actual) }
+        shelf.onPick = { [weak self] id in
+            guard let self else { return }
+            self.activate(id)
+            self.showRing(on: id)
+        }
         let defaults = UserDefaults.standard
         currentSpace = min(Self.spaceCount - 1, max(0, defaults.integer(forKey: "currentSpace")))
         for (key, value) in (defaults.dictionary(forKey: "placement") as? [String: String]) ?? [:] {
@@ -164,7 +169,9 @@ final class Tiler {
     /// Moves every window parked for another space back onto its display.
     /// Runs synchronously so it finishes before Tessel quits.
     func revealHiddenWindows() {
-        for (s, layouts) in spaces.enumerated() where s != currentSpace {
+        shelf.hide(animated: false)
+        for s in spaces.indices { for uuid in spaces[s].keys { spaces[s][uuid]?.spotlight = nil } }
+        for (_, layouts) in spaces.enumerated() {
             for (uuid, layout) in layouts {
                 let display = displays.first { $0.uuid == uuid } ?? displays.first
                 guard let d = display else { continue }
@@ -617,11 +624,26 @@ final class Tiler {
         let now = CACurrentMediaTime()
         let spot = Display.hidingSpot(in: displays)
         var moves: [(window: WindowHandle, from: CGRect, to: CGRect, kind: Animator.Kind)] = []
+        func park(_ w: ManagedWindow) {
+            guard !w.hidden else { return }
+            let parked = CGRect(origin: spot, size: (w.target ?? w.frame).size)
+            w.target = parked
+            w.hidden = true
+            settlingUntil[w.id] = now + 0.4
+            moves.append((w.handle, parked, parked, .positionOnly))
+        }
         for (s, layouts) in spaces.enumerated() {
             for (uuid, layout) in layouts {
                 if s == currentSpace, let d = activeDisplays.first(where: { $0.uuid == uuid }) {
+                    // Spotlight: the shelved windows wait off screen; the shelf shows cards for them.
+                    let shelved = Set(layout.shelved)
                     for (id, frame) in layout.frames(in: d.visible, gap: Self.gap) {
                         guard let w = windows[id] else { continue }
+                        if shelved.contains(id) {
+                            if !w.hidden, let t = w.target { shelfOrigins[id] = t }
+                            park(w)
+                            continue
+                        }
                         if !w.hidden, let t = w.target, t.isClose(to: frame, tolerance: 0.5) { continue }
                         let from = w.hidden ? frame : (w.target ?? w.frame)
                         let kind: Animator.Kind = animated && animationsAllowed && !w.hidden ? .animate : .snap
@@ -631,18 +653,12 @@ final class Tiler {
                         moves.append((w.handle, from, frame, kind))
                     }
                 } else {
-                    for id in layout.windows {
-                        guard let w = windows[id], !w.hidden else { continue }
-                        let parked = CGRect(origin: spot, size: (w.target ?? w.frame).size)
-                        w.target = parked
-                        w.hidden = true
-                        settlingUntil[id] = now + 0.4
-                        moves.append((w.handle, parked, parked, .positionOnly))
-                    }
+                    for id in layout.windows { if let w = windows[id] { park(w) } }
                 }
             }
         }
         animator.run(moves)
+        updateShelf()
         onChange?()
     }
 
@@ -706,6 +722,7 @@ final class Tiler {
         case .close: closeFocused()
         case .hide: send(toSpace: Self.spaceCount - 1, caption: "Hidden in space \(Self.spaceCount)", follow: false)
         case .spotlight: toggleSpotlight()
+        case .normalize: normalize()
         case .launcher: break // handled by the app delegate
         }
         let ms = (CACurrentMediaTime() - t0) * 1000
@@ -789,17 +806,18 @@ final class Tiler {
         relayout(animated: false)
         persist()
 
-        let remembered = lastFocused[index].flatMap { place(of: $0)?.space == index ? $0 : nil }
-        let mainUUID = displays.first(where: \.isMain)?.uuid ?? ""
-        let fallback = spaces[index][mainUUID]?.windows.first ?? spaces[index].values.first?.windows.first
-        if let target = preferred ?? remembered ?? fallback {
-            if preferred == nil { activate(target) }
+        if let preferred {
+            _ = preferred // the caller focuses it
+        } else if let rightmost = visibleFrames().max(by: { a, b in
+            // Right-most window; between two equally far right, the top one.
+            (a.value.maxX, -a.value.minY) < (b.value.maxX, -b.value.minY)
+        })?.key {
+            // Entering a space always lands on its right-most window.
+            activate(rightmost)
+            showRing(on: rightmost)
         } else {
             // Nothing here yet: hand focus to the desktop so typing can't land in a parked window.
-            focusedID = nil
-            if let finder = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first {
-                AXUIElementCreateApplication(finder.processIdentifier).set(kAXFrontmostAttribute, true)
-            }
+            focusDesktop()
         }
         badge.show(space: index, count: Self.spaceCount, on: display)
     }
@@ -840,11 +858,22 @@ final class Tiler {
             activate(next)
             showRing(on: next)
         } else {
-            focusedID = nil
-            if let finder = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first {
-                AXUIElementCreateApplication(finder.processIdentifier).set(kAXFrontmostAttribute, true)
-            }
+            focusDesktop()
         }
+    }
+
+    /// Gives keyboard focus to the desktop (Finder's desktop window), for a
+    /// space with no windows, so typing can't land in a window parked elsewhere.
+    private func focusDesktop() {
+        focusedID = nil
+        guard let finder = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first else { return }
+        let pid = finder.processIdentifier
+        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+        let desktop = list.first {
+            ($0[kCGWindowOwnerPID as String] as? pid_t) == pid && (($0[kCGWindowLayer as String] as? Int) ?? 0) < 0
+        }?[kCGWindowNumber as String] as? CGWindowID
+        if let desktop, WindowFocus.focus(pid: pid, windowID: desktop) { return }
+        AXUIElementCreateApplication(pid).set(kAXFrontmostAttribute, true)
     }
 
     /// Presses the focused window's close button, exactly like clicking it, so apps
@@ -1001,8 +1030,14 @@ final class Tiler {
             return
         }
         spaces[space][uuid] = layout
+        let shelved = layout.shelved
+        if !shelved.isEmpty {
+            // Grab what the windows look like while they're still on screen.
+            Snapshotter.capture(shelved) { [weak self] images in
+                for (wid, image) in images { self?.shelf.setSnapshot(image, for: wid) }
+            }
+        }
         relayout(animated: true)
-        // Keep the centered window in front of any shelved app that can't shrink that small.
         if layout.spotlight != nil { activate(id) }
         showRing(on: id)
     }
@@ -1013,6 +1048,32 @@ final class Tiler {
         layout.spotlight = nil
         spaces[space][uuid] = layout
         relayout(animated: true)
+    }
+
+    // MARK: Spotlight shelf
+
+    private let shelf = Shelf()
+    /// Where each shelved window was before it went to the shelf.
+    private var shelfOrigins: [CGWindowID: CGRect] = [:]
+
+    /// Shows the shelf for the space being viewed when one of its displays has a
+    /// spotlight, and hides it otherwise.
+    private func updateShelf() {
+        for d in activeDisplays {
+            guard let layout = spaces[currentSpace][d.uuid], !layout.shelved.isEmpty else { continue }
+            let cards = layout.shelved.compactMap { id -> Shelf.Card? in
+                guard let w = windows[id] else { return nil }
+                let running = NSRunningApplication(processIdentifier: w.pid)
+                return Shelf.Card(
+                    id: id, name: running?.localizedName ?? "Window",
+                    icon: running?.icon ?? NSWorkspace.shared.icon(for: .application),
+                    aspect: max(0.4, min(2.5, (shelfOrigins[id] ?? w.frame).width / max(1, (shelfOrigins[id] ?? w.frame).height)))
+                )
+            }
+            shelf.show(cards, on: d)
+            return
+        }
+        shelf.hide(animated: true)
     }
 
     // MARK: Focus ring
@@ -1069,9 +1130,19 @@ final class Tiler {
         persist()
     }
 
-    func balance() {
+    /// ⌘⇧0: even out every split in the space being viewed (stacks and columns
+    /// back to equal shares, a lone window back to its default size), end
+    /// spotlight, and send every window back to its slot, so a window an app
+    /// nudged out of place snaps back too.
+    func normalize() {
+        guard enabled else { return }
         for uuid in spaces[currentSpace].keys { spaces[currentSpace][uuid]?.balance() }
+        for id in spaces[currentSpace].values.flatMap(\.windows) {
+            if let w = windows[id], !w.hidden { w.target = nil }
+        }
         relayout(animated: true)
+        persist()
+        if let id = focusedID { showRing(on: id) }
     }
 
     func retile() {

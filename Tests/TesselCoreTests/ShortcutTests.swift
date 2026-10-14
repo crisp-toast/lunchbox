@@ -38,6 +38,8 @@ func flags(leftCommand: Bool = true, rightCommand: Bool = false, shift: Bool = f
         #expect(action(51, flags(shift: true)) == .close)
         #expect(action(4, flags(shift: true)) == .hide)
         #expect(action(3, flags(shift: true)) == .spotlight)
+        #expect(action(29, flags(shift: true)) == .normalize)
+        #expect(action(29, flags()) == nil)
         // Without Shift these stay with the app: ⌘-Delete and ⌘-H keep their usual jobs.
         #expect(action(51, flags()) == nil)
         #expect(action(4, flags()) == nil)

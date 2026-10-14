@@ -132,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("hide", _): tiler.perform(.hide)
         case ("spotlight", _): tiler.perform(.spotlight)
         case ("launcher", "open"?): launcher.openSelection()
+        case ("launcher", "new"?): launcher.openSelection(newWindow: true)
         case ("launcher", "down"?): launcher.moveSelection(by: 1)
         case ("launcher", "up"?): launcher.moveSelection(by: -1)
         case ("launcher", _): launcher.toggle()
@@ -139,7 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("send", let n?): if let i = Int(n) { tiler.perform(.sendToSpace(i - 1)) }
         case ("displays", "all"?): tiler.setUseAllDisplays(true)
         case ("displays", "main"?): tiler.setUseAllDisplays(false)
-        case ("balance", _): tiler.balance()
+        case ("balance", _), ("normalize", _): tiler.normalize()
         case ("retile", _): tiler.retile()
         case ("pause", _): setTiling(false)
         case ("resume", _): setTiling(true)

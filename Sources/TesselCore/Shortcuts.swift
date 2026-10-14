@@ -10,6 +10,8 @@ public enum KeyAction: Equatable, Sendable {
     case hide
     /// Puts the focused window alone in the center, the rest shelved at the side.
     case spotlight
+    /// Evens out every split in the space being viewed and puts windows back in their slots.
+    case normalize
     case switchSpace(Int)
     case sendToSpace(Int)
     /// Shows or hides the launcher.
@@ -49,6 +51,7 @@ public enum Shortcuts {
         case 51: return shift ? .close : nil      // Delete (Backspace)
         case 4: return shift ? .hide : nil        // H
         case 3: return shift ? .spotlight : nil   // F
+        case 29: return shift ? .normalize : nil  // 0
         default: return nil
         }
     }

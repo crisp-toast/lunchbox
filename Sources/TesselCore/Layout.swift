@@ -248,8 +248,10 @@ public struct Layout: Equatable, Sendable {
         return changed
     }
 
-    /// Resets every window to an even share and lone windows to the default size.
+    /// Resets every window to an even share and lone windows to the default
+    /// size, and ends spotlight.
     public mutating func balance() {
+        spotlight = nil
         for i in columns.indices {
             columns[i].weight = 1
             columns[i].weights = Array(repeating: 1, count: columns[i].windows.count)
@@ -334,6 +336,12 @@ public struct Layout: Equatable, Sendable {
     }
 
     // MARK: Spotlight
+
+    /// The windows waiting on the shelf while another is spotlighted.
+    public var shelved: [WindowID] {
+        guard let spot = spotlight, contains(spot), windowCount > 1 else { return [] }
+        return windows.filter { $0 != spot }
+    }
 
     /// ⌘⇧F: puts `id` alone in the center with the others shelved, or ends
     /// spotlight if it's on. Does nothing for a window that's already alone.

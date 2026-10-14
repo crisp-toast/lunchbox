@@ -14,17 +14,24 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         let bundleID: String?
     }
 
+    /// One entry in the list. Return runs the main action; an app with a window
+    /// you can reach also offers a second one, a new window, on Shift-Return.
     enum Result {
-        case open(App)
-        case goTo(App, NSRunningApplication)
-        case newWindow(App, NSRunningApplication)
+        /// `reachable`: it has a window you can get to, so Return goes there and
+        /// Shift-Return opens a new one. Otherwise Return opens the app.
+        case app(App, running: NSRunningApplication?, reachable: Bool)
         case file(URL)
 
         var path: String {
             switch self {
-            case .open(let a), .goTo(let a, _), .newWindow(let a, _): return a.url.path
+            case .app(let a, _, _): return a.url.path
             case .file(let url): return url.path
             }
+        }
+
+        var hasNewWindowAction: Bool {
+            if case .app(_, _, true) = self { return true }
+            return false
         }
     }
 
@@ -81,10 +88,15 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
 
     /// For scripts and tests.
     func moveSelection(by delta: Int) { select(selected + delta) }
-    func openSelection() { if results.indices.contains(selected) { open(results[selected]) } }
+    func openSelection(newWindow: Bool = false) {
+        if results.indices.contains(selected) { open(results[selected], newWindow: newWindow) }
+    }
     var stateDescription: [String: Any] {
         ["visible": isVisible, "query": field.stringValue, "selected": selected,
-         "results": results.map { describe($0).title + " | " + describe($0).subtitle }]
+         "results": results.map { r -> String in
+             let d = describe(r)
+             return d.title + " | " + d.subtitle + " [↩]" + (r.hasNewWindowAction ? " + New window [⇧↩]" : "")
+         }]
     }
 
     // MARK: Apps
@@ -161,15 +173,10 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             .map(\.0)
         }
 
-        var list: [Result] = []
-        for app in ranked {
-            guard list.count < Self.maxRows else { break }
-            if let running = runningApp(app), tiler.hasReachableWindow(ofApp: running.processIdentifier) {
-                list.append(.goTo(app, running))
-                if list.count < Self.maxRows { list.append(.newWindow(app, running)) }
-            } else {
-                list.append(.open(app))
-            }
+        let list: [Result] = ranked.prefix(Self.maxRows).map { app in
+            let running = runningApp(app)
+            let reachable = running.map { tiler.hasReachableWindow(ofApp: $0.processIdentifier) } ?? false
+            return .app(app, running: running, reachable: reachable)
         }
         results = list
         selected = 0
@@ -223,21 +230,25 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
 
     // MARK: Opening
 
-    private func open(_ result: Result) {
+    /// Runs exactly one action: going to the app's window (Return), or a new
+    /// window (Shift-Return, only offered when the app has a window to go to).
+    private func open(_ result: Result, newWindow: Bool) {
         hide()
         var uses = UserDefaults.standard.dictionary(forKey: "launcherUses") as? [String: Int] ?? [:]
         uses[result.path, default: 0] += 1
         UserDefaults.standard.set(uses, forKey: "launcherUses")
 
         switch result {
-        case .open(let app):
-            launch(app)
-        case .goTo(let app, let running):
-            if !tiler.goToWindow(ofApp: running.processIdentifier) { launch(app) }
-        case .newWindow(let app, let running):
-            tiler.openNewWindow(ofApp: running.processIdentifier) { [weak self] opened in
-                if !opened { self?.launch(app) }
+        case .app(let app, let running?, true):
+            if newWindow {
+                tiler.openNewWindow(ofApp: running.processIdentifier) { [weak self] opened in
+                    if !opened { self?.launch(app) }
+                }
+            } else if !tiler.goToWindow(ofApp: running.processIdentifier) {
+                launch(app)
             }
+        case .app(let app, _, _):
+            launch(app)
         case .file(let url):
             NSWorkspace.shared.open(url)
         }
@@ -257,7 +268,9 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         switch selector {
         case #selector(NSResponder.moveDown(_:)): select(selected + 1)
         case #selector(NSResponder.moveUp(_:)): select(selected - 1)
-        case #selector(NSResponder.insertNewline(_:)): openSelection()
+        case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)),
+             #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
+            openSelection(newWindow: NSApp.currentEvent?.modifierFlags.contains(.shift) ?? false)
         case #selector(NSResponder.cancelOperation(_:)): hide()
         default: return false
         }
@@ -275,14 +288,16 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     // MARK: Drawing
 
     private var panelHeight: CGFloat {
-        Self.fieldHeight + (results.isEmpty ? 0 : CGFloat(results.count) * Self.rowHeight + 12)
+        guard !results.isEmpty else { return Self.fieldHeight }
+        let rows = results.map { $0.hasNewWindowAction ? Self.rowHeight + ResultRow.secondaryHeight : Self.rowHeight }
+        return Self.fieldHeight + rows.reduce(0, +) + 12
     }
 
     private func describe(_ result: Result) -> (title: String, subtitle: String, icon: String) {
         switch result {
-        case .open(let app): return (app.name, runningApp(app) == nil ? "Open" : "Open · running with no windows", app.url.path)
-        case .goTo(let app, _): return (app.name, "Already open · go to its window", app.url.path)
-        case .newWindow(let app, _): return ("New \(app.name) window", "Opens next to your other windows", app.url.path)
+        case .app(let app, let running, let reachable):
+            let subtitle = reachable ? "Go to its window" : (running == nil ? "Open" : "Open · running with no windows")
+            return (app.name, subtitle, app.url.path)
         case .file(let url):
             let folder = url.deletingLastPathComponent().path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
             return (url.lastPathComponent, folder, url.path)
@@ -300,11 +315,13 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         rowViews.forEach { $0.removeFromSuperview() }
         rowViews = results.enumerated().map { i, result in
             let d = describe(result)
-            let row = ResultRow(title: d.title, subtitle: d.subtitle, icon: icon(for: d.icon))
+            var newWindowTitle: String?
+            if case .app(let app, _, true) = result { newWindowTitle = "New \(app.name) window" }
+            let row = ResultRow(title: d.title, subtitle: d.subtitle, icon: icon(for: d.icon), newWindowTitle: newWindowTitle)
             row.isSelected = i == selected
-            row.onClick = { [weak self] in
+            row.onClick = { [weak self] newWindow in
                 guard let self, self.results.indices.contains(i) else { return }
-                self.open(self.results[i])
+                self.open(self.results[i], newWindow: newWindow)
             }
             rows.addArrangedSubview(row)
             return row
@@ -381,14 +398,25 @@ final class LauncherPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+/// One app (or file) in the list. The main line carries a ↩ keycap; an app with
+/// a window to go to gets a second, smaller line, "New … window", with ⇧↩.
+/// Both lines are one selection, so a key press can only ever do one thing.
 private final class ResultRow: NSView {
-    var onClick: (() -> Void)?
+    static let mainHeight: CGFloat = 46
+    static let secondaryHeight: CGFloat = 30
+
+    var onClick: ((_ newWindow: Bool) -> Void)?
     var isSelected = false { didSet { refresh() } }
     private let title = NSTextField(labelWithString: "")
     private let subtitle = NSTextField(labelWithString: "")
     private let iconView = NSImageView()
+    private let returnKey = Keycap(text: "↩")
+    private var newWindowLabel: NSTextField?
+    private var shiftReturnKey: Keycap?
+    private let hasSecondary: Bool
 
-    init(title text: String, subtitle detail: String, icon: NSImage) {
+    init(title text: String, subtitle detail: String, icon: NSImage, newWindowTitle: String?) {
+        hasSecondary = newWindowTitle != nil
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 10
@@ -403,24 +431,53 @@ private final class ResultRow: NSView {
         subtitle.stringValue = detail
         subtitle.font = .systemFont(ofSize: 12)
         subtitle.lineBreakMode = .byTruncatingMiddle
-        for v in [iconView, title, subtitle] as [NSView] {
+        for v in [iconView, title, subtitle, returnKey] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             addSubview(v)
         }
+        let height = Self.mainHeight + (hasSecondary ? Self.secondaryHeight : 0)
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 46),
+            heightAnchor.constraint(equalToConstant: height),
             widthAnchor.constraint(equalToConstant: 628),
             iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            iconView.centerYAnchor.constraint(equalTo: topAnchor, constant: Self.mainHeight / 2),
             iconView.widthAnchor.constraint(equalToConstant: 30),
             iconView.heightAnchor.constraint(equalToConstant: 30),
             title.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 12),
-            title.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -14),
+            title.trailingAnchor.constraint(lessThanOrEqualTo: returnKey.leadingAnchor, constant: -10),
             title.topAnchor.constraint(equalTo: topAnchor, constant: 6),
             subtitle.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-            subtitle.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -14),
+            subtitle.trailingAnchor.constraint(lessThanOrEqualTo: returnKey.leadingAnchor, constant: -10),
             subtitle.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 1),
+            returnKey.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            returnKey.centerYAnchor.constraint(equalTo: topAnchor, constant: Self.mainHeight / 2),
         ])
+
+        if let newWindowTitle {
+            let label = NSTextField(labelWithString: newWindowTitle)
+            label.font = .systemFont(ofSize: 13)
+            label.lineBreakMode = .byTruncatingTail
+            let plus = NSImageView(image: NSImage(systemSymbolName: "plus.rectangle.on.rectangle", accessibilityDescription: nil) ?? NSImage())
+            plus.contentTintColor = .secondaryLabelColor
+            let key = Keycap(text: "⇧↩")
+            for v in [plus, label, key] as [NSView] {
+                v.translatesAutoresizingMaskIntoConstraints = false
+                addSubview(v)
+            }
+            NSLayoutConstraint.activate([
+                plus.leadingAnchor.constraint(equalTo: title.leadingAnchor),
+                plus.centerYAnchor.constraint(equalTo: bottomAnchor, constant: -Self.secondaryHeight / 2 - 3),
+                plus.widthAnchor.constraint(equalToConstant: 16),
+                plus.heightAnchor.constraint(equalToConstant: 14),
+                label.leadingAnchor.constraint(equalTo: plus.trailingAnchor, constant: 7),
+                label.centerYAnchor.constraint(equalTo: plus.centerYAnchor),
+                label.trailingAnchor.constraint(lessThanOrEqualTo: key.leadingAnchor, constant: -10),
+                key.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+                key.centerYAnchor.constraint(equalTo: plus.centerYAnchor),
+            ])
+            newWindowLabel = label
+            shiftReturnKey = key
+        }
         refresh()
     }
 
@@ -430,7 +487,49 @@ private final class ResultRow: NSView {
         layer?.backgroundColor = isSelected ? NSColor.controlAccentColor.cgColor : NSColor.clear.cgColor
         title.textColor = isSelected ? .white : .labelColor
         subtitle.textColor = isSelected ? NSColor.white.withAlphaComponent(0.8) : .secondaryLabelColor
+        newWindowLabel?.textColor = isSelected ? NSColor.white.withAlphaComponent(0.92) : .labelColor
+        returnKey.onAccent = isSelected
+        shiftReturnKey?.onAccent = isSelected
     }
 
-    override func mouseDown(with event: NSEvent) { onClick?() }
+    override func mouseDown(with event: NSEvent) {
+        let y = convert(event.locationInWindow, from: nil).y
+        // The second line sits at the bottom of the row (AppKit y grows upward).
+        onClick?(hasSecondary && y < Self.secondaryHeight + 4)
+    }
+}
+
+/// A small key-shaped label like ↩ or ⇧↩.
+private final class Keycap: NSView {
+    private let label: NSTextField
+    var onAccent = false { didSet { refresh() } }
+
+    init(text: String) {
+        label = NSTextField(labelWithString: text)
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 5
+        layer?.borderWidth = 1
+        label.font = .systemFont(ofSize: 12, weight: .semibold)
+        label.alignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(equalToConstant: 22),
+            widthAnchor.constraint(greaterThanOrEqualToConstant: 28),
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 7),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -7),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+        refresh()
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    private func refresh() {
+        let color = onAccent ? NSColor.white : NSColor.secondaryLabelColor
+        label.textColor = color
+        layer?.borderColor = color.withAlphaComponent(onAccent ? 0.7 : 0.45).cgColor
+        layer?.backgroundColor = (onAccent ? NSColor.white.withAlphaComponent(0.12) : NSColor.labelColor.withAlphaComponent(0.05)).cgColor
+    }
 }
