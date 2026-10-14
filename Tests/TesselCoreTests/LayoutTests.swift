@@ -186,8 +186,33 @@ func layout(_ columns: [[WindowID]]) -> Layout {
         l.balance()
         #expect(l.columns.map(\.weight) == [1, 1])
         #expect(l.columns[1].weights == [1, 1])
-        #expect(l.spotlight == nil)
-        #expect(l.shelved.isEmpty)
+        #expect(l.spotlight == 2) // normalize keeps spotlight on
+    }
+
+    @Test func draggedShapeStaysCenteredAndNormalizeResetsIt() throws {
+        var l = layout([[1]])
+        do { let r = l.adopt(1, size: CGSize(width: 900, height: 1200), in: screen, gap: gap); #expect(r) }
+        let tall = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(abs(tall.width - 900) <= 2 && abs(tall.height - 1200) <= 2)
+        #expect(abs(tall.midX - screen.midX) <= 1 && abs(tall.midY - screen.midY) <= 1)
+        // Growing keeps the shape.
+        do { let r = l.resize(1, by: 0.08); #expect(r) }
+        let bigger = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(abs(bigger.width / bigger.height - tall.width / tall.height) < 0.02)
+        l.balance()
+        let normal = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(abs(normal.width / normal.height - 1.6) < 0.01)
+    }
+
+    @Test func spotlightedWindowTakesADraggedShape() throws {
+        var l = layout([[1], [2]])
+        l.toggleSpotlight(1)
+        do { let r = l.adopt(1, size: CGSize(width: 1000, height: 1300), in: screen, gap: gap); #expect(r) }
+        let f = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(abs(f.width - 1000) <= 2 && abs(f.height - 1300) <= 2)
+        #expect(l.columns.map(\.weight) == [1, 1]) // columns untouched
+        l.balance()
+        #expect(l.spotlight == 1)
     }
 
     @Test func maxColumnsByWidth() {

@@ -39,13 +39,18 @@ public struct Layout: Equatable, Sendable {
     public var columns: [Column]
     /// Width of a lone window as a fraction of the usable screen width.
     public var singleScale: Double
+    /// Height of a lone or spotlighted window as a fraction of the usable
+    /// height, once the user has dragged it to a shape of their own. nil means
+    /// the default 16:10.
+    public var singleHeight: Double?
     /// While set, this window sits alone in the center and the rest wait as
     /// small windows down the left edge (⌘⇧F). Any change to the layout ends it.
     public var spotlight: WindowID?
 
     public static let defaultSingleScale = 0.6
     public static let singleAspect = 1.6 // 16:10
-    public static let singleScaleRange = 0.3...1.0
+    public static let singleScaleRange = 0.2...1.0
+    public static let singleHeightRange = 0.15...1.0
     public static let minFraction = 0.12
 
     public init(columns: [Column] = [], singleScale: Double = Layout.defaultSingleScale) {
@@ -198,7 +203,17 @@ public struct Layout: Equatable, Sendable {
     public mutating func resize(_ id: WindowID, by delta: Double) -> Bool {
         guard let (c, r) = position(of: id) else { return false }
         if windowCount == 1 || spotlight == id {
-            let next = min(Self.singleScaleRange.upperBound, max(Self.singleScaleRange.lowerBound, singleScale + delta))
+            var next = min(Self.singleScaleRange.upperBound, max(Self.singleScaleRange.lowerBound, singleScale + delta))
+            if let h = singleHeight {
+                // A shape the user chose grows and shrinks in proportion, stopping
+                // when either side reaches its limit so the shape never changes.
+                var k = next / singleScale
+                k = min(k, Self.singleHeightRange.upperBound / h)
+                k = max(k, Self.singleHeightRange.lowerBound / h)
+                next = singleScale * k
+                guard abs(k - 1) > 0.0001 else { return false }
+                singleHeight = h * k
+            }
             guard abs(next - singleScale) > 0.0001 else { return false }
             singleScale = next
             return true
@@ -222,11 +237,15 @@ public struct Layout: Equatable, Sendable {
     public mutating func adopt(_ id: WindowID, size: CGSize, in rect: CGRect, gap: CGFloat) -> Bool {
         guard let (c, r) = position(of: id) else { return false }
         let usable = rect.insetBy(dx: gap, dy: gap)
-        if windowCount == 1 {
-            let scale = Double(size.width / max(1, usable.width))
-            let next = min(Self.singleScaleRange.upperBound, max(Self.singleScaleRange.lowerBound, scale))
-            let changed = abs(next - singleScale) > 0.005
-            singleScale = next
+        if windowCount == 1 || spotlight == id {
+            // Any shape the user drags to; it stays centered.
+            let width = min(Self.singleScaleRange.upperBound, max(Self.singleScaleRange.lowerBound,
+                                                                   Double(size.width / max(1, usable.width))))
+            let height = min(Self.singleHeightRange.upperBound, max(Self.singleHeightRange.lowerBound,
+                                                                     Double(size.height / max(1, usable.height))))
+            let changed = abs(width - singleScale) > 0.005 || abs(height - (singleHeight ?? -1)) > 0.005
+            singleScale = width
+            singleHeight = height
             return changed
         }
         var changed = false
@@ -248,10 +267,10 @@ public struct Layout: Equatable, Sendable {
         return changed
     }
 
-    /// Resets every window to an even share and lone windows to the default
-    /// size, and ends spotlight.
+    /// Resets every window to an even share, and a lone or spotlighted window to
+    /// the default size and shape. Spotlight stays on.
     public mutating func balance() {
-        spotlight = nil
+        singleHeight = nil
         for i in columns.indices {
             columns[i].weight = 1
             columns[i].weights = Array(repeating: 1, count: columns[i].windows.count)
@@ -287,11 +306,11 @@ public struct Layout: Equatable, Sendable {
         )
         var result: [WindowID: CGRect] = [:]
         if windowCount == 1, let id = windows.first {
-            result[id] = Self.singleFrame(in: usable, scale: singleScale)
+            result[id] = Self.singleFrame(in: usable, scale: singleScale, height: singleHeight)
             return result
         }
         if let spot = spotlight, contains(spot) {
-            let center = Self.singleFrame(in: usable, scale: singleScale)
+            let center = Self.singleFrame(in: usable, scale: singleScale, height: singleHeight)
             result[spot] = center
             let others = windows.filter { $0 != spot }
             for (id, frame) in zip(others, Self.shelfFrames(count: others.count, beside: center, in: usable, gap: gap)) {
@@ -322,16 +341,19 @@ public struct Layout: Equatable, Sendable {
         return result
     }
 
-    /// A lone window: centered, 16:10, `scale` of the usable width, never taller
-    /// than the screen. At full scale it fills the usable area.
-    static func singleFrame(in usable: CGRect, scale: Double) -> CGRect {
-        if scale >= singleScaleRange.upperBound - 0.0001 { return usable }
-        let width = (usable.width * CGFloat(scale)).rounded()
-        let height = min(usable.height, (width / CGFloat(singleAspect)).rounded())
+    /// A lone (or spotlighted) window, centered. By default 16:10 at `scale` of
+    /// the usable width and never taller than the screen; at full scale it
+    /// fills the usable area. With `height` (a fraction of the usable height)
+    /// it keeps the shape the user dragged it to.
+    static func singleFrame(in usable: CGRect, scale: Double, height: Double? = nil) -> CGRect {
+        if scale >= singleScaleRange.upperBound - 0.0001, height == nil { return usable }
+        let width = min(usable.width, (usable.width * CGFloat(scale)).rounded())
+        let h = height.map { (usable.height * CGFloat($0)).rounded() } ?? (width / CGFloat(singleAspect)).rounded()
+        let clamped = min(usable.height, h)
         return CGRect(
             x: (usable.midX - width / 2).rounded(),
-            y: (usable.midY - height / 2).rounded(),
-            width: width, height: height
+            y: (usable.midY - clamped / 2).rounded(),
+            width: width, height: clamped
         )
     }
 

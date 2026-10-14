@@ -270,7 +270,10 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         case #selector(NSResponder.moveUp(_:)): select(selected - 1)
         case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)),
              #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
-            openSelection(newWindow: NSApp.currentEvent?.modifierFlags.contains(.shift) ?? false)
+            // Read Shift from the keyboard itself: the panel doesn't activate Tessel,
+            // so NSApp.currentEvent can be stale and miss it.
+            let shift = NSEvent.modifierFlags.contains(.shift) || (NSApp.currentEvent?.modifierFlags.contains(.shift) ?? false)
+            openSelection(newWindow: shift)
         case #selector(NSResponder.cancelOperation(_:)): hide()
         default: return false
         }

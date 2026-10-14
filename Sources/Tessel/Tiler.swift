@@ -556,6 +556,18 @@ final class Tiler {
     private func userDropped(_ id: CGWindowID, frame: CGRect?, at point: CGPoint) {
         guard let frame, let w = windows[id], let target = w.target, let (space, uuid) = place(of: id) else { return }
         w.frame = frame
+        // A centered window (alone, or in spotlight) keeps whatever shape the user
+        // drags it to and glides back to the middle; a plain drag just re-centers it.
+        if let layout = spaces[space][uuid], layout.windowCount == 1 || layout.spotlight == id {
+            if abs(frame.width - target.width) > 4 || abs(frame.height - target.height) > 4,
+               let d = displays.first(where: { $0.uuid == uuid }) {
+                spaces[space][uuid]?.adopt(id, size: frame.size, in: d.visible, gap: Self.gap)
+            }
+            w.target = nil
+            relayout(animated: true)
+            persist()
+            return
+        }
         if abs(frame.width - target.width) > 4 || abs(frame.height - target.height) > 4 {
             if let d = displays.first(where: { $0.uuid == uuid }), var layout = spaces[space][uuid] {
                 layout.adopt(id, size: frame.size, in: d.visible, gap: Self.gap)

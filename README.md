@@ -44,7 +44,8 @@ Apps you open often rise to the top.
 - ↑ ↓ to choose, Return to open, Esc or ⇧ Space to close.
 
 With the mouse: drag a tiled window onto another to swap them, onto the other screen to move it
-there, or drag its edge to resize. ⌘-Tab to a window in another space switches to that space.
+there, or drag its edge to resize. A centered window (alone, or in spotlight) keeps any shape you
+drag it to and glides back to the center; ⌘⇧0 returns it to the default size without leaving spotlight. ⌘-Tab to a window in another space switches to that space.
 
 The menu bar shows the current space. Its menu can pause tiling, float or tile the focused window,
 normalize, re-tile everything, and open **Keyboard Shortcuts…** (the same searchable list as Left ⌘⇧Space). **Settings** holds Launch at Login, Set Up Space Keys, and

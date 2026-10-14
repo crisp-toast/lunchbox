@@ -25,7 +25,7 @@ struct ShortcutGuide {
                 (["Left ⌘ ⇧", "−"], "Give the window less space"),
                 (["Left ⌘ ⇧", "F"], "Spotlight: this window centered, the rest on a shelf (again to undo)"),
                 (["Esc"], "Leave spotlight (new Finder windows open in spotlight)"),
-                (["Left ⌘ ⇧", "0"], "Normalize: even out every window in this space"),
+                (["Left ⌘ ⇧", "0"], "Normalize: even out every window in this space (a centered window goes back to its default size)"),
                 (["Left ⌘ ⇧", "Delete"], "Close the window"),
             ]),
             ("Spaces", [
@@ -46,7 +46,7 @@ struct ShortcutGuide {
             ]),
             ("Mouse", [
                 (["Drag"], "Drop a window onto another to swap them"),
-                (["Drag edge"], "Resize a window; its neighbors make room"),
+                (["Drag edge"], "Resize a window; its neighbors make room. A centered window keeps any shape and stays centered"),
                 (["Click"], "Click a card on the spotlight shelf to bring everything back"),
             ]),
             ("Help", [
