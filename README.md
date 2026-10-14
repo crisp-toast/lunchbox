@@ -62,11 +62,24 @@ osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificati
 ```
 
 Commands: `focus-left|right|up|down`, `move-…`, `grow`, `shrink`, `space-1…3`, `send-1…3`,
-`balance`, `retile`, and `dump`, which writes the current state to
+`balance`, `retile`, `pause`, `resume`, and `dump`, which writes the current state to
 `~/Library/Application Support/Tessel/state.json`.
 
-Logs:
+`pause` and `resume` do what the menu's **Tiling** item does. Pausing brings back windows parked in
+other spaces, stops tiling, and lets every shortcut through to apps. Both are safe to send twice.
+Agents that drive the screen (computer use, screen recordings, anything that needs a window at an
+exact size) should pause first and resume when they're done:
 
 ```bash
-log stream --predicate 'subsystem == "com.tyleryouens.tessel"' --info
+osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately("com.tyleryouens.tessel.command", "pause", $(), true)'
+```
+
+```bash
+osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately("com.tyleryouens.tessel.command", "resume", $(), true)'
+```
+
+Logs (`/usr/bin/log`, since zsh has its own `log` builtin):
+
+```bash
+/usr/bin/log stream --predicate 'subsystem == "com.tyleryouens.tessel"' --info
 ```

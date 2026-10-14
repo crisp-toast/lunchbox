@@ -69,13 +69,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func toggleTiling() {
-        if tiler.enabled {
-            tiler.stop()
-            tap.enabled = false
-        } else {
+        setTiling(!tiler.enabled)
+    }
+
+    /// Pauses or resumes tiling and the shortcuts together. Pausing brings windows parked in other
+    /// spaces back and lets every keystroke through. Asking for the current state does nothing.
+    private func setTiling(_ on: Bool) {
+        guard on != tiler.enabled, menu.trusted || !on else { return }
+        if on {
             tiler.start()
             tap.enabled = true
+        } else {
+            tiler.stop()
+            tap.enabled = false
         }
+        log.notice("tiling \(on ? "resumed" : "paused", privacy: .public)")
         menu.refresh()
     }
 
@@ -94,7 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Lets scripts drive Tessel without the keyboard, e.g.
     /// `osascript -l JavaScript -e '…postNotificationName("com.tyleryouens.tessel.command", "focus-left")…'`.
     /// Commands: focus-/move-left|right|up|down, grow, shrink, space-1…3, send-1…3,
-    /// balance, retile, dump (writes the state to ~/Library/Application Support/Tessel/state.json).
+    /// balance, retile, pause, resume, dump (writes the state to ~/Library/Application Support/Tessel/state.json).
     private func listenForCommands() {
         DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name("com.tyleryouens.tessel.command"), object: nil, queue: .main
@@ -115,6 +123,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("send", let n?): if let i = Int(n) { tiler.perform(.sendToSpace(i - 1)) }
         case ("balance", _): tiler.balance()
         case ("retile", _): tiler.retile()
+        case ("pause", _): setTiling(false)
+        case ("resume", _): setTiling(true)
         case ("dump", _): dumpState()
         default: log.error("unknown command \(command, privacy: .public)")
         }
