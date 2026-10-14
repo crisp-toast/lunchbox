@@ -226,3 +226,54 @@ func layout(_ columns: [[WindowID]]) -> Layout {
         #expect(nearest(from: source, direction: .right, in: frames) != nil)
     }
 }
+
+@Suite struct Spotlight {
+    @Test func centersOneAndShelvesTheRestOnTheLeft() throws {
+        var l = layout([[1], [2, 3]])
+        do { let r = l.toggleSpotlight(2); #expect(r) }
+        let frames = l.frames(in: screen, gap: gap)
+        let center = try #require(frames[2])
+        #expect(abs(center.midX - screen.midX) <= 1)
+        #expect(abs(center.width / center.height - 1.6) < 0.01)
+        for id: WindowID in [1, 3] {
+            let small = try #require(frames[id])
+            #expect(small.minX == gap)
+            #expect(small.maxX <= center.minX)
+            #expect(small.width < center.width / 2)
+        }
+        #expect(!frames[1]!.intersects(frames[3]!))
+    }
+
+    @Test func toggleEndsItAndLoneWindowsIgnoreIt() {
+        var l = layout([[1], [2]])
+        do { let r = l.toggleSpotlight(1); #expect(r) }
+        do { let r = l.toggleSpotlight(1); #expect(r) }
+        #expect(l.spotlight == nil)
+        var lone = layout([[1]])
+        do { let r = lone.toggleSpotlight(1); #expect(!r) }
+        #expect(lone.spotlight == nil)
+    }
+
+    @Test func anyLayoutChangeEndsIt() {
+        var l = layout([[1], [2], [3]])
+        l.toggleSpotlight(1)
+        l.insert(4, near: 1, maxColumns: 4)
+        #expect(l.spotlight == nil)
+        l.toggleSpotlight(1)
+        l.remove(3)
+        #expect(l.spotlight == nil)
+        l.toggleSpotlight(1)
+        _ = l.move(2, .left)
+        #expect(l.spotlight == nil)
+    }
+
+    @Test func growResizesTheCenteredWindow() throws {
+        var l = layout([[1], [2]])
+        l.toggleSpotlight(1)
+        let before = try #require(l.frames(in: screen, gap: gap)[1])
+        do { let r = l.resize(1, by: 0.1); #expect(r) }
+        let after = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(after.width > before.width)
+        #expect(l.spotlight == 1)
+    }
+}

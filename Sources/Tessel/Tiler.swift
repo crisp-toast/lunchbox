@@ -82,6 +82,7 @@ final class Tiler {
 
     init() {
         Tiler.shared = self
+        animator.onSettled = { [weak self] id, actual, _ in self?.settled(id, at: actual) }
         let defaults = UserDefaults.standard
         currentSpace = min(Self.spaceCount - 1, max(0, defaults.integer(forKey: "currentSpace")))
         for (key, value) in (defaults.dictionary(forKey: "placement") as? [String: String]) ?? [:] {
@@ -387,7 +388,7 @@ final class Tiler {
                 // parked in another space. Keep focus where the user was looking instead.
                 if wasFocused, let frame {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { [weak self] in
-                        self?.focusNearest(to: frame)
+                        self?.focusNearest(to: frame, excluding: id)
                     }
                 }
             } else {
@@ -398,6 +399,16 @@ final class Tiler {
                 let id = element.windowID
                 DispatchQueue.main.async { if let id { self?.focusChanged(to: id, app: app) } }
             }
+        case kAXWindowMiniaturizedNotification:
+            // Same as closing: keep focus near where the user was looking.
+            if let id = app.windowIDs[element], id == focusedID, let w = windows[id], !w.hidden {
+                let frame = w.target ?? w.frame
+                quietFocus()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+                    self?.focusNearest(to: frame, excluding: id)
+                }
+            }
+            scheduleScan(app)
         case kAXWindowMovedNotification, kAXWindowResizedNotification:
             if let id = app.windowIDs[element] { windowChangedOnItsOwn(id) }
         default:
@@ -437,6 +448,7 @@ final class Tiler {
         }
         focusedID = id
         lastFocused[space] = id
+        endSpotlight(unlessShowing: id)
     }
 
     /// Focus changes before this time don't switch spaces.
@@ -663,7 +675,9 @@ final class Tiler {
         case .switchSpace(let i): switchSpace(to: i, focusing: nil)
         case .sendToSpace(let i): send(toSpace: i)
         case .close: closeFocused()
-        case .hideToNextSpace: send(toSpace: (currentSpace + 1) % Self.spaceCount)
+        case .hide: send(toSpace: Self.spaceCount - 1, caption: "Hidden in space \(Self.spaceCount)")
+        case .spotlight: toggleSpotlight()
+        case .launcher: break // handled by the app delegate
         }
         let ms = (CACurrentMediaTime() - t0) * 1000
         log.notice("\(String(describing: action), privacy: .public) handled in \(ms, format: .fixed(precision: 2)) ms")
@@ -683,17 +697,18 @@ final class Tiler {
         let source = focusedFrame(in: visible)
         var candidates = visible
         if let id = focusedID { candidates[id] = nil }
-        guard let next = nearest(from: source, direction: direction, in: candidates), let frame = visible[next] else {
-            if let id = focusedID, visible[id] != nil { ring.flash(source, on: displays) }
+        guard let next = nearest(from: source, direction: direction, in: candidates) else {
+            if let id = focusedID, visible[id] != nil { showRing(on: id) }
             return
         }
         activate(next)
-        ring.flash(frame, on: displays)
+        showRing(on: next)
     }
 
     private func move(_ direction: Direction) {
         guard let id = focusedID, let (space, uuid) = place(of: id), space == currentSpace,
               var layout = spaces[space][uuid] else { return }
+        let before = layout.columns.map(\.windows)
         switch layout.move(id, direction) {
         case .moved:
             spaces[space][uuid] = layout
@@ -703,7 +718,7 @@ final class Tiler {
             for d in activeDisplays where d.uuid != uuid { others[d.uuid] = d.frame }
             guard let targetUUID = nearest(from: here.frame, direction: direction, in: others, tolerance: 2),
                   let target = displays.first(where: { $0.uuid == targetUUID }) else {
-                if let f = windows[id]?.target { ring.flash(f, on: displays) }
+                showRing(on: id)
                 return
             }
             let relativeX = Double(((windows[id]?.target?.midX ?? here.frame.midX) - here.frame.minX) / here.frame.width)
@@ -717,7 +732,9 @@ final class Tiler {
         }
         relayout(animated: true)
         persist()
-        if let f = windows[id]?.target { ring.flash(f, on: displays) }
+        let after = place(of: id).flatMap { spaces[$0.space][$0.display]?.columns.map(\.windows) } ?? []
+        log.notice("move \(direction.rawValue, privacy: .public): window \(id) (\(self.windows[id]?.handle.app.bundleID ?? "?", privacy: .public)) \(String(describing: before), privacy: .public) -> \(String(describing: after), privacy: .public)")
+        showRing(on: id)
     }
 
     private func resize(by delta: Double) {
@@ -727,7 +744,7 @@ final class Tiler {
             spaces[space][uuid] = layout
             relayout(animated: true)
         }
-        if let f = windows[id]?.target { ring.flash(f, on: displays) }
+        showRing(on: id)
     }
 
     func switchSpace(to index: Int, focusing preferred: CGWindowID?) {
@@ -758,7 +775,7 @@ final class Tiler {
         badge.show(space: index, count: Self.spaceCount, on: display)
     }
 
-    private func send(toSpace index: Int) {
+    private func send(toSpace index: Int, caption: String? = nil) {
         guard let id = focusedID, let (space, uuid) = place(of: id), space == currentSpace, index != space,
               (0..<Self.spaceCount).contains(index) else { return }
         let display = displays.first { $0.uuid == uuid }
@@ -772,17 +789,18 @@ final class Tiler {
         persist()
 
         if let oldFrame { focusNearest(to: oldFrame) } else { focusedID = nil }
-        badge.show(space: index, count: Self.spaceCount, caption: "Window sent to space \(index + 1)", on: display)
+        badge.show(space: index, count: Self.spaceCount, caption: caption ?? "Window moved to space \(index + 1)", on: display)
     }
 
     /// Focuses the visible window closest to `frame`, or the desktop when this space is empty.
-    private func focusNearest(to frame: CGRect) {
-        let visible = visibleFrames()
+    private func focusNearest(to frame: CGRect, excluding excluded: CGWindowID? = nil) {
+        var visible = visibleFrames()
+        if let excluded { visible[excluded] = nil }
         if let next = visible.min(by: {
             hypot($0.value.midX - frame.midX, $0.value.midY - frame.midY) < hypot($1.value.midX - frame.midX, $1.value.midY - frame.midY)
         })?.key {
             activate(next)
-            if let f = visible[next] { ring.flash(f, on: displays) }
+            showRing(on: next)
         } else {
             focusedID = nil
             if let finder = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first {
@@ -818,6 +836,7 @@ final class Tiler {
         guard let w = windows[id] else { return }
         focusedID = id
         if let space = place(of: id)?.space { lastFocused[space] = id }
+        endSpotlight(unlessShowing: id)
         lastActivation = CACurrentMediaTime()
         let element = w.handle.element, app = w.handle.app
         let focused = WindowFocus.focus(pid: app.pid, windowID: id)
@@ -825,6 +844,69 @@ final class Tiler {
             element.raise()
             element.set(kAXMainAttribute, true)
             if !focused { app.element.set(kAXFrontmostAttribute, true) }
+        }
+    }
+
+    // MARK: Spotlight
+
+    /// ⌘⇧F: the focused window alone in the center, the rest of its space
+    /// shelved as small windows on the left. Again (or focusing any shelved
+    /// window) puts everything back.
+    private func toggleSpotlight() {
+        guard let id = focusedID, let (space, uuid) = place(of: id), space == currentSpace,
+              var layout = spaces[space][uuid] else { return }
+        guard layout.toggleSpotlight(id) else {
+            showRing(on: id) // already alone: nothing to do
+            return
+        }
+        spaces[space][uuid] = layout
+        relayout(animated: true)
+        // Keep the centered window in front of any shelved app that can't shrink that small.
+        if layout.spotlight != nil { activate(id) }
+        showRing(on: id)
+    }
+
+    private func endSpotlight(unlessShowing id: CGWindowID) {
+        guard let (space, uuid) = place(of: id), var layout = spaces[space][uuid],
+              let spot = layout.spotlight, spot != id else { return }
+        layout.spotlight = nil
+        spaces[space][uuid] = layout
+        relayout(animated: true)
+    }
+
+    // MARK: Focus ring
+
+    /// The window the ring is outlining right now.
+    private var ringWindow: CGWindowID?
+
+    /// Outlines a window where it really is: its target while it's still
+    /// moving, otherwise its last known frame, double-checked with the app.
+    private func showRing(on id: CGWindowID) {
+        guard let w = windows[id], !w.hidden else { return }
+        let moving = CACurrentMediaTime() < (settlingUntil[id] ?? 0)
+        let frame = moving ? (w.target ?? w.frame) : w.frame
+        ringWindow = id
+        ring.flash(frame, on: displays)
+        guard !moving else { return } // the move's own read-back corrects it
+        let element = w.handle.element
+        w.handle.app.queue.async { [weak self] in
+            let actual = element.frame
+            DispatchQueue.main.async {
+                guard let self, let actual, self.ringWindow == id, self.ring.isShowing,
+                      !actual.isClose(to: frame, tolerance: 2) else { return }
+                self.windows[id]?.frame = actual
+                self.ring.flash(actual, on: self.displays)
+            }
+        }
+    }
+
+    /// A move finished: remember where the window really is, and slide the ring
+    /// there if it was outlining a spot the window didn't reach.
+    private func settled(_ id: CGWindowID, at actual: CGRect?) {
+        guard let actual, let w = windows[id], !w.hidden else { return }
+        w.frame = actual
+        if ringWindow == id, ring.isShowing, let target = w.target, !actual.isClose(to: target, tolerance: 2) {
+            ring.flash(actual, on: displays)
         }
     }
 

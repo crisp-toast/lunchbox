@@ -121,7 +121,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("shrink", _): tiler.perform(.shrink)
         case ("close", let id?): if let id = CGWindowID(id) { tiler.close(windowID: id) }
         case ("close", _): tiler.perform(.close)
-        case ("hide", _): tiler.perform(.hideToNextSpace)
+        case ("hide", _): tiler.perform(.hide)
+        case ("spotlight", _): tiler.perform(.spotlight)
         case ("space", let n?): if let i = Int(n) { tiler.perform(.switchSpace(i - 1)) }
         case ("send", let n?): if let i = Int(n) { tiler.perform(.sendToSpace(i - 1)) }
         case ("displays", "all"?): tiler.setUseAllDisplays(true)

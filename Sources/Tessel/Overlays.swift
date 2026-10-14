@@ -24,6 +24,8 @@ final class FocusRing {
     private var shownOn: CGDirectDisplayID?
     private var fade: DispatchWorkItem?
 
+    var isShowing: Bool { shownOn != nil }
+
     func flash(_ frame: CGRect, on displays: [Display]) {
         guard let display = displays.first(where: { $0.frame.contains(frame.center) }) ?? displays.first,
               let screen = NSScreen.screens.first(where: {

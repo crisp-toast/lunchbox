@@ -39,6 +39,9 @@ public struct Layout: Equatable, Sendable {
     public var columns: [Column]
     /// Width of a lone window as a fraction of the usable screen width.
     public var singleScale: Double
+    /// While set, this window sits alone in the center and the rest wait as
+    /// small windows down the left edge (⌘⇧F). Any change to the layout ends it.
+    public var spotlight: WindowID?
 
     public static let defaultSingleScale = 0.6
     public static let singleAspect = 1.6 // 16:10
@@ -76,6 +79,7 @@ public struct Layout: Equatable, Sendable {
     /// after that it stacks into the column with the fewest windows.
     public mutating func insert(_ id: WindowID, near focused: WindowID?, maxColumns: Int) {
         guard !contains(id) else { return }
+        spotlight = nil
         guard !columns.isEmpty else {
             columns = [Column(windows: [id])]
             return
@@ -101,6 +105,7 @@ public struct Layout: Equatable, Sendable {
     /// column nearest `relativeX` (0 = left edge, 1 = right edge).
     public mutating func insert(_ id: WindowID, entering direction: Direction, relativeX: Double = 0.5) {
         guard !contains(id) else { return }
+        spotlight = nil
         guard !columns.isEmpty else {
             columns = [Column(windows: [id])]
             return
@@ -121,6 +126,7 @@ public struct Layout: Equatable, Sendable {
         guard let (c, r) = position(of: id) else { return false }
         columns[c].removeWindow(at: r)
         if columns[c].windows.isEmpty { columns.remove(at: c) }
+        spotlight = nil
         return true
     }
 
@@ -159,6 +165,7 @@ public struct Layout: Equatable, Sendable {
     /// can be reached with the arrow keys alone.
     public mutating func move(_ id: WindowID, _ direction: Direction) -> MoveResult {
         guard let (c, r) = position(of: id) else { return .notFound }
+        spotlight = nil
         switch direction {
         case .up, .down:
             let target = direction == .up ? r - 1 : r + 1
@@ -190,7 +197,7 @@ public struct Layout: Equatable, Sendable {
     @discardableResult
     public mutating func resize(_ id: WindowID, by delta: Double) -> Bool {
         guard let (c, r) = position(of: id) else { return false }
-        if windowCount == 1 {
+        if windowCount == 1 || spotlight == id {
             let next = min(Self.singleScaleRange.upperBound, max(Self.singleScaleRange.lowerBound, singleScale + delta))
             guard abs(next - singleScale) > 0.0001 else { return false }
             singleScale = next
@@ -281,6 +288,15 @@ public struct Layout: Equatable, Sendable {
             result[id] = Self.singleFrame(in: usable, scale: singleScale)
             return result
         }
+        if let spot = spotlight, contains(spot) {
+            let center = Self.singleFrame(in: usable, scale: singleScale)
+            result[spot] = center
+            let others = windows.filter { $0 != spot }
+            for (id, frame) in zip(others, Self.shelfFrames(count: others.count, beside: center, in: usable, gap: gap)) {
+                result[id] = frame
+            }
+            return result
+        }
 
         let widthTotal = columns.map(\.weight).reduce(0, +)
         let availWidth = usable.width - gap * CGFloat(columns.count - 1)
@@ -315,6 +331,36 @@ public struct Layout: Equatable, Sendable {
             y: (usable.midY - height / 2).rounded(),
             width: width, height: height
         )
+    }
+
+    // MARK: Spotlight
+
+    /// ⌘⇧F: puts `id` alone in the center with the others shelved, or ends
+    /// spotlight if it's on. Does nothing for a window that's already alone.
+    @discardableResult
+    public mutating func toggleSpotlight(_ id: WindowID) -> Bool {
+        if spotlight != nil {
+            spotlight = nil
+            return true
+        }
+        guard windowCount > 1, contains(id) else { return false }
+        spotlight = id
+        return true
+    }
+
+    /// Small windows stacked down the left edge, vertically centered, in the
+    /// space left of the centered window (never narrower than 160 points).
+    static func shelfFrames(count: Int, beside center: CGRect, in usable: CGRect, gap: CGFloat) -> [CGRect] {
+        guard count > 0 else { return [] }
+        let width = max(160, min(420, center.minX - usable.minX - gap)).rounded()
+        let slot = (usable.height - gap * CGFloat(count - 1)) / CGFloat(count)
+        let height = min((width / CGFloat(singleAspect)).rounded(), slot.rounded(.down))
+        let total = height * CGFloat(count) + gap * CGFloat(count - 1)
+        var y = (usable.minY + (usable.height - total) / 2).rounded()
+        return (0..<count).map { _ in
+            defer { y += height + gap }
+            return CGRect(x: usable.minX, y: y, width: width, height: height)
+        }
     }
 
     /// How many side-by-side columns new windows get before they start stacking.

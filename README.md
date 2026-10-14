@@ -9,16 +9,19 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 
 ## Shortcuts
 
+⌘ goes somewhere; ⌘⇧ moves or changes something.
+
 | Keys | What it does |
 | --- | --- |
 | Left ⌘ + ← → ↑ ↓ | Focus the next window in that direction (crosses to the other screen at the edge) |
 | Left ⌘ ⇧ + ← → | Move the window one step sideways: first it stacks with its neighbor, a second press moves it past |
 | Left ⌘ ⇧ + ↑ ↓ | Swap with the window above or below in a stack |
-| Left ⌘ ⇧ + plus / minus | Give the window more or less space (a lone window grows or shrinks around the center) |
+| Left ⌘ ⇧ + plus / minus | Give the window more or less space (a lone or spotlighted window grows or shrinks around the center) |
+| Left ⌘ ⇧ + F | Spotlight: the window alone in the center, the rest of the space shelved as small windows on the left. Again, a click on a shelved window, or ⌘-arrowing to one puts everything back |
+| Left ⌘ ⇧ + H | Hide the window: it always moves to space 3 |
 | Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
-| Left ⌘ ⇧ + H | Hide the window by sending it to the next space (1 → 2 → 3 → 1) |
-| ⌘ ⇧ + space key 1 / 2 / 3 | Switch to that space |
-| ⌥ ⌘ ⇧ + space key 1 / 2 / 3 | Send the focused window to that space |
+| ⌘ + space key 1 / 2 / 3 | Go to that space |
+| ⌘ ⇧ + space key 1 / 2 / 3 | Move the focused window to that space |
 
 The space keys are whatever three keys you teach it on first launch (menu → **Set Up Space Keys…**).
 On Tyler's Boop65 they're the three keys on the far right, above the right arrow.
@@ -65,7 +68,7 @@ Tessel listens for distributed notifications named `com.tyleryouens.tessel.comma
 osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately("com.tyleryouens.tessel.command", "focus-left", $(), true)'
 ```
 
-Commands: `focus-left|right|up|down`, `move-…`, `grow`, `shrink`, `close` (the focused window) or `close-<windowID>`, `hide`, `space-1…3`, `send-1…3`,
+Commands: `focus-left|right|up|down`, `move-…`, `grow`, `shrink`, `close` (the focused window) or `close-<windowID>`, `hide`, `spotlight`, `space-1…3`, `send-1…3`,
 `balance`, `retile`, `displays-all`, `displays-main`, `pause`, `resume`, and `dump`, which writes the current state to
 `~/Library/Application Support/Tessel/state.json`.
 

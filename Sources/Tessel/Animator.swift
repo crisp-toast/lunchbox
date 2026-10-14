@@ -1,4 +1,5 @@
 import AppKit
+import os
 import QuartzCore
 
 /// Moves real windows, smoothly where the app can keep up and instantly where it can't.
@@ -9,16 +10,27 @@ import QuartzCore
 /// - apps slower than 30 ms just snap, so a struggling app never adds lag.
 /// A frame is skipped rather than queued while the previous one is still
 /// being applied, so the window always heads for the newest target.
+///
+/// Every final placement is read back. An app that's busy or swapped out can
+/// time out and silently ignore a move, which used to leave Tessel believing a
+/// window was somewhere it wasn't. Now the move is retried, and the frame the
+/// window really ended up with is reported through `onSettled`.
 final class Animator {
     enum Kind {
         case animate
         case snap
+        /// Parking a window off screen: only its position changes.
         case positionOnly
     }
 
     static let duration: CFTimeInterval = 0.2
     static let fullAnimationLatency = 0.006
     static let slideLatency = 0.030
+    static let retryDelays: [Double] = [0.1, 0.25, 0.6]
+
+    /// Called on the main thread with the frame a window really settled at
+    /// (nil if the app didn't answer).
+    var onSettled: ((CGWindowID, CGRect?, _ landed: Bool) -> Void)?
 
     private struct Animation {
         let window: WindowHandle
@@ -47,6 +59,9 @@ final class Animator {
     private var running: [CGWindowID: Animation] = [:]
     private var timer: DispatchSourceTimer?
     private var nextToken: UInt64 = 0
+    /// The newest move for each window, readable from the app queues so a
+    /// retry never overrides a later move.
+    private let latest = OSAllocatedUnfairLock(initialState: [CGWindowID: UInt64]())
 
     func run(_ moves: [(window: WindowHandle, from: CGRect, to: CGRect, kind: Kind)]) {
         guard !moves.isEmpty else { return }
@@ -60,6 +75,8 @@ final class Animator {
 
     private func schedule(_ window: WindowHandle, from: CGRect, to: CGRect, kind: Kind, now: CFTimeInterval) {
         nextToken &+= 1
+        let token = nextToken
+        latest.withLock { $0[window.id] = token }
         let latency = window.app.latency
         var start = from
         if let existing = running[window.id] { start = existing.frame(at: now) }
@@ -67,18 +84,14 @@ final class Animator {
         let snaps = kind != .animate || latency > Self.slideLatency || start.isClose(to: to, tolerance: 1)
         guard !snaps else {
             running[window.id] = nil
-            let element = window.element, app = window.app
-            app.queue.async {
-                let t0 = CACurrentMediaTime()
-                if kind == .positionOnly { element.setPosition(to.origin) } else { element.setFrame(to) }
-                app.recordLatency((CACurrentMediaTime() - t0) / (kind == .positionOnly ? 1 : 2))
+            window.app.queue.async { [weak self] in
+                self?.place(window, at: to, positionOnly: kind == .positionOnly, token: token, attempt: 0)
             }
             return
         }
-        let resizeEveryFrame = latency < Self.fullAnimationLatency
         running[window.id] = Animation(
             window: window, from: start, to: to, start: now,
-            resizeEveryFrame: resizeEveryFrame, token: nextToken,
+            resizeEveryFrame: latency < Self.fullAnimationLatency, token: token,
             sizeSent: start.size == to.size
         )
     }
@@ -94,21 +107,49 @@ final class Animator {
             anim.finalSent = isFinal
             running[id] = anim
 
-            let element = anim.window.element, app = anim.window.app, token = anim.token, to = anim.to
-            app.queue.async { [weak self] in
-                let t0 = CACurrentMediaTime()
-                var calls = 1.0
+            let window = anim.window, token = anim.token
+            window.app.queue.async { [weak self] in
+                guard let self else { return }
                 if isFinal {
-                    element.setFrame(to)
-                    calls = 2
+                    self.place(window, at: frame, positionOnly: false, token: token, attempt: 0)
                 } else {
-                    if let size = sendSize { element.setSize(size); calls = 2 }
-                    element.setPosition(frame.origin)
+                    let t0 = CACurrentMediaTime()
+                    if let size = sendSize { window.element.setSize(size) }
+                    window.element.setPosition(frame.origin)
+                    window.app.recordLatency((CACurrentMediaTime() - t0) / (sendSize == nil ? 1 : 2))
                 }
-                app.recordLatency((CACurrentMediaTime() - t0) / calls)
-                self?.queue.async { self?.finished(id, token: token) }
+                self.queue.async { self.finished(id, token: token) }
             }
         }
+    }
+
+    /// Runs on the window's app queue: sets the final frame, reads it back, and
+    /// retries a few times if the window didn't get there.
+    private func place(_ window: WindowHandle, at target: CGRect, positionOnly: Bool, token: UInt64, attempt: Int) {
+        guard latest.withLock({ $0[window.id] }) == token else { return } // a newer move took over
+        let element = window.element
+        let t0 = CACurrentMediaTime()
+        if positionOnly { element.setPosition(target.origin) } else { element.setFrame(target) }
+        window.app.recordLatency((CACurrentMediaTime() - t0) / (positionOnly ? 1 : 2))
+
+        let actual = element.frame
+        // Parking only needs the window pushed off the right edge (macOS may clamp
+        // its height); a normal move needs its position to land. Size may differ
+        // when an app enforces a minimum or maximum size, and that's fine.
+        let landed: Bool = actual.map { a in
+            positionOnly ? a.minX >= target.minX - 2
+                : abs(a.minX - target.minX) <= 2 && abs(a.minY - target.minY) <= 2
+        } ?? false
+        if !landed, attempt < Self.retryDelays.count {
+            window.app.queue.asyncAfter(deadline: .now() + Self.retryDelays[attempt]) { [weak self] in
+                self?.place(window, at: target, positionOnly: positionOnly, token: token, attempt: attempt + 1)
+            }
+            return
+        }
+        if !landed {
+            log.error("window \(window.id) (\(window.app.bundleID ?? "?", privacy: .public)) didn't move to \(NSStringFromRect(target), privacy: .public); it's at \(actual.map { NSStringFromRect($0) } ?? "unknown", privacy: .public)")
+        }
+        DispatchQueue.main.async { [weak self] in self?.onSettled?(window.id, actual, landed) }
     }
 
     private func finished(_ id: CGWindowID, token: UInt64) {

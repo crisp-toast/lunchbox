@@ -63,7 +63,7 @@ final class KeyTeacher: NSObject, NSWindowDelegate {
         if saving {
             onDone(keys)
             title.stringValue = "All set"
-            detail.stringValue = "Shift-⌘ plus those keys switches spaces. Add Option to send the focused window there."
+            detail.stringValue = "⌘ plus those keys goes to that space. Add Shift to move the focused window there."
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [weak self] in self?.panel?.orderOut(nil) }
         } else {
             panel?.orderOut(nil)

@@ -66,9 +66,10 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             "Left ⌘⇧ + arrows: move the window",
             "Left ⌘⇧ + plus / minus: more or less space",
             "Left ⌘⇧ + Delete: close the window",
-            "Left ⌘⇧ + H: hide the window in the next space",
-            "⌘⇧ + space key: switch to space 1, 2 or 3",
-            "⌥⌘⇧ + space key: send the window to that space",
+            "Left ⌘⇧ + H: hide the window in space 3",
+            "Left ⌘⇧ + F: spotlight the window, the rest shelved at the side",
+            "⌘ + space key: go to space 1, 2 or 3",
+            "⌘⇧ + space key: move the window to that space",
             "Right ⌘ + arrows still move the text cursor",
         ] { list.addItem(disabled: line) }
         shortcuts.submenu = list
