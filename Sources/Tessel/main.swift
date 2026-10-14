@@ -10,24 +10,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch action {
         case .launcher: self.launcher.toggle()
         case .help: self.help.toggle()
-        case .escape: self.escape()
         default: self.tiler.perform(action)
         }
     }
     private lazy var launcher: Launcher = Launcher(tiler: tiler)
-    private lazy var help: HelpPanel = HelpPanel { [weak self] in self?.tap.spaceKeys ?? [] }
+    private lazy var help: HelpPanel = HelpPanel { [weak self] in (self?.tap.keymap ?? Keymap(), self?.tap.spaceKeys ?? []) }
     private lazy var menu: StatusMenu = StatusMenu(tiler: tiler)
     private lazy var onboarding: Onboarding = Onboarding(tap: tap, tiler: tiler)
+    private lazy var shortcuts: ShortcutsWindow = ShortcutsWindow(tap: tap)
     private var trustPoll: Timer?
     private var signalSource: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         tiler.onChange = { [weak self] in self?.menu.refresh() }
         _ = launcher // build the app list now, so the first ⇧Space already finds apps
-        tiler.onSpotlightChange = { [weak self] on in self?.tap.escapeLeavesSpotlight = on }
         menu.onToggle = { [weak self] in self?.toggleTiling() }
         menu.onTeachKeys = { [weak self] in self?.onboarding.show(at: .keys) }
         menu.onShowWelcome = { [weak self] in self?.onboarding.show() }
+        menu.onShowShortcuts = { [weak self] in self?.shortcuts.show() }
+        shortcuts.onChange = { KeymapStore.save($0) }
+        help.onCustomize = { [weak self] in self?.shortcuts.show() }
+        onboarding.onCustomize = { [weak self] in self?.shortcuts.show() }
         onboarding.onSpaceKeys = { [weak self] keys in self?.saveSpaceKeys(keys) }
         onboarding.onRequestAccess = {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
@@ -36,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.onShowHelp = { [weak self] in self?.help.show() }
         menu.onGrantAccess = { Self.openAccessibilitySettings() }
         tap.spaceKeys = (UserDefaults.standard.array(forKey: "spaceKeys") as? [Int]).map { $0.map(Int64.init) } ?? []
+        tap.keymap = KeymapStore.load()
 
         // Quit cleanly on `kill`, so parked windows come back.
         signal(SIGTERM, SIG_IGN)
@@ -89,13 +93,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if tap.spaceKeys.count != 3, !onboarding.isVisible {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.onboarding.show(at: .keys) }
         }
-    }
-
-    /// Esc while spotlight is on: close the launcher or help if open, else leave spotlight.
-    private func escape() {
-        if launcher.isVisible { launcher.hide() }
-        else if help.isVisible { help.hide() }
-        else { tiler.exitSpotlight() }
     }
 
     private func toggleTiling() {
@@ -184,10 +181,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("launcher", "up"?): launcher.moveSelection(by: -1)
         case ("launcher", _): launcher.toggle()
         case ("help", _): help.toggle()
+        case ("shortcuts", _): shortcuts.show()
         case ("welcome", let n?): if let i = Int(n), let step = Onboarding.Step(rawValue: i) { onboarding.show(at: step) }
         case ("welcome", _): onboarding.show()
         case ("welcomeclose", _): onboarding.close()
-        case ("escape", _): escape()
         case ("space", let n?): if let i = Int(n) { tiler.perform(.switchSpace(i - 1)) }
         case ("send", let n?): if let i = Int(n) { tiler.perform(.sendToSpace(i - 1)) }
         case ("displays", "all"?): tiler.setUseAllDisplays(true)
@@ -219,3 +216,21 @@ let delegate = AppDelegate()
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
 app.run()
+
+/// Saves the user's changed shortcuts; anything not changed follows the defaults.
+enum KeymapStore {
+    private static let key = "keymap"
+
+    static func load() -> Keymap {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let stored = try? JSONDecoder().decode([String: KeyBinding].self, from: data) else { return Keymap() }
+        var map = Keymap()
+        for (name, binding) in stored { if let c = Command(rawValue: name) { map.overrides[c] = binding } }
+        return map
+    }
+
+    static func save(_ map: Keymap) {
+        let stored = Dictionary(uniqueKeysWithValues: map.overrides.map { ($0.key.rawValue, $0.value) })
+        if let data = try? JSONEncoder().encode(stored) { UserDefaults.standard.set(data, forKey: key) }
+    }
+}

@@ -5,7 +5,7 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 - One window on a screen sits centered at a comfortable 16:10 size. Two or more tile side by side.
 - Everything is driven by the **left** ⌘ key, so right ⌘ + arrows still move the text cursor.
 - Windows slide into place. Apps that can't keep up just snap, so Tessel never adds lag.
-- Three spaces, switched instantly from the keyboard.
+- Three Workspaces, switched instantly from the keyboard.
 
 ## Shortcuts
 
@@ -17,16 +17,15 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + ← → | Move the window one step sideways: first it stacks with its neighbor, a second press moves it past |
 | Left ⌘ ⇧ + ↑ ↓ | Swap with the window above or below in a stack |
 | Left ⌘ ⇧ + plus / minus | Give the window more or less space (a lone window, or one in Focus, grows or shrinks around the center) |
-| Left ⌘ ⇧ + F | **Focus**: the window alone in the center, the rest of the space shelved as small windows on the left. Again, a click on a shelved window, or ⌘-arrowing to one puts everything back |
-| Left ⌘ ⇧ + H | **Stash** the window: it always moves to Space 3 |
-| Esc | Leave Focus (only claimed while Focus is on). New Finder windows open in Focus |
+| Left ⌘ ⇧ + F | **Focus**: the window alone in the center, the rest of the Workspace on the Shelf. Again, a click on a Shelf card, or ⌘-arrowing to one ends it. New Finder windows open in Focus |
+| Left ⌘ ⇧ + H | **Stash** the window: it always moves to Workspace 3 |
 | Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
-| ⌘ + space key 1 / 2 / 3 | Go to that space |
-| ⌘ ⇧ + space key 1 / 2 / 3 | Move the focused window to that space and go there with it |
+| ⌘ + Workspace key 1 / 2 / 3 | Go to that Workspace |
+| ⌘ ⇧ + Workspace key 1 / 2 / 3 | Move the focused window to that Workspace and go there with it |
 | ⇧ Space | **Summon**: open an app, file or website |
 | Left ⌘ ⇧ + Space | The **Cheat Sheet**: every shortcut, with search |
 
-The space keys are whatever three keys you teach it on first launch (menu → **Set Up Space Keys…**).
+The Workspace keys are whatever three keys you pick on first launch (menu → **Set Up Space Keys…**).
 On Tyler's Boop65 they're the three keys on the far right, above the right arrow.
 
 ## Names
@@ -37,10 +36,22 @@ On Tyler's Boop65 they're the three keys on the far right, above the right arrow
 | **Focus** | ⌘⇧F: one window centered, the rest on the Shelf |
 | **the Shelf** | The tilted cards beside a Focus window |
 | **Tidy** | ⌘⇧0: even out every split in the space |
-| **Stash** | ⌘⇧H: send the window to Space 3 |
+| **Stash** | ⌘⇧H: send the window to Workspace 3 |
 | **Cheat Sheet** | ⌘⇧Space: every shortcut, searchable |
 | **Halo** | The blue outline around the focused window |
-| **Spaces 1–3** | Tessel's own instant spaces, on your three **space keys** |
+| **Workspaces 1–3** | Tessel's own instant Workspaces, on your three **Workspace keys** |
+
+## Your own shortcuts
+
+Every command can be rebound: menu bar › Settings › **Keyboard Shortcuts…** (or **Customize…** in the
+Cheat Sheet). Click a shortcut and press new keys. Tessel refuses a combination another command already
+uses, or one that would get in the way of typing; **Show defaults** lists the original keys next to yours,
+and each changed shortcut has its own reset, plus **Restore All Defaults**. Changes are saved as
+overrides on top of the defaults (`Sources/TesselCore/Keymap.swift`).
+
+The Cheat Sheet's search forgives: synonyms ("maximize", "minimize", "virtual desktop"), symbols
+(⌘ ⇧ ← ↩), abbreviations (cmd, alt), filler words ("how do I make it bigger") and typos. When nothing
+matches exactly it shows the closest lines instead of an empty list.
 
 ## Summon
 

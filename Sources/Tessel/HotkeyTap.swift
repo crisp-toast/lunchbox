@@ -3,16 +3,14 @@ import os
 import TesselCore
 
 /// Watches the keyboard with a CGEventTap on its own high-priority thread, so a
-/// busy main thread can never delay typing. Only the left Command key triggers
-/// the arrow and size shortcuts; right Command passes through untouched, so
-/// right-⌘ + arrows still move the text cursor.
+/// busy main thread can never delay typing. Key presses are matched against the
+/// user's keymap; anything that isn't a Tessel shortcut passes straight through.
 final class HotkeyTap {
     private struct State {
         var enabled = false
-        var spaceKeys: [Int64] = []
-        var learner: ((Int64) -> Void)?
-        /// Esc leaves spotlight; only while it's on, so Esc reaches apps otherwise.
-        var escapeLeavesSpotlight = false
+        var workspaceKeys: [Int64] = []
+        var keymap = Keymap()
+        var learner: ((Int64, CGEventFlags) -> Void)?
     }
 
     private let state = OSAllocatedUnfairLock(initialState: State())
@@ -21,8 +19,8 @@ final class HotkeyTap {
     /// Key codes whose key-down we swallowed; their key-up is swallowed too.
     /// Only touched on the tap thread.
     private var swallowed = Set<Int64>()
-    /// ⇧Space detection; tap thread only.
-    private var chord = ShiftSpaceChord()
+    /// "⇧ then key" detection; tap thread only.
+    private var chord = ShiftTapChord()
 
     init(onAction: @escaping (KeyAction) -> Void) {
         self.onAction = onAction
@@ -33,18 +31,20 @@ final class HotkeyTap {
         set { state.withLock { $0.enabled = newValue } }
     }
 
+    /// The three keys chosen for Workspaces 1, 2 and 3.
     var spaceKeys: [Int64] {
-        get { state.withLock { $0.spaceKeys } }
-        set { state.withLock { $0.spaceKeys = newValue } }
+        get { state.withLock { $0.workspaceKeys } }
+        set { state.withLock { $0.workspaceKeys = newValue } }
     }
 
-    var escapeLeavesSpotlight: Bool {
-        get { state.withLock { $0.escapeLeavesSpotlight } }
-        set { state.withLock { $0.escapeLeavesSpotlight = newValue } }
+    var keymap: Keymap {
+        get { state.withLock { $0.keymap } }
+        set { state.withLock { $0.keymap = newValue } }
     }
 
-    /// While set, the next key press goes to `learner` instead of the app in front.
-    func learnNextKey(_ learner: ((Int64) -> Void)?) {
+    /// While set, the next key press (with its modifiers) goes to `learner`
+    /// instead of the app in front.
+    func learnNextKey(_ learner: ((Int64, CGEventFlags) -> Void)?) {
         state.withLock { $0.learner = learner }
     }
 
@@ -106,26 +106,22 @@ final class HotkeyTap {
 
         if let learner = s.learner {
             swallowed.insert(code)
-            DispatchQueue.main.async { learner(code) }
+            let flags = event.flags
+            DispatchQueue.main.async { learner(code, flags) }
             return nil
         }
+
         let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-        let modifiers: CGEventFlags = [.maskCommand, .maskAlternate, .maskControl, .maskShift]
-        if code == 53, s.enabled, s.escapeLeavesSpotlight, event.flags.intersection(modifiers).isEmpty {
-            _ = chord.keyDown(code: code, flags: event.flags, isRepeat: isRepeat)
-            swallowed.insert(code)
-            DispatchQueue.main.async { [onAction] in onAction(.escape) }
-            return nil
-        }
-        if chord.keyDown(code: code, flags: event.flags, isRepeat: isRepeat), s.enabled {
-            swallowed.insert(code)
-            DispatchQueue.main.async { [onAction] in onAction(.launcher) }
-            return nil
-        }
-        guard s.enabled, let action = Shortcuts.action(for: code, flags: event.flags, spaceKeys: s.spaceKeys) else {
-            return pass
-        }
+        let afterShiftTap = chord.keyDown(code: code, flags: event.flags, isRepeat: isRepeat)
+        guard s.enabled else { return pass }
+
+        var command: Command?
+        if afterShiftTap { command = s.keymap.shiftTapCommand(for: code, workspaceKeys: s.workspaceKeys) }
+        if command == nil { command = s.keymap.command(for: code, flags: event.flags, workspaceKeys: s.workspaceKeys) }
+        guard let command else { return pass }
+
         swallowed.insert(code)
+        let action = command.action
         DispatchQueue.main.async { [onAction] in onAction(action) }
         return nil
     }

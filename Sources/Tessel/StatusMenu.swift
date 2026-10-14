@@ -11,6 +11,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     var onGrantAccess: (() -> Void)?
     var onShowHelp: (() -> Void)?
     var onShowWelcome: (() -> Void)?
+    var onShowShortcuts: (() -> Void)?
 
     init(tiler: Tiler) {
         self.tiler = tiler
@@ -40,7 +41,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             menu.addItem(action("Tiling", checked: tiler.enabled) { [weak self] in self?.onToggle?() })
             menu.addItem(.separator())
             for i in 0..<Tiler.spaceCount {
-                let entry = action("Space \(i + 1)", checked: tiler.enabled && tiler.currentSpace == i) { [weak self] in
+                let entry = action("Workspace \(i + 1)", checked: tiler.enabled && tiler.currentSpace == i) { [weak self] in
                     self?.tiler.switchSpace(to: i, focusing: nil)
                 }
                 entry.isEnabled = tiler.enabled
@@ -52,7 +53,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             }
             float.isEnabled = tiler.enabled && tiler.focusedID != nil
             menu.addItem(float)
-            let even = action("Tidy This Space") { [weak self] in self?.tiler.normalize() }
+            let even = action("Tidy This Workspace") { [weak self] in self?.tiler.normalize() }
             even.isEnabled = tiler.enabled
             menu.addItem(even)
             let retile = action("Re-tile All Windows") { [weak self] in self?.tiler.retile() }
@@ -80,7 +81,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
                 log.error("launch at login: \(error.localizedDescription, privacy: .public)")
             }
         })
-        let teach = action("Set Up Space Keys…") { [weak self] in self?.onTeachKeys?() }
+        options.addItem(action("Keyboard Shortcuts…") { [weak self] in self?.onShowShortcuts?() })
+        let teach = action("Set Up Workspace Keys…") { [weak self] in self?.onTeachKeys?() }
         teach.isEnabled = trusted
         options.addItem(teach)
         options.addItem(action("Welcome & Setup…") { [weak self] in self?.onShowWelcome?() })

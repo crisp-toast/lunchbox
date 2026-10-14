@@ -812,10 +812,10 @@ final class Tiler {
         case .switchSpace(let i): switchSpace(to: i, focusing: nil)
         case .sendToSpace(let i): send(toSpace: i, follow: true)
         case .close: closeFocused()
-        case .hide: send(toSpace: Self.spaceCount - 1, caption: "Stashed in Space \(Self.spaceCount)", follow: false)
+        case .hide: send(toSpace: Self.spaceCount - 1, caption: "Stashed in Workspace \(Self.spaceCount)", follow: false)
         case .spotlight: toggleSpotlight()
         case .normalize: normalize()
-        case .launcher, .help, .escape: break // handled by the app delegate
+        case .launcher, .help: break // handled by the app delegate
         }
         let ms = (CACurrentMediaTime() - t0) * 1000
         log.notice("\(String(describing: action), privacy: .public) handled in \(ms, format: .fixed(precision: 2)) ms")
@@ -937,7 +937,7 @@ final class Tiler {
         persist()
 
         if let oldFrame { focusNearest(to: oldFrame) } else { focusedID = nil }
-        badge.show(space: index, count: Self.spaceCount, caption: caption ?? "Moved to Space \(index + 1)", on: display)
+        badge.show(space: index, count: Self.spaceCount, caption: caption ?? "Moved to Workspace \(index + 1)", on: display)
     }
 
     /// Focuses the visible window closest to `frame`, or the desktop when this space is empty.
@@ -1188,17 +1188,12 @@ final class Tiler {
                 )
             }
             shelf.show(cards, on: d)
-            onSpotlightChange?(true)
             return
         }
         shelf.hide(animated: true)
-        onSpotlightChange?(false)
     }
 
-    /// Whether the space being viewed has a spotlight on (for Esc).
-    var onSpotlightChange: ((Bool) -> Void)?
-
-    /// Esc: leave spotlight in the space being viewed, keeping focus where it is.
+    /// Leaves Focus in the Workspace being viewed, keeping focus where it is.
     func exitSpotlight() {
         var changed = false
         for uuid in spaces[currentSpace].keys where spaces[currentSpace][uuid]?.spotlight != nil {

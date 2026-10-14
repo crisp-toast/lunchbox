@@ -1,84 +1,54 @@
 import AppKit
 import TesselCore
 
-/// Every shortcut Tessel has, grouped, for the help panel.
-struct ShortcutGuide {
-    struct Entry {
-        let keys: [String]
-        let action: String
-        let group: String
+/// Everything the Cheat Sheet lists: every command with its current keys, plus
+/// the few things that aren't commands (Summon's own keys, the mouse).
+enum CheatSheetContent {
+    static let groupOrder = ["Windows", "Workspaces", "Summon", "Mouse", "Cheat Sheet"]
 
-        func matches(_ words: [String]) -> Bool {
-            let haystack = (keys.joined(separator: " ") + " " + action + " " + group).lowercased()
-            return words.allSatisfy { haystack.contains($0) }
+    static func entries(keymap: Keymap, workspaceKeys: [Int64]) -> [CheatEntry] {
+        var all = Command.allCases.map { c in
+            CheatEntry(id: c.rawValue, keys: Keymap.keycaps(for: keymap.binding(for: c), workspaceKeys: workspaceKeys),
+                       title: c.title, group: c.group, keywords: c.keywords)
         }
-    }
-
-    static func entries(spaceKeys: [Int64]) -> [Entry] {
-        let k = (0..<3).map { i in spaceKeys.indices.contains(i) ? keyName(spaceKeys[i]) : "Space key \(i + 1)" }
-        let all: [(String, [([String], String)])] = [
-            ("Windows", [
-                (["Left ⌘", "← → ↑ ↓"], "Focus the next window in that direction"),
-                (["Left ⌘ ⇧", "← →"], "Move the window sideways: it stacks with its neighbor, then passes it"),
-                (["Left ⌘ ⇧", "↑ ↓"], "Swap the window with the one above or below"),
-                (["Left ⌘ ⇧", "+"], "Give the window more space"),
-                (["Left ⌘ ⇧", "−"], "Give the window less space"),
-                (["Left ⌘ ⇧", "F"], "Focus: this window centered, the rest on the Shelf (again to leave)"),
-                (["Esc"], "Leave Focus (new Finder windows open in Focus)"),
-                (["Left ⌘ ⇧", "0"], "Tidy: even out every window in this space (a centered window goes back to its default size)"),
-                (["Left ⌘ ⇧", "Delete"], "Close the window"),
-            ]),
-            ("Spaces", [
-                (["⌘", k[0]], "Go to Space 1"),
-                (["⌘", k[1]], "Go to Space 2"),
-                (["⌘", k[2]], "Go to Space 3"),
-                (["⌘ ⇧", k[0]], "Move the window to Space 1 and go with it"),
-                (["⌘ ⇧", k[1]], "Move the window to Space 2 and go with it"),
-                (["⌘ ⇧", k[2]], "Move the window to Space 3 and go with it"),
-                (["Left ⌘ ⇧", "H"], "Stash: send the window to Space 3 and stay here"),
-            ]),
-            ("Summon", [
-                (["⇧", "Space"], "Summon: apps first, then files and folders, then the web"),
-                (["↩"], "Open the app, or go to its window if it has one"),
-                (["⌘", "↩"], "Open a new window of an app that's already open"),
-                (["↑ ↓"], "Choose a result"),
-                (["Esc"], "Close Summon"),
-            ]),
-            ("Mouse", [
-                (["Drag"], "Drop a window onto another to swap them"),
-                (["Drag edge"], "Resize a window; its neighbors make room. A centered window keeps any shape and stays centered"),
-                (["Click"], "Click a card on the Shelf to leave Focus with that window"),
-            ]),
-            ("Cheat Sheet", [
-                (["Left ⌘ ⇧", "Space"], "Show or hide this Cheat Sheet"),
-            ]),
+        all += [
+            CheatEntry(id: "summon.go", keys: ["↩"], title: "In Summon: open the app, or go to its window", group: "Summon",
+                       keywords: ["return", "enter", "open", "go to", "existing window", "launch", "select"]),
+            CheatEntry(id: "summon.new", keys: ["⌘", "↩"], title: "In Summon: open a new window of an app that's already open", group: "Summon",
+                       keywords: ["new window", "another window", "second window", "command return", "duplicate", "fresh window"]),
+            CheatEntry(id: "summon.choose", keys: ["↑ ↓"], title: "In Summon: choose a result", group: "Summon",
+                       keywords: ["arrow", "select", "pick", "next result", "previous result", "navigate"]),
+            CheatEntry(id: "summon.close", keys: ["Esc"], title: "In Summon or the Cheat Sheet: close it", group: "Summon",
+                       keywords: ["escape", "close", "dismiss", "cancel", "hide", "exit"]),
+            CheatEntry(id: "mouse.swap", keys: ["Drag"], title: "Drop a window onto another to swap them", group: "Mouse",
+                       keywords: ["mouse", "drag", "drop", "swap", "rearrange", "trackpad", "click"]),
+            CheatEntry(id: "mouse.resize", keys: ["Drag edge"], title: "Resize a window; neighbors make room, a centered window keeps its shape",
+                       group: "Mouse", keywords: ["mouse", "resize", "edge", "size", "stretch", "corner", "trackpad"]),
+            CheatEntry(id: "mouse.shelf", keys: ["Click"], title: "Click a card on the Shelf to leave Focus with that window", group: "Mouse",
+                       keywords: ["mouse", "click", "shelf", "card", "focus", "restore", "exit focus", "leave focus"]),
         ]
-        return all.flatMap { group, rows in rows.map { Entry(keys: $0.0, action: $0.1, group: group) } }
-    }
-
-    static func keyName(_ code: Int64) -> String {
-        let names: [Int64: String] = [
-            116: "Page Up", 121: "Page Down", 119: "End", 115: "Home", 117: "Del", 114: "Help",
-            122: "F1", 120: "F2", 99: "F3", 118: "F4", 96: "F5", 97: "F6", 98: "F7", 100: "F8",
-            101: "F9", 109: "F10", 103: "F11", 111: "F12", 105: "F13", 107: "F14", 113: "F15",
-        ]
-        return names[code] ?? "Key \(code)"
+        // Stable: by group, then in the order listed.
+        return all.enumerated().sorted {
+            let a = groupOrder.firstIndex(of: $0.element.group) ?? 9, b = groupOrder.firstIndex(of: $1.element.group) ?? 9
+            return a != b ? a < b : $0.offset < $1.offset
+        }.map(\.element)
     }
 }
 
-/// Left ⌘⇧Space: every shortcut, grouped, with a search box.
+/// Left ⌘⇧Space: every shortcut, grouped, with a search box that forgives.
 final class HelpPanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     private var panel: LauncherPanel?
     private let field = NSTextField()
     private let list = NSStackView()
-    private let empty = NSTextField(labelWithString: "No shortcut matches that.")
-    private var entries: [ShortcutGuide.Entry] = []
-    private let spaceKeys: () -> [Int64]
+    private let note = NSTextField(labelWithString: "")
+    private var entries: [CheatEntry] = []
+    private let source: () -> (Keymap, [Int64])
+    var onCustomize: (() -> Void)?
 
-    private static let size = NSSize(width: 600, height: 640)
+    private static let size = NSSize(width: 620, height: 660)
 
-    init(spaceKeys: @escaping () -> [Int64]) {
-        self.spaceKeys = spaceKeys
+    init(source: @escaping () -> (Keymap, [Int64])) {
+        self.source = source
     }
 
     var isVisible: Bool { panel?.isVisible ?? false }
@@ -86,7 +56,8 @@ final class HelpPanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     func toggle() { isVisible ? hide() : show() }
 
     func show(query: String = "") {
-        entries = ShortcutGuide.entries(spaceKeys: spaceKeys())
+        let (keymap, keys) = source()
+        entries = CheatSheetContent.entries(keymap: keymap, workspaceKeys: keys)
         let panel = self.panel ?? makePanel()
         field.stringValue = query
         render()
@@ -101,7 +72,7 @@ final class HelpPanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     func hide() { panel?.orderOut(nil) }
 
     var stateDescription: [String: Any] {
-        ["visible": isVisible, "query": field.stringValue,
+        ["visible": isVisible, "query": field.stringValue, "note": note.stringValue,
          "shown": list.arrangedSubviews.compactMap { ($0 as? HelpRow)?.summary }]
     }
 
@@ -115,13 +86,25 @@ final class HelpPanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
 
     func windowDidResignKey(_ notification: Notification) { hide() }
 
+    @objc private func customize() {
+        hide()
+        onCustomize?()
+    }
+
     private func render() {
         list.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let words = field.stringValue.lowercased().split(separator: " ").map(String.init)
-        let shown = entries.filter { $0.matches(words) }
+        let result = CheatSheetSearch.search(field.stringValue, in: entries)
+        note.stringValue = result.closest ? "No exact match. These are the closest:" : ""
+        note.isHidden = !result.closest
+        if result.entries.isEmpty {
+            note.stringValue = "Nothing matches that. Try a word like \"move\", \"workspace\" or \"bigger\"."
+            note.isHidden = false
+        }
+        // Search results keep their ranking; the full list is grouped.
+        let grouped = field.stringValue.trimmingCharacters(in: .whitespaces).isEmpty
         var group = ""
-        for entry in shown {
-            if entry.group != group {
+        for entry in result.entries {
+            if grouped, entry.group != group {
                 group = entry.group
                 let header = NSTextField(labelWithString: group.uppercased())
                 header.font = .systemFont(ofSize: 11, weight: .semibold)
@@ -132,9 +115,8 @@ final class HelpPanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
                 list.addArrangedSubview(spacer)
                 list.addArrangedSubview(header)
             }
-            list.addArrangedSubview(HelpRow(entry: entry))
+            list.addArrangedSubview(HelpRow(entry: entry, showGroup: !grouped))
         }
-        empty.isHidden = !shown.isEmpty
     }
 
     private func makePanel() -> LauncherPanel {
@@ -165,6 +147,9 @@ final class HelpPanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         let title = NSTextField(labelWithString: "Tessel Cheat Sheet")
         title.font = .systemFont(ofSize: 13, weight: .semibold)
         title.textColor = .secondaryLabelColor
+        let customize = NSButton(title: "Customize…", target: self, action: #selector(customize))
+        customize.bezelStyle = .inline
+        customize.toolTip = "Change any shortcut, or restore the defaults"
 
         let glass = NSImageView(image: NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil) ?? NSImage())
         glass.contentTintColor = .secondaryLabelColor
@@ -172,7 +157,7 @@ final class HelpPanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = .systemFont(ofSize: 20)
-        field.placeholderString = "Search shortcuts (try \"focus\" or \"move\")"
+        field.placeholderString = "Search, like \"hide\", \"bigger\" or \"desktop 2\""
         field.delegate = self
 
         list.orientation = .vertical
@@ -188,19 +173,21 @@ final class HelpPanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         scroll.autohidesScrollers = true
         scroll.documentView = document
 
-        empty.font = .systemFont(ofSize: 14)
-        empty.textColor = .secondaryLabelColor
-        empty.isHidden = true
+        note.font = .systemFont(ofSize: 12, weight: .medium)
+        note.textColor = .secondaryLabelColor
+        note.isHidden = true
 
         let divider = NSBox()
         divider.boxType = .separator
-        for v in [title, glass, field, divider, scroll, empty] as [NSView] {
+        for v in [title, customize, glass, field, divider, note, scroll] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             background.addSubview(v)
         }
         NSLayoutConstraint.activate([
             title.topAnchor.constraint(equalTo: background.topAnchor, constant: 16),
             title.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: 22),
+            customize.centerYAnchor.constraint(equalTo: title.centerYAnchor),
+            customize.trailingAnchor.constraint(equalTo: background.trailingAnchor, constant: -18),
             glass.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: 22),
             glass.centerYAnchor.constraint(equalTo: field.centerYAnchor),
             glass.widthAnchor.constraint(equalToConstant: 18),
@@ -211,7 +198,9 @@ final class HelpPanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             divider.topAnchor.constraint(equalTo: field.bottomAnchor, constant: 12),
             divider.leadingAnchor.constraint(equalTo: background.leadingAnchor),
             divider.trailingAnchor.constraint(equalTo: background.trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 8),
+            note.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 10),
+            note.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: 22),
+            scroll.topAnchor.constraint(equalTo: note.bottomAnchor, constant: 4),
             scroll.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: 10),
             scroll.trailingAnchor.constraint(equalTo: background.trailingAnchor, constant: -10),
             scroll.bottomAnchor.constraint(equalTo: background.bottomAnchor, constant: -10),
@@ -222,8 +211,6 @@ final class HelpPanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             list.trailingAnchor.constraint(equalTo: document.trailingAnchor, constant: -12),
             list.topAnchor.constraint(equalTo: document.topAnchor, constant: 4),
             list.bottomAnchor.constraint(equalTo: document.bottomAnchor, constant: -8),
-            empty.centerXAnchor.constraint(equalTo: background.centerXAnchor),
-            empty.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 40),
         ])
         panel.contentView = background
         self.panel = panel
@@ -231,37 +218,52 @@ final class HelpPanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     }
 }
 
-private final class FlippedView: NSView {
+final class FlippedView: NSView {
     override var isFlipped: Bool { true }
 }
 
 private final class HelpRow: NSView {
     let summary: String
 
-    init(entry: ShortcutGuide.Entry) {
-        summary = entry.keys.joined(separator: " + ") + ": " + entry.action
+    init(entry: CheatEntry, showGroup: Bool) {
+        summary = entry.keys.joined(separator: " + ") + ": " + entry.title
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        let keys = NSStackView(views: entry.keys.map { Keycap(text: $0) })
+        let keys = NSStackView(views: entry.keys.map { k in
+            k == "then" ? NSTextField(labelWithString: "then") as NSView : Keycap(text: k)
+        })
         keys.orientation = .horizontal
         keys.spacing = 4
-        let action = NSTextField(wrappingLabelWithString: entry.action)
+        let action = NSTextField(wrappingLabelWithString: entry.title)
         action.font = .systemFont(ofSize: 13)
         action.textColor = .labelColor
-        for v in [keys, action] as [NSView] {
+        var views: [NSView] = [keys, action]
+        let group = NSTextField(labelWithString: entry.group)
+        if showGroup {
+            group.font = .systemFont(ofSize: 11)
+            group.textColor = .tertiaryLabelColor
+            views.append(group)
+        }
+        for v in views {
             v.translatesAutoresizingMaskIntoConstraints = false
             addSubview(v)
         }
         NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: 540),
+            widthAnchor.constraint(equalToConstant: 560),
             keys.leadingAnchor.constraint(equalTo: leadingAnchor),
             keys.topAnchor.constraint(equalTo: topAnchor, constant: 5),
-            action.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 190),
-            action.trailingAnchor.constraint(equalTo: trailingAnchor),
+            action.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 200),
+            action.trailingAnchor.constraint(equalTo: trailingAnchor, constant: showGroup ? -76 : 0),
             action.topAnchor.constraint(equalTo: topAnchor, constant: 7),
             bottomAnchor.constraint(greaterThanOrEqualTo: action.bottomAnchor, constant: 6),
             bottomAnchor.constraint(greaterThanOrEqualTo: keys.bottomAnchor, constant: 5),
         ])
+        if showGroup {
+            NSLayoutConstraint.activate([
+                group.trailingAnchor.constraint(equalTo: trailingAnchor),
+                group.centerYAnchor.constraint(equalTo: action.centerYAnchor),
+            ])
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }

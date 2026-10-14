@@ -11,6 +11,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
 
     var onSpaceKeys: (([Int64]) -> Void)?
     var onRequestAccess: (() -> Void)?
+    var onCustomize: (() -> Void)?
 
     private let tap: HotkeyTap
     private let tiler: Tiler
@@ -159,12 +160,6 @@ final class Onboarding: NSObject, NSWindowDelegate {
 
     // MARK: Space keys
 
-    /// Keys that type or edit text are turned down; the right-hand navigation
-    /// cluster and function keys are fair game.
-    static func isGoodSpaceKey(_ code: Int64) -> Bool {
-        (96...122).contains(code) || [64, 79, 80, 90].contains(code)
-    }
-
     private func keysView() -> NSView {
         keys = []
         slots = (1...3).map { KeySlot(space: $0) }
@@ -182,26 +177,26 @@ final class Onboarding: NSObject, NSWindowDelegate {
         column.spacing = 14
         listenForKey()
         return page(top: symbol("keyboard"),
-                    title: "Choose your space keys",
-                    body: "Tap three keys you never use, ideally out of the way on the right side of your keyboard. Page Up, Page Down and End are perfect, or F13, F14 and F15. They become Spaces 1, 2 and 3.",
+                    title: "Choose your Workspace keys",
+                    body: "Tessel gives you three Workspaces. Tap three keys you never use, ideally out of the way on the right side of your keyboard. Page Up, Page Down and End are perfect, or F13, F14 and F15. They become Workspaces 1, 2 and 3.",
                     content: column)
     }
 
     private func listenForKey() {
         guard AXIsProcessTrusted(), keys.count < 3 else { return }
-        tap.learnNextKey { [weak self] code in self?.learned(code) }
+        tap.learnNextKey { [weak self] code, _ in self?.learned(code) }
     }
 
     private func learned(_ code: Int64) {
         guard step == .keys, keys.count < 3 else { return }
-        if !Self.isGoodSpaceKey(code) {
+        if !KeyNames.isGoodWorkspaceKey(code) {
             keyHint.stringValue = "That key is used for typing. Try one on the far right, like Page Up or End."
         } else if keys.contains(code) {
             keyHint.stringValue = "You already picked that one. Tap a different key."
         } else {
-            slots[keys.count].fill(with: ShortcutGuide.keyName(code))
+            slots[keys.count].fill(with: KeyNames.name(code))
             keys.append(code)
-            keyHint.stringValue = keys.count == 3 ? "All set. ⌘ plus a space key switches spaces." : " "
+            keyHint.stringValue = keys.count == 3 ? "All set. ⌘ plus a Workspace key switches Workspaces." : " "
             if keys.count < 3 { slots[keys.count].isCurrent = true }
             if keys.count == 3 {
                 onSpaceKeys?(keys)
@@ -224,11 +219,11 @@ final class Onboarding: NSObject, NSWindowDelegate {
 
     private func practiceView() -> NSView {
         practiceRows = [:]
-        let spaceKey = tap.spaceKeys.count > 1 ? ShortcutGuide.keyName(tap.spaceKeys[1]) : "Space key 2"
+        let spaceKey = tap.spaceKeys.count > 1 ? KeyNames.name(tap.spaceKeys[1]) : "Workspace key 2"
         let items: [(String, [String], String)] = [
             ("focus", ["Left ⌘", "→"], "Move focus to the next window"),
             ("move", ["Left ⌘", "⇧", "←"], "Move a window"),
-            ("space", ["⌘", spaceKey], "Go to Space 2 (and back with your first key)"),
+            ("space", ["⌘", spaceKey], "Go to Workspace 2 (and back with your first key)"),
             ("summon", ["⇧", "Space"], "Summon an app, then Esc to close"),
             ("help", ["Left ⌘", "⇧", "Space"], "Open the Cheat Sheet, then Esc"),
         ]
@@ -408,7 +403,7 @@ private final class KeySlot: NSView {
     private var filled = false
 
     init(space: Int) {
-        caption = NSTextField(labelWithString: "Space \(space)")
+        caption = NSTextField(labelWithString: "Workspace \(space)")
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 18
@@ -453,7 +448,7 @@ private final class KeySlot: NSView {
 
     func clear() {
         filled = false
-        keyLabel.stringValue = caption.stringValue.replacingOccurrences(of: "Space ", with: "")
+        keyLabel.stringValue = caption.stringValue.replacingOccurrences(of: "Workspace ", with: "")
         refresh()
     }
 
