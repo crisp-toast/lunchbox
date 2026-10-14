@@ -117,6 +117,10 @@ final class Tiler {
         on(NSWorkspace.didUnhideApplicationNotification) { [weak self] n in self?.rescan(n) }
         on(NSWorkspace.activeSpaceDidChangeNotification) { [weak self] _ in self?.scanAll() }
         on(NSApplication.didChangeScreenParametersNotification, .default) { [weak self] _ in self?.displaysChanged() }
+        // Showing or hiding the Dock changes the usable area of the screen.
+        on(Notification.Name("com.apple.dock.prefchanged"), DistributedNotificationCenter.default()) { [weak self] _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self?.displaysChanged() }
+        }
 
         mouseMonitors = [
             NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
@@ -137,7 +141,11 @@ final class Tiler {
         guard enabled else { return }
         revealHiddenWindows()
         enabled = false
-        notificationTokens.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0); NotificationCenter.default.removeObserver($0) }
+        notificationTokens.forEach {
+            NSWorkspace.shared.notificationCenter.removeObserver($0)
+            NotificationCenter.default.removeObserver($0)
+            DistributedNotificationCenter.default().removeObserver($0)
+        }
         notificationTokens = []
         mouseMonitors.forEach { NSEvent.removeMonitor($0) }
         mouseMonitors = []
@@ -585,6 +593,10 @@ final class Tiler {
     /// Sends every window whose slot changed to its new frame. Windows of other
     /// spaces are parked off screen.
     func relayout(animated: Bool) {
+        // Pick up a Dock that was just shown, hidden, or resized: the usable area
+        // changes without the set of displays changing.
+        let fresh = Display.current()
+        if Set(fresh.map(\.uuid)) == Set(displays.map(\.uuid)) { displays = fresh }
         let now = CACurrentMediaTime()
         let spot = Display.hidingSpot(in: displays)
         var moves: [(window: WindowHandle, from: CGRect, to: CGRect, kind: Animator.Kind)] = []

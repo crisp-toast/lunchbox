@@ -35,10 +35,15 @@ final class FocusRing {
         let (panel, ring) = overlay(for: display.id, screen: screen)
         if panel.frame != screen.frame { panel.setFrame(screen.frame, display: false) }
 
+        // Window frames are top-left based; the overlay's layers are bottom-left
+        // based (AppKit owns a layer-backed view's flip, so asking it to flip
+        // doesn't stick). Convert explicitly, relative to where the panel really is.
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? screen.frame.height
         let local = CGRect(
-            x: frame.minX - display.frame.minX - 2, y: frame.minY - display.frame.minY - 2,
-            width: frame.width + 4, height: frame.height + 4
-        )
+            x: frame.minX - panel.frame.minX,
+            y: primaryHeight - frame.maxY - panel.frame.minY,
+            width: frame.width, height: frame.height
+        ).insetBy(dx: -2, dy: -2)
         let glide = shownOn == display.id && ring.opacity > 0.01 && !reduceMotion
         CATransaction.begin()
         if glide {
@@ -79,7 +84,6 @@ final class FocusRing {
         let panel = overlayPanel(frame: screen.frame)
         let view = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
         view.wantsLayer = true
-        view.layer?.isGeometryFlipped = true
         view.autoresizingMask = [.width, .height]
         let ring = CALayer()
         ring.borderWidth = 3
