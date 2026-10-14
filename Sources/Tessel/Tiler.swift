@@ -483,10 +483,26 @@ final class Tiler {
         }
     }
 
+    /// Something Tessel opened (from Summon) is on its way: when its app comes
+    /// forward, its window joins the Workspace being viewed.
+    private var expectedArrival: (bundleID: String, until: CFTimeInterval)?
+
+    /// Call before Summon opens something: leaves Focus here and makes the app
+    /// that will show it bring its window to this Workspace instead of taking
+    /// you to wherever that window was.
+    func prepareForOpening(with bundleID: String?) {
+        exitSpotlight()
+        if let bundleID { expectedArrival = (bundleID, CACurrentMediaTime() + 6) }
+    }
+
     private func appActivated(_ running: NSRunningApplication) {
         guard let app = apps[running.processIdentifier] else { return }
         if let click = lastClick, CACurrentMediaTime() - click.at < 1.2, isDockClick(click.point) {
             dockActivation = (app.pid, CACurrentMediaTime() + 1.5)
+        }
+        if let arrival = expectedArrival, arrival.bundleID == running.bundleIdentifier, CACurrentMediaTime() < arrival.until {
+            expectedArrival = nil
+            dockActivation = (app.pid, CACurrentMediaTime() + 2)
         }
         app.queue.async { [weak self] in
             let id = app.element.element(kAXFocusedWindowAttribute)?.windowID
@@ -507,7 +523,7 @@ final class Tiler {
             return
         }
         if space != currentSpace, let dock = dockActivation, dock.pid == app.pid, CACurrentMediaTime() < dock.until {
-            // Opened from the Dock: bring the window here instead of going to it.
+            // Opened from the Dock or Summon: bring the window here instead of going to it.
             dockActivation = nil
             bringToCurrentSpace(id)
             return
@@ -1050,7 +1066,8 @@ final class Tiler {
     /// focused once it appears. Brings the app forward first (many apps ignore
     /// menu commands while in the background), without jumping to a space where
     /// its other windows live; then uses its own File › New Window (or the
-    /// like), falling back to sending it ⌘N. Reports false if neither worked.
+    /// like). Reports false when the app has no such command. (No ⌘N fallback:
+    /// in Music that's New Playlist, in Notes New Note.)
     func openNewWindow(ofApp pid: pid_t, completion: @escaping (Bool) -> Void) {
         guard let app = apps[pid] else { return completion(false) }
         let mine = windows.values.filter { $0.pid == pid }
@@ -1064,9 +1081,8 @@ final class Tiler {
             app.element.set(kAXFrontmostAttribute, true)
         }
         app.queue.asyncAfter(deadline: .now() + 0.12) { [weak self] in
-            var opened = Self.newWindowMenuItem(in: app.element)
+            let opened = Self.newWindowMenuItem(in: app.element)
                 .map { AXUIElementPerformAction($0, kAXPressAction as CFString) == .success } ?? false
-            if !opened { opened = Self.sendCommandN(to: pid) }
             DispatchQueue.main.async {
                 if !opened { self?.pendingNewWindow = nil }
                 completion(opened)
@@ -1074,21 +1090,28 @@ final class Tiler {
         }
     }
 
-    /// ⌘N straight to one app, for apps without a findable New Window item.
-    private static func sendCommandN(to pid: pid_t) -> Bool {
-        guard let source = CGEventSource(stateID: .hidSystemState),
-              let down = CGEvent(keyboardEventSource: source, virtualKey: 45, keyDown: true),
-              let up = CGEvent(keyboardEventSource: source, virtualKey: 45, keyDown: false) else { return false }
-        down.flags = .maskCommand
-        up.flags = .maskCommand
-        down.postToPid(pid)
-        up.postToPid(pid)
-        return true
+    /// Whether each app (by bundle ID) has a real New Window command.
+    private(set) var newWindowSupport: [String: Bool] = [:]
+
+    /// Whether an app can open a new window: true/false when known, nil while
+    /// Tessel looks at its menus (then `changed` runs once with the answer).
+    func supportsNewWindow(pid: pid_t, bundleID: String?, changed: @escaping () -> Void) -> Bool? {
+        guard let bundleID else { return false }
+        if let known = newWindowSupport[bundleID] { return known }
+        guard let app = apps[pid] else { return false }
+        app.queue.async { [weak self] in
+            let found = Self.newWindowMenuItem(in: app.element) != nil
+            DispatchQueue.main.async {
+                self?.newWindowSupport[bundleID] = found
+                changed()
+            }
+        }
+        return nil
     }
 
     /// Runs on the app's queue. Looks through the File, Shell and Window menus
     /// for "New Window" (or "New Finder Window", or File › New › Window in
-    /// Xcode), falling back to the plain ⌘N item.
+    /// Xcode). Only an item that says "window" counts.
     private static func newWindowMenuItem(in app: AXUIElement) -> AXUIElement? {
         guard let bar = app.element(kAXMenuBarAttribute) else { return nil }
         func title(_ e: AXUIElement) -> String { (e.string(kAXTitleAttribute) ?? "").lowercased() }
@@ -1096,7 +1119,6 @@ final class Tiler {
         let menus = bar.elements(kAXChildrenAttribute)
             .filter { preferred.contains(title($0)) }
             .sorted { (preferred.firstIndex(of: title($0)) ?? 9) < (preferred.firstIndex(of: title($1)) ?? 9) }
-        var commandN: AXUIElement?
         for top in menus {
             guard let menu = top.elements(kAXChildrenAttribute).first else { continue }
             for item in menu.elements(kAXChildrenAttribute) where item.bool(kAXEnabledAttribute) {
@@ -1107,13 +1129,9 @@ final class Tiler {
                    let window = sub.elements(kAXChildrenAttribute).first(where: { title($0) == "window" && $0.bool(kAXEnabledAttribute) }) {
                     return window
                 }
-                if commandN == nil, item.string(kAXMenuItemCmdCharAttribute)?.uppercased() == "N",
-                   (item.value(kAXMenuItemCmdModifiersAttribute) as? Int) == 0 {
-                    commandN = item
-                }
             }
         }
-        return commandN
+        return nil
     }
 
     // MARK: Spotlight
@@ -1293,6 +1311,7 @@ final class Tiler {
         return [
             "enabled": enabled, "currentSpace": currentSpace + 1, "focused": focusedID ?? 0,
             "useAllDisplays": useAllDisplays, "windowServerFocus": WindowFocus.isAvailable,
+            "newWindowSupport": newWindowSupport,
             "displays": displays.map { "\($0.name) \(NSStringFromRect($0.visible))" },
             "spaces": spaceList, "windows": windowList,
         ]

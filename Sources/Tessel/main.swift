@@ -147,6 +147,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             launcher.show(query: String(command.dropFirst(5)))
             return
         }
+        if command.hasPrefix("press:") {
+            // press:<keycode>[:cmd][:shift][:opt] posts a real key press through the
+            // whole system, exactly like the keyboard, for end-to-end tests.
+            let parts = command.split(separator: ":").map(String.init)
+            guard parts.count >= 2, let code = CGKeyCode(parts[1]) else { return }
+            var flags = CGEventFlags()
+            if parts.contains("cmd") { flags.insert(.maskCommand); flags.insert(CGEventFlags(rawValue: Shortcuts.leftCommandMask)) }
+            if parts.contains("shift") { flags.insert(.maskShift); flags.insert(CGEventFlags(rawValue: 0x02)) }
+            if parts.contains("opt") { flags.insert(.maskAlternate) }
+            let source = CGEventSource(stateID: .hidSystemState)
+            for down in [true, false] {
+                guard let e = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else { continue }
+                e.flags = flags
+                e.post(tap: .cghidEventTap)
+            }
+            return
+        }
         if command.hasPrefix("help:") {
             help.show(query: String(command.dropFirst(5)))
             return

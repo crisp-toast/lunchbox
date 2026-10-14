@@ -17,23 +17,24 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     /// One entry in the list. Return runs the main action; an app with a window
     /// you can reach also offers a second one, a new window, on ⌘-Return.
     enum Result {
-        /// `reachable`: it has a window you can get to, so Return goes there and
-        /// Shift-Return opens a new one. Otherwise Return opens the app.
-        case app(App, running: NSRunningApplication?, reachable: Bool)
+        /// `reachable`: it has a window you can get to, so Return goes there.
+        /// `newWindow`: it also has a real New Window command, offered on ⌘↩.
+        /// Otherwise Return opens the app.
+        case app(App, running: NSRunningApplication?, reachable: Bool, newWindow: Bool)
         case file(URL)
         /// Nothing matched: search the web for the text, or open it if it's an address.
         case web(String)
 
         var path: String {
             switch self {
-            case .app(let a, _, _): return a.url.path
+            case .app(let a, _, _, _): return a.url.path
             case .file(let url): return url.path
             case .web: return ""
             }
         }
 
         var hasNewWindowAction: Bool {
-            if case .app(_, _, true) = self { return true }
+            if case .app(_, _, true, true) = self { return true }
             return false
         }
     }
@@ -56,10 +57,23 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     private static let rowHeight: CGFloat = 46
     private static let maxRows = 8
 
+    private var keyMonitor: Any?
+
     init(tiler: Tiler) {
         self.tiler = tiler
         super.init()
         reloadApps()
+        // ⌘↩ never reaches the search field: AppKit treats any ⌘ combination as
+        // a menu shortcut first, and the field drops it. Catch Return with ⌘ or
+        // ⇧ here, before anything else sees it.
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, self.isVisible, event.window === self.panel,
+                  event.keyCode == 36 || event.keyCode == 76 else { return event }
+            let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            guard mods.contains(.command) || mods.contains(.shift) else { return event }
+            self.openSelection(newWindow: true)
+            return nil
+        }
     }
 
     var isVisible: Bool { panel?.isVisible ?? false }
@@ -95,7 +109,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         if results.indices.contains(selected) { open(results[selected], newWindow: newWindow) }
     }
     var stateDescription: [String: Any] {
-        ["visible": isVisible, "query": field.stringValue, "selected": selected,
+        ["visible": isVisible, "key": panel?.isKeyWindow ?? false, "query": field.stringValue, "selected": selected,
          "results": results.map { r -> String in
              let d = describe(r)
              return d.title + " | " + d.subtitle + " [↩]" + (r.hasNewWindowAction ? " + New window [⌘↩]" : "")
@@ -183,7 +197,15 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         let list: [Result] = ranked.prefix(Self.maxRows).map { app in
             let running = runningApp(app)
             let reachable = running.map { tiler.hasReachableWindow(ofApp: $0.processIdentifier) } ?? false
-            return .app(app, running: running, reachable: reachable)
+            var newWindow = false
+            if reachable, let running {
+                // Only apps with a real New Window command get the ⌘↩ line; the
+                // first time, Tessel looks at the app's menus and redraws.
+                newWindow = tiler.supportsNewWindow(pid: running.processIdentifier, bundleID: app.bundleID) { [weak self] in
+                    self?.refreshKeepingSelection()
+                } ?? false
+            }
+            return .app(app, running: running, reachable: reachable, newWindow: newWindow)
         }
         results = list
         if list.isEmpty, !query.isEmpty { results = [.web(query)] }
@@ -195,6 +217,14 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             fileSearch = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.06, execute: work)
         }
+    }
+
+    /// Re-runs the search after a menu check, keeping the highlighted row.
+    private func refreshKeepingSelection() {
+        guard isVisible, results.allSatisfy({ if case .app = $0 { return true }; return false }) else { return }
+        let keep = selected
+        update()
+        select(min(keep, max(0, results.count - 1)))
     }
 
     private func runningApp(_ app: App) -> NSRunningApplication? {
@@ -247,16 +277,28 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         uses[result.path, default: 0] += 1
         UserDefaults.standard.set(uses, forKey: "launcherUses")
 
+        // Whatever opens lands in this Workspace, tiled, and Focus ends here.
         switch result {
-        case .app(let app, let running?, true):
-            if newWindow {
+        case .app(let app, _, let reachable, let canNew) where (newWindow && canNew) || !reachable:
+            tiler.prepareForOpening(with: app.bundleID)
+        case .file(let url):
+            tiler.prepareForOpening(with: NSWorkspace.shared.urlForApplication(toOpen: url).flatMap { Bundle(url: $0)?.bundleIdentifier })
+        case .web:
+            tiler.prepareForOpening(with: Self.defaultBrowser.flatMap { Bundle(path: $0.path)?.bundleIdentifier })
+        default:
+            break
+        }
+
+        switch result {
+        case .app(let app, let running?, true, let canNew):
+            if newWindow && canNew {
                 tiler.openNewWindow(ofApp: running.processIdentifier) { [weak self] opened in
                     if !opened { self?.launch(app) }
                 }
             } else if !tiler.goToWindow(ofApp: running.processIdentifier) {
                 launch(app)
             }
-        case .app(let app, _, _):
+        case .app(let app, _, _, _):
             launch(app)
         case .file(let url):
             NSWorkspace.shared.open(url)
@@ -353,7 +395,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
 
     private func describe(_ result: Result) -> (title: String, subtitle: String, icon: String) {
         switch result {
-        case .app(let app, let running, let reachable):
+        case .app(let app, let running, let reachable, _):
             let subtitle = reachable ? "Go to its window" : (running == nil ? "Open" : "Open · running with no windows")
             return (app.name, subtitle, app.url.path)
         case .file(let url):
@@ -381,7 +423,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         rowViews = results.enumerated().map { i, result in
             let d = describe(result)
             var newWindowTitle: String?
-            if case .app(let app, _, true) = result { newWindowTitle = "New \(app.name) window" }
+            if case .app(let app, _, true, true) = result { newWindowTitle = "New \(app.name) window" }
             let row = ResultRow(title: d.title, subtitle: d.subtitle, icon: icon(for: d.icon), newWindowTitle: newWindowTitle)
             row.isSelected = i == selected
             row.onClick = { [weak self] newWindow in
