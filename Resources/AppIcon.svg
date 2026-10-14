@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- macOS icon grid: an 824-point body centered on a 1024 canvas, with a soft drop shadow -->
+  <defs>
+    <linearGradient id="bg" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#4c8dff"/>
+      <stop offset="1" stop-color="#1f45d6"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.30"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#0b1a4a" flood-opacity="0.30"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  </g>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#sheen)"/>
+  <rect x="258" y="258" width="232" height="508" rx="40" fill="#ffffff" fill-opacity="0.96"/>
+  <rect x="534" y="258" width="232" height="232" rx="40" fill="#ffffff" fill-opacity="0.96"/>
+  <rect x="534" y="534" width="232" height="232" rx="40" fill="#ffffff" fill-opacity="0.62"/>
+  <rect x="514" y="238" width="272" height="272" rx="57" fill="none" stroke="#bfe0ff" stroke-width="13"/>
+</svg>

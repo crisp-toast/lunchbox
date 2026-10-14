@@ -8,6 +8,8 @@
 	<string>Tessel</string>
 	<key>CFBundleExecutable</key>
 	<string>Tessel</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.tyleryouens.tessel</string>
 	<key>CFBundleInfoDictionaryVersion</key>
