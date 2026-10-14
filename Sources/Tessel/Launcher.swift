@@ -18,7 +18,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     /// you can reach also offers a second one, a new window, on ⌘-Return.
     enum Result {
         /// `reachable`: it has a window you can get to, so Return goes there.
-        /// `newWindow`: it also has a real New Window command, offered on ⌘↩.
+        /// `newWindow`: it also has a real New Window command, offered on ⇧↩.
         /// Otherwise Return opens the app.
         case app(App, running: NSRunningApplication?, reachable: Bool, newWindow: Bool)
         case file(URL)
@@ -63,14 +63,13 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         self.tiler = tiler
         super.init()
         reloadApps()
-        // ⌘↩ never reaches the search field: AppKit treats any ⌘ combination as
-        // a menu shortcut first, and the field drops it. Catch Return with ⌘ or
-        // ⇧ here, before anything else sees it.
+        // Catch ⇧↩ (a new window) here, before the search field sees it, so it
+        // works however the field interprets Return.
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, self.isVisible, event.window === self.panel,
                   event.keyCode == 36 || event.keyCode == 76 else { return event }
             let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            guard mods.contains(.command) || mods.contains(.shift) else { return event }
+            guard mods.contains(.shift), !mods.contains(.command) else { return event }
             self.openSelection(newWindow: true)
             return nil
         }
@@ -112,7 +111,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         ["visible": isVisible, "key": panel?.isKeyWindow ?? false, "query": field.stringValue, "selected": selected,
          "results": results.map { r -> String in
              let d = describe(r)
-             return d.title + " | " + d.subtitle + " [↩]" + (r.hasNewWindowAction ? " + New window [⌘↩]" : "")
+             return d.title + " | " + d.subtitle + " [↩]" + (r.hasNewWindowAction ? " + New window [⇧↩]" : "")
          }]
     }
 
@@ -199,7 +198,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             let reachable = running.map { tiler.hasReachableWindow(ofApp: $0.processIdentifier) } ?? false
             var newWindow = false
             if reachable, let running {
-                // Only apps with a real New Window command get the ⌘↩ line; the
+                // Only apps with a real New Window command get the ⇧↩ line; the
                 // first time, Tessel looks at the app's menus and redraws.
                 newWindow = tiler.supportsNewWindow(pid: running.processIdentifier, bundleID: app.bundleID) { [weak self] in
                     self?.refreshKeepingSelection()
@@ -367,10 +366,10 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         case #selector(NSResponder.moveUp(_:)): select(selected - 1)
         case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)),
              #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
-            // ⌘↩ (or ⇧↩) opens a new window. Read the modifiers from the keyboard
-            // itself: the panel doesn't activate Tessel, so NSApp.currentEvent can be stale.
+            // ⇧↩ opens a new window. Read the modifiers from the keyboard itself:
+            // the panel doesn't activate Tessel, so NSApp.currentEvent can be stale.
             let flags = NSEvent.modifierFlags.union(NSApp.currentEvent?.modifierFlags ?? [])
-            openSelection(newWindow: flags.contains(.command) || flags.contains(.shift))
+            openSelection(newWindow: flags.contains(.shift))
         case #selector(NSResponder.cancelOperation(_:)): hide()
         default: return false
         }
@@ -507,7 +506,7 @@ final class LauncherPanel: NSPanel {
 }
 
 /// One app (or file) in the list. The main line carries a ↩ keycap; an app with
-/// a window to go to gets a second, smaller line, "New … window", with ⌘↩.
+/// a window to go to gets a second, smaller line, "New … window", with ⇧↩.
 /// Both lines are one selection, so a key press can only ever do one thing.
 private final class ResultRow: NSView {
     static let mainHeight: CGFloat = 46
@@ -567,7 +566,7 @@ private final class ResultRow: NSView {
             label.lineBreakMode = .byTruncatingTail
             let plus = NSImageView(image: NSImage(systemSymbolName: "plus.rectangle.on.rectangle", accessibilityDescription: nil) ?? NSImage())
             plus.contentTintColor = .secondaryLabelColor
-            let key = Keycap(text: "⌘↩")
+            let key = Keycap(text: "⇧↩")
             for v in [plus, label, key] as [NSView] {
                 v.translatesAutoresizingMaskIntoConstraints = false
                 addSubview(v)
@@ -607,7 +606,7 @@ private final class ResultRow: NSView {
     }
 }
 
-/// A small key-shaped label like ↩ or ⌘↩.
+/// A small key-shaped label like ↩ or ⇧↩.
 final class Keycap: NSView {
     private let label: NSTextField
     var onAccent = false { didSet { refresh() } }

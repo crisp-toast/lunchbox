@@ -7,6 +7,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var tap: HotkeyTap = HotkeyTap { [weak self] action in
         guard let self else { return }
         self.onboarding.noted(action)
+        // Practicing in onboarding: window shortcuts move the pretend windows.
+        if self.onboarding.capturesWindowActions, action != .launcher, action != .help {
+            self.onboarding.playgroundPerform(action)
+            return
+        }
         switch action {
         case .launcher: self.launcher.toggle()
         case .help: self.help.toggle()

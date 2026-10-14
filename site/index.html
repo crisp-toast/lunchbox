@@ -499,7 +499,7 @@ const CHECKOUT_URL = "";
     const L = step.launcher;
     mac.launcher.hidden = !L;
     if (L) {
-      const rows = (L.rows || []).map((r, i) => `<div class="row ${i === (L.sel ?? 0) ? "sel" : ""}"><span class="ic" style="${r.ic || ""}"></span><span class="t">${r.t}</span><span class="mini-kc ret">↩</span><span class="s">${r.s}</span>${r.sub ? `<div class="sub"><span>＋ ${r.sub}</span><span class="mini-kc">⌘↩</span></div>` : ""}</div>`).join("");
+      const rows = (L.rows || []).map((r, i) => `<div class="row ${i === (L.sel ?? 0) ? "sel" : ""}"><span class="ic" style="${r.ic || ""}"></span><span class="t">${r.t}</span><span class="mini-kc ret">↩</span><span class="s">${r.s}</span>${r.sub ? `<div class="sub"><span>＋ ${r.sub}</span><span class="mini-kc">⇧↩</span></div>` : ""}</div>`).join("");
       mac.launcher.innerHTML = `<div class="q">${L.q ? L.q : '<span class="ph">Summon an app, file or website</span>'}<span class="caret"></span></div>${rows}`;
     }
     const H = step.help;
@@ -569,7 +569,7 @@ const CHECKOUT_URL = "";
       { win: four, focus: "B", keys: [], cap: "Faster than Spotlight for the apps you use every day." },
       { win: four, focus: "B", keys: ["⇧", "Space"], launcher: { q: "", rows: [] }, cap: "Shift, then Space, and Summon is there instantly." },
       { win: four, focus: "B", keys: ["A", "R"], launcher: { q: "ar", rows: arcRows, sel: 0 }, cap: "Apps first, then files, then the web. An open app offers two choices." },
-      { win: { A: R.c1t, F: R.c1b, B: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: ["⌘", "↩"], cap: "↩ goes to its window. ⌘↩ opens a new one, tiled and focused." },
+      { win: { A: R.c1t, F: R.c1b, B: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: ["⇧", "↩"], cap: "↩ goes to its window. ⇧↩ opens a new one, tiled and focused." },
     ]},
     { title: "Cheat Sheet", hint: "left ⌘⇧ Space", steps: [
       { win: four, focus: "C", keys: [], cap: "Forget a shortcut? There's one to show them all." },

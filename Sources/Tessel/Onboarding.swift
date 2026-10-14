@@ -31,6 +31,10 @@ final class Onboarding: NSObject, NSWindowDelegate {
     // Practice step
     private var practiceRows: [String: PracticeRow] = [:]
     private var practiced = Set<String>()
+    private var playground: Playground?
+
+    private static let normalSize = NSSize(width: 760, height: 560)
+    private static let practiceSize = NSSize(width: 1260, height: 820)
 
     // Finish step
     private let previewStatus = NSTextField(labelWithString: "")
@@ -52,6 +56,15 @@ final class Onboarding: NSObject, NSWindowDelegate {
         go(to: start, animated: false)
     }
 
+    /// While the practice step is in front, window shortcuts drive the
+    /// playground instead of real windows. Switch to another app and they work
+    /// on the real desktop again, so onboarding never takes over the Mac.
+    var capturesWindowActions: Bool {
+        isVisible && step == .practice && (window?.isKeyWindow ?? false)
+    }
+
+    func playgroundPerform(_ action: KeyAction) { playground?.perform(action) }
+
     /// Practice: tick off a shortcut the user just used.
     func noted(_ action: KeyAction) {
         guard isVisible, step == .practice else { return }
@@ -59,9 +72,12 @@ final class Onboarding: NSObject, NSWindowDelegate {
         switch action {
         case .focus: id = "focus"
         case .move: id = "move"
+        case .grow, .shrink: id = "size"
+        case .spotlight: id = "focusMode"
+        case .normalize: id = "tidy"
+        case .switchSpace, .sendToSpace: id = "space"
         case .launcher: id = "summon"
         case .help: id = "help"
-        case .switchSpace: id = "space"
         default: return
         }
         guard !practiced.contains(id), let row = practiceRows[id] else { return }
@@ -86,6 +102,19 @@ final class Onboarding: NSObject, NSWindowDelegate {
         }
         swap(to: view, animated: animated)
         updateFooter()
+        resizeWindow(to: target == .practice ? Self.practiceSize : Self.normalSize, animated: animated)
+    }
+
+    /// The practice step opens up into a big window with the playground; the
+    /// other steps stay compact. Grows around its center, kept on screen.
+    private func resizeWindow(to size: NSSize, animated: Bool) {
+        guard let window, window.frame.size != size else { return }
+        let area = (window.screen ?? NSScreen.main)?.visibleFrame ?? window.frame
+        var frame = NSRect(x: window.frame.midX - size.width / 2, y: window.frame.midY - size.height / 2,
+                           width: min(size.width, area.width), height: min(size.height, area.height))
+        frame.origin.x = min(max(frame.minX, area.minX), area.maxX - frame.width)
+        frame.origin.y = min(max(frame.minY, area.minY), area.maxY - frame.height)
+        window.setFrame(frame, display: true, animate: animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     }
 
     private func updateFooter() {
@@ -219,13 +248,18 @@ final class Onboarding: NSObject, NSWindowDelegate {
 
     private func practiceView() -> NSView {
         practiceRows = [:]
-        let spaceKey = tap.spaceKeys.count > 1 ? KeyNames.name(tap.spaceKeys[1]) : "Workspace key 2"
+        let keymap = tap.keymap
+        let keys = tap.spaceKeys
+        let caps = { (c: Command) in Keymap.keycaps(for: keymap.binding(for: c), workspaceKeys: keys) }
         let items: [(String, [String], String)] = [
-            ("focus", ["Left ⌘", "→"], "Move focus to the next window"),
-            ("move", ["Left ⌘", "⇧", "←"], "Move a window"),
-            ("space", ["⌘", spaceKey], "Go to Workspace 2 (and back with your first key)"),
-            ("summon", ["⇧", "Space"], "Summon an app, then Esc to close"),
-            ("help", ["Left ⌘", "⇧", "Space"], "Open the Cheat Sheet, then Esc"),
+            ("focus", caps(.focusRight), "Move focus to the next window"),
+            ("move", caps(.moveLeft), "Move a window (press again to pass)"),
+            ("size", caps(.grow), "Give a window more space"),
+            ("focusMode", caps(.focusMode), "Focus on one window, then again to undo"),
+            ("tidy", caps(.tidy), "Tidy everything back to even"),
+            ("space", caps(.workspace2), "Go to Workspace 2, and back"),
+            ("summon", caps(.summon), "Summon an app (Esc closes it)"),
+            ("help", caps(.cheatSheet), "Open the Cheat Sheet (Esc closes it)"),
         ]
         let rows = items.map { id, keys, label -> PracticeRow in
             let row = PracticeRow(keys: keys, label: label)
@@ -236,12 +270,44 @@ final class Onboarding: NSObject, NSWindowDelegate {
         let list = NSStackView(views: rows)
         list.orientation = .vertical
         list.alignment = .leading
-        list.spacing = 10
-        return page(top: symbol("sparkles"),
-                    title: "Try the essentials",
-                    body: "Do each one once and it lights up. These few cover almost everything you'll do with Tessel.",
-                    content: list)
+        list.spacing = 12
+
+        let playground = self.playground ?? Playground(frame: NSRect(x: 0, y: 0, width: 760, height: 475))
+        self.playground = playground
+        playground.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            playground.widthAnchor.constraint(equalToConstant: 760),
+            playground.heightAnchor.constraint(equalToConstant: 475),
+        ])
+        let reset = NSButton(title: "Reset the Practice Space", target: self, action: #selector(resetPlayground))
+        reset.bezelStyle = .inline
+        let left = NSStackView(views: [playground, reset])
+        left.orientation = .vertical
+        left.spacing = 10
+
+        let heading = NSTextField(labelWithString: "Try it on a practice screen")
+        heading.font = .systemFont(ofSize: 26, weight: .semibold)
+        let text = NSTextField(wrappingLabelWithString: "Your shortcuts move the pretend windows on the left, never your real ones. Each one lights up as you use it.")
+        text.font = .systemFont(ofSize: 14)
+        text.textColor = .secondaryLabelColor
+        text.preferredMaxLayoutWidth = 380
+        let right = NSStackView(views: [heading, text, list])
+        right.orientation = .vertical
+        right.alignment = .leading
+        right.spacing = 14
+        right.setCustomSpacing(22, after: text)
+        right.translatesAutoresizingMaskIntoConstraints = false
+        right.widthAnchor.constraint(equalToConstant: 380).isActive = true
+        for row in rows { row.widthAnchor.constraint(equalToConstant: 380).isActive = true }
+
+        let layout = NSStackView(views: [left, right])
+        layout.orientation = .horizontal
+        layout.alignment = .top
+        layout.spacing = 32
+        return layout
     }
+
+    @objc private func resetPlayground() { playground?.reset() }
 
     // MARK: Finish
 
@@ -262,14 +328,18 @@ final class Onboarding: NSObject, NSWindowDelegate {
         let previewRow = NSStackView(views: [previewStatus, NSView(), previews])
         previewRow.translatesAutoresizingMaskIntoConstraints = false
         previewRow.widthAnchor.constraint(equalToConstant: 440).isActive = true
-        let list = NSStackView(views: [login, displays, previewRow])
+        let customize = NSButton(title: "Customize Shortcuts…", target: self, action: #selector(customizeShortcuts))
+        customize.bezelStyle = .rounded
+        let list = NSStackView(views: [login, displays, previewRow, customize])
         list.orientation = .vertical
         list.spacing = 14
         return page(top: symbol("slider.horizontal.3"),
                     title: "Make it yours",
-                    body: "You can change these any time from Tessel's menu bar icon, and press Left ⌘⇧Space whenever you forget a shortcut.",
+                    body: "Change these any time from Tessel's menu bar icon. Every shortcut can be changed to keys you like, and Left ⌘⇧Space shows them all whenever you forget one.",
                     content: list)
     }
+
+    @objc private func customizeShortcuts() { onCustomize?() }
 
     @objc private func allowPreviews() {
         DispatchQueue.global(qos: .utility).async { _ = CGRequestScreenCaptureAccess() }
@@ -460,36 +530,31 @@ private final class KeySlot: NSView {
     }
 }
 
-/// A practice item: keycaps, what they do, and a circle that turns into a check.
-private final class PracticeRow: NSView {
+/// A practice item: a circle that turns into a check, the keycaps, and what they do.
+private final class PracticeRow: NSStackView {
     private let check = NSImageView()
 
     init(keys: [String], label text: String) {
         super.init(frame: .zero)
+        orientation = .horizontal
+        alignment = .centerY
+        spacing = 10
         translatesAutoresizingMaskIntoConstraints = false
-        let caps = NSStackView(views: keys.map { Keycap(text: $0) })
-        caps.spacing = 4
-        let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 14)
         check.image = NSImage(systemSymbolName: "circle", accessibilityDescription: "Not yet")
         check.contentTintColor = .tertiaryLabelColor
-        for v in [caps, label, check] as [NSView] {
-            v.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(v)
-        }
-        NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: 520),
-            heightAnchor.constraint(equalToConstant: 30),
-            check.leadingAnchor.constraint(equalTo: leadingAnchor),
-            check.centerYAnchor.constraint(equalTo: centerYAnchor),
-            check.widthAnchor.constraint(equalToConstant: 18),
-            check.heightAnchor.constraint(equalToConstant: 18),
-            caps.leadingAnchor.constraint(equalTo: check.trailingAnchor, constant: 14),
-            caps.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 230),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
-        ])
+        check.translatesAutoresizingMaskIntoConstraints = false
+        check.widthAnchor.constraint(equalToConstant: 18).isActive = true
+        check.heightAnchor.constraint(equalToConstant: 18).isActive = true
+        let caps = NSStackView(views: keys.map { k in
+            k == "then" ? NSTextField(labelWithString: "then") as NSView : Keycap(text: k)
+        })
+        caps.spacing = 4
+        caps.setContentHuggingPriority(.required, for: .horizontal)
+        caps.setContentCompressionResistancePriority(.required, for: .horizontal)
+        let label = NSTextField(wrappingLabelWithString: text)
+        label.font = .systemFont(ofSize: 13)
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        setViews([check, caps, label], in: .leading)
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
