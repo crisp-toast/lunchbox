@@ -4,7 +4,11 @@ import TesselCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let tiler = Tiler()
-    private lazy var tap = HotkeyTap { [weak self] action in self?.tiler.perform(action) }
+    private lazy var tap = HotkeyTap { [weak self] action in
+        guard let self else { return }
+        if action == .launcher { self.launcher.toggle() } else { self.tiler.perform(action) }
+    }
+    private lazy var launcher = Launcher(tiler: tiler)
     private lazy var menu = StatusMenu(tiler: tiler)
     private lazy var teacher = KeyTeacher(tap: tap) { [weak self] keys in self?.saveSpaceKeys(keys) }
     private var trustPoll: Timer?
@@ -113,6 +117,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func run(_ command: String) {
+        if command.hasPrefix("find:") {
+            launcher.show(query: String(command.dropFirst(5)))
+            return
+        }
         let parts = command.split(separator: "-").map(String.init)
         switch (parts.first, parts.count > 1 ? parts[1] : nil) {
         case ("focus", let d?): if let dir = Direction(rawValue: d) { tiler.perform(.focus(dir)) }
@@ -123,6 +131,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("close", _): tiler.perform(.close)
         case ("hide", _): tiler.perform(.hide)
         case ("spotlight", _): tiler.perform(.spotlight)
+        case ("launcher", "open"?): launcher.openSelection()
+        case ("launcher", "down"?): launcher.moveSelection(by: 1)
+        case ("launcher", "up"?): launcher.moveSelection(by: -1)
+        case ("launcher", _): launcher.toggle()
         case ("space", let n?): if let i = Int(n) { tiler.perform(.switchSpace(i - 1)) }
         case ("send", let n?): if let i = Int(n) { tiler.perform(.sendToSpace(i - 1)) }
         case ("displays", "all"?): tiler.setUseAllDisplays(true)
@@ -141,6 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         var state = tiler.stateDescription()
         state["spaceKeys"] = tap.spaceKeys
+        state["launcher"] = launcher.stateDescription
         if let data = try? JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: dir.appendingPathComponent("state.json"))
         }

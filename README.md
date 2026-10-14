@@ -26,6 +26,20 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 The space keys are whatever three keys you teach it on first launch (menu → **Set Up Space Keys…**).
 On Tyler's Boop65 they're the three keys on the far right, above the right arrow.
 
+## Launcher
+
+Press **⇧ Space** (Shift, then Space, with nothing in between, so typing a capital
+and a space quickly never opens it). Type part of an app's name: prefixes, word starts
+("code" for Visual Studio Code), initials ("vsc") and letters in order ("xcd") all match.
+Apps you open often rise to the top.
+
+- An app that's already open shows two rows: **go to its window** (switching spaces if
+  needed) and **New … window**, which uses the app's own File › New Window and lands
+  tiled and focused in the current space.
+- When no app matches, it searches Spotlight's index for files and folders, most
+  recently used first.
+- ↑ ↓ to choose, Return to open, Esc or ⇧ Space to close.
+
 With the mouse: drag a tiled window onto another to swap them, onto the other screen to move it
 there, or drag its edge to resize. ⌘-Tab to a window in another space switches to that space.
 
@@ -68,7 +82,7 @@ Tessel listens for distributed notifications named `com.tyleryouens.tessel.comma
 osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately("com.tyleryouens.tessel.command", "focus-left", $(), true)'
 ```
 
-Commands: `focus-left|right|up|down`, `move-…`, `grow`, `shrink`, `close` (the focused window) or `close-<windowID>`, `hide`, `spotlight`, `space-1…3`, `send-1…3`,
+Commands: `find:<text>` (opens the launcher with that text), `launcher`, `launcher-open|up|down`, `focus-left|right|up|down`, `move-…`, `grow`, `shrink`, `close` (the focused window) or `close-<windowID>`, `hide`, `spotlight`, `space-1…3`, `send-1…3`,
 `balance`, `retile`, `displays-all`, `displays-main`, `pause`, `resume`, and `dump`, which writes the current state to
 `~/Library/Application Support/Tessel/state.json`.
 

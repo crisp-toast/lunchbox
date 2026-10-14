@@ -70,6 +70,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             "Left ⌘⇧ + F: spotlight the window, the rest shelved at the side",
             "⌘ + space key: go to space 1, 2 or 3",
             "⌘⇧ + space key: move the window to that space",
+            "⇧ Space: open the launcher (apps, then files)",
             "Right ⌘ + arrows still move the text cursor",
         ] { list.addItem(disabled: line) }
         shortcuts.submenu = list

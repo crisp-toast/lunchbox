@@ -298,7 +298,19 @@ final class Tiler {
             relayout(animated: true)
             persist()
         }
+        // A window the launcher asked for has appeared: bring it forward.
+        if let pending = pendingNewWindow, pending.pid == app.pid {
+            if CACurrentMediaTime() > pending.deadline {
+                pendingNewWindow = nil
+            } else if let fresh = infos.map(\.id).first(where: { !pending.existing.contains($0) && place(of: $0) != nil }) {
+                pendingNewWindow = nil
+                activate(fresh)
+                showRing(on: fresh)
+            }
+        }
     }
+
+    private var pendingNewWindow: (pid: pid_t, existing: Set<CGWindowID>, deadline: CFTimeInterval)?
 
     /// Registers a window and adds it to or removes it from the layout as needed.
     /// Returns true when the layout changed.
@@ -857,6 +869,74 @@ final class Tiler {
             element.set(kAXMainAttribute, true)
             if !focused { app.element.set(kAXFrontmostAttribute, true) }
         }
+    }
+
+    // MARK: Launcher
+
+    /// Focuses the app's most recently used window, switching spaces if needed.
+    /// Returns false when Tessel doesn't know any window of that app.
+    func goToWindow(ofApp pid: pid_t) -> Bool {
+        let mine = windows.values.filter { $0.pid == pid }
+        guard !mine.isEmpty else { return false }
+        let recent = ([currentSpace] + (0..<Self.spaceCount).filter { $0 != currentSpace })
+            .compactMap { lastFocused[$0] }
+            .first { windows[$0]?.pid == pid }
+        let choice = recent.flatMap { windows[$0] }
+            ?? mine.first { place(of: $0.id)?.space == currentSpace }
+            ?? mine.first { place(of: $0.id) != nil }
+            ?? mine.first
+        guard let w = choice else { return false }
+        if let space = place(of: w.id)?.space, space != currentSpace { switchSpace(to: space, focusing: w.id) }
+        activate(w.id)
+        showRing(on: w.id)
+        return true
+    }
+
+    /// Opens a new window of a running app with its own menu command (File ›
+    /// New Window and the like, as if chosen by hand). Tessel tiles it in the
+    /// current space and focuses it when it appears. Reports false when the app
+    /// has no such command.
+    func openNewWindow(ofApp pid: pid_t, completion: @escaping (Bool) -> Void) {
+        guard let app = apps[pid] else { return completion(false) }
+        let existing = Set(windows.values.filter { $0.pid == pid }.map(\.id))
+        app.queue.async { [weak self] in
+            let pressed = Self.newWindowMenuItem(in: app.element)
+                .map { AXUIElementPerformAction($0, kAXPressAction as CFString) == .success } ?? false
+            DispatchQueue.main.async {
+                if pressed { self?.pendingNewWindow = (pid, existing, CACurrentMediaTime() + 4) }
+                completion(pressed)
+            }
+        }
+    }
+
+    /// Runs on the app's queue. Looks through the File, Shell and Window menus
+    /// for "New Window" (or "New Finder Window", or File › New › Window in
+    /// Xcode), falling back to the plain ⌘N item.
+    private static func newWindowMenuItem(in app: AXUIElement) -> AXUIElement? {
+        guard let bar = app.element(kAXMenuBarAttribute) else { return nil }
+        func title(_ e: AXUIElement) -> String { (e.string(kAXTitleAttribute) ?? "").lowercased() }
+        let preferred = ["file", "shell", "window"]
+        let menus = bar.elements(kAXChildrenAttribute)
+            .filter { preferred.contains(title($0)) }
+            .sorted { (preferred.firstIndex(of: title($0)) ?? 9) < (preferred.firstIndex(of: title($1)) ?? 9) }
+        var commandN: AXUIElement?
+        for top in menus {
+            guard let menu = top.elements(kAXChildrenAttribute).first else { continue }
+            for item in menu.elements(kAXChildrenAttribute) where item.bool(kAXEnabledAttribute) {
+                let t = title(item)
+                if t == "new window" { return item }
+                if t.hasPrefix("new "), t.hasSuffix(" window"), !t.contains("private"), !t.contains("incognito") { return item }
+                if t == "new", let sub = item.elements(kAXChildrenAttribute).first,
+                   let window = sub.elements(kAXChildrenAttribute).first(where: { title($0) == "window" && $0.bool(kAXEnabledAttribute) }) {
+                    return window
+                }
+                if commandN == nil, item.string(kAXMenuItemCmdCharAttribute)?.uppercased() == "N",
+                   (item.value(kAXMenuItemCmdModifiersAttribute) as? Int) == 0 {
+                    commandN = item
+                }
+            }
+        }
+        return commandN
     }
 
     // MARK: Spotlight

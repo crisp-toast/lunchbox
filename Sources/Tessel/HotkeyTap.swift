@@ -19,6 +19,8 @@ final class HotkeyTap {
     /// Key codes whose key-down we swallowed; their key-up is swallowed too.
     /// Only touched on the tap thread.
     private var swallowed = Set<Int64>()
+    /// ⇧Space detection; tap thread only.
+    private var chord = ShiftSpaceChord()
 
     init(onAction: @escaping (KeyAction) -> Void) {
         self.onAction = onAction
@@ -46,6 +48,7 @@ final class HotkeyTap {
         var created = false
         let thread = Thread { [self] in
             let mask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue)
+                | (1 << CGEventType.flagsChanged.rawValue)
             guard let port = CGEvent.tapCreate(
                 tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
                 eventsOfInterest: CGEventMask(mask),
@@ -82,6 +85,9 @@ final class HotkeyTap {
         case .keyUp:
             let code = event.getIntegerValueField(.keyboardEventKeycode)
             return swallowed.remove(code) != nil ? nil : pass
+        case .flagsChanged:
+            chord.flagsChanged(event.flags)
+            return pass
         case .keyDown:
             break
         default:
@@ -94,6 +100,12 @@ final class HotkeyTap {
         if let learner = s.learner {
             swallowed.insert(code)
             DispatchQueue.main.async { learner(code) }
+            return nil
+        }
+        let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        if chord.keyDown(code: code, flags: event.flags, isRepeat: isRepeat), s.enabled {
+            swallowed.insert(code)
+            DispatchQueue.main.async { [onAction] in onAction(.launcher) }
             return nil
         }
         guard s.enabled, let action = Shortcuts.action(for: code, flags: event.flags, spaceKeys: s.spaceKeys) else {
