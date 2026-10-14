@@ -119,8 +119,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("move", let d?): if let dir = Direction(rawValue: d) { tiler.perform(.move(dir)) }
         case ("grow", _): tiler.perform(.grow)
         case ("shrink", _): tiler.perform(.shrink)
+        case ("close", let id?): if let id = CGWindowID(id) { tiler.close(windowID: id) }
+        case ("close", _): tiler.perform(.close)
+        case ("hide", _): tiler.perform(.hideToNextSpace)
         case ("space", let n?): if let i = Int(n) { tiler.perform(.switchSpace(i - 1)) }
         case ("send", let n?): if let i = Int(n) { tiler.perform(.sendToSpace(i - 1)) }
+        case ("displays", "all"?): tiler.setUseAllDisplays(true)
+        case ("displays", "main"?): tiler.setUseAllDisplays(false)
         case ("balance", _): tiler.balance()
         case ("retile", _): tiler.retile()
         case ("pause", _): setTiling(false)

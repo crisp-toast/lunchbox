@@ -52,6 +52,14 @@ final class Tiler {
     private(set) var enabled = false
     private(set) var currentSpace = 0
     private(set) var displays: [Display] = []
+    /// Off: Tessel uses only the main display and ignores the others (e.g. a dummy display plug).
+    private(set) var useAllDisplays = UserDefaults.standard.object(forKey: "useAllDisplays") as? Bool ?? true
+    /// The displays Tessel tiles on.
+    private var activeDisplays: [Display] {
+        useAllDisplays ? displays : displays.filter(\.isMain)
+    }
+    /// When Tessel last gave a window focus itself.
+    private var lastActivation: CFTimeInterval = 0
     private var apps: [pid_t: AppHandle] = [:]
     private var windows: [CGWindowID: ManagedWindow] = [:]
     /// The layout of each display (by UUID) in each space.
@@ -118,6 +126,7 @@ final class Tiler {
         ].compactMap { $0 }
 
         for app in NSWorkspace.shared.runningApplications { track(app, scan: false) }
+        mergeInactiveDisplays()
         initialScan()
         log.notice("started with \(self.displays.count) displays, space \(self.currentSpace + 1)")
     }
@@ -323,9 +332,10 @@ final class Tiler {
 
     private func insert(_ window: ManagedWindow) {
         let saved = savedPlacement.removeValue(forKey: window.id)
-        let display = saved.flatMap { s in displays.first { $0.uuid == s.display } }
-            ?? displays.first { $0.frame.contains(window.frame.center) }
-            ?? displays.first { $0.isMain }
+        let display = saved.flatMap { s in activeDisplays.first { $0.uuid == s.display } }
+            ?? activeDisplays.first { $0.frame.contains(window.frame.center) }
+            ?? activeDisplays.first { $0.isMain }
+            ?? activeDisplays.first
         guard let display else { return }
         let space = saved?.space ?? currentSpace
         var layout = spaces[space][display.uuid] ?? Layout()
@@ -368,9 +378,18 @@ final class Tiler {
         case kAXUIElementDestroyedNotification:
             if let id = app.windowIDs[element] {
                 quietFocus()
+                let wasFocused = focusedID == id
+                let frame = windows[id].flatMap { $0.hidden ? nil : ($0.target ?? $0.frame) }
                 forget(id)
                 relayout(animated: true)
                 persist()
+                // macOS would hand focus to another window of the same app, which may be
+                // parked in another space. Keep focus where the user was looking instead.
+                if wasFocused, let frame {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { [weak self] in
+                        self?.focusNearest(to: frame)
+                    }
+                }
             } else {
                 scheduleScan(app)
             }
@@ -486,7 +505,7 @@ final class Tiler {
             let visible = visibleFrames()
             if let other = visible.first(where: { $0.key != id && $0.value.contains(point) })?.key {
                 swapWindows(id, other)
-            } else if let d = displays.first(where: { $0.frame.contains(point) }), d.uuid != uuid {
+            } else if let d = activeDisplays.first(where: { $0.frame.contains(point) }), d.uuid != uuid {
                 removeFromLayouts(id)
                 var layout = spaces[currentSpace][d.uuid] ?? Layout()
                 layout.insert(id, near: layout.windows.last, maxColumns: Layout.maxColumns(forWidth: d.visible.width))
@@ -510,11 +529,19 @@ final class Tiler {
 
     private func displaysChanged() {
         guard enabled else { return }
-        let fresh = Display.current()
-        guard let main = fresh.first(where: \.isMain) else { return }
-        let connected = Set(fresh.map(\.uuid))
+        displays = Display.current()
+        mergeInactiveDisplays()
+        relayout(animated: false)
+        persist()
+    }
+
+    /// Moves windows from displays Tessel doesn't tile on (unplugged, or ignored
+    /// because "Use All Displays" is off) onto the main display.
+    private func mergeInactiveDisplays() {
+        guard let main = displays.first(where: \.isMain) else { return }
+        let active = Set(activeDisplays.map(\.uuid))
         for s in spaces.indices {
-            for (uuid, layout) in spaces[s] where !connected.contains(uuid) {
+            for (uuid, layout) in spaces[s] where !active.contains(uuid) {
                 var merged = spaces[s][main.uuid] ?? Layout()
                 for id in layout.windows {
                     merged.insert(id, near: merged.windows.last, maxColumns: Layout.maxColumns(forWidth: main.visible.width))
@@ -523,8 +550,19 @@ final class Tiler {
                 spaces[s][uuid] = nil
             }
         }
-        displays = fresh
-        relayout(animated: false)
+    }
+
+    func setUseAllDisplays(_ on: Bool) {
+        guard on != useAllDisplays else { return }
+        useAllDisplays = on
+        UserDefaults.standard.set(on, forKey: "useAllDisplays")
+        log.notice("use all displays: \(on)")
+        guard enabled else { return }
+        mergeInactiveDisplays()
+        // Pick up windows sitting on a display that just became active (or inactive).
+        for w in windows.values where !w.hidden { w.target = nil }
+        scanAll()
+        relayout(animated: true)
         persist()
     }
 
@@ -540,7 +578,7 @@ final class Tiler {
         var moves: [(window: WindowHandle, from: CGRect, to: CGRect, kind: Animator.Kind)] = []
         for (s, layouts) in spaces.enumerated() {
             for (uuid, layout) in layouts {
-                if s == currentSpace, let d = displays.first(where: { $0.uuid == uuid }) {
+                if s == currentSpace, let d = activeDisplays.first(where: { $0.uuid == uuid }) {
                     for (id, frame) in layout.frames(in: d.visible, gap: Self.gap) {
                         guard let w = windows[id] else { continue }
                         if !w.hidden, let t = w.target, t.isClose(to: frame, tolerance: 0.5) { continue }
@@ -569,7 +607,7 @@ final class Tiler {
 
     private func visibleFrames() -> [CGWindowID: CGRect] {
         var result: [CGWindowID: CGRect] = [:]
-        for d in displays {
+        for d in activeDisplays {
             guard let layout = spaces[currentSpace][d.uuid] else { continue }
             result.merge(layout.frames(in: d.visible, gap: Self.gap)) { a, _ in a }
         }
@@ -593,6 +631,29 @@ final class Tiler {
 
     func perform(_ action: KeyAction) {
         guard enabled else { return }
+        // Tessel's idea of the focused window can go stale (a click it never heard
+        // about, an app that didn't come forward). Acting on the wrong window is what
+        // made "down" look like "up", so ask the front app which window really has
+        // focus, unless Tessel focused one itself a moment ago and the app may still
+        // be catching up.
+        let recentlyFocused = CACurrentMediaTime() - lastActivation < 0.35
+        if case .switchSpace = action {} else if !recentlyFocused,
+           let front = NSWorkspace.shared.frontmostApplication, let app = apps[front.processIdentifier] {
+            app.queue.async { [weak self] in
+                let id = app.element.element(kAXFocusedWindowAttribute)?.windowID
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.focusedID = id
+                    self.run(action)
+                }
+            }
+            return
+        }
+        run(action)
+    }
+
+    private func run(_ action: KeyAction) {
+        guard enabled else { return }
         let t0 = CACurrentMediaTime()
         switch action {
         case .focus(let direction): focus(direction)
@@ -601,6 +662,8 @@ final class Tiler {
         case .shrink: resize(by: -Self.resizeStep)
         case .switchSpace(let i): switchSpace(to: i, focusing: nil)
         case .sendToSpace(let i): send(toSpace: i)
+        case .close: closeFocused()
+        case .hideToNextSpace: send(toSpace: (currentSpace + 1) % Self.spaceCount)
         }
         let ms = (CACurrentMediaTime() - t0) * 1000
         log.notice("\(String(describing: action), privacy: .public) handled in \(ms, format: .fixed(precision: 2)) ms")
@@ -637,7 +700,7 @@ final class Tiler {
         case .edge:
             guard let here = displays.first(where: { $0.uuid == uuid }) else { return }
             var others: [String: CGRect] = [:]
-            for d in displays where d.uuid != uuid { others[d.uuid] = d.frame }
+            for d in activeDisplays where d.uuid != uuid { others[d.uuid] = d.frame }
             guard let targetUUID = nearest(from: here.frame, direction: direction, in: others, tolerance: 2),
                   let target = displays.first(where: { $0.uuid == targetUUID }) else {
                 if let f = windows[id]?.target { ring.flash(f, on: displays) }
@@ -708,27 +771,60 @@ final class Tiler {
         relayout(animated: true)
         persist()
 
-        // Focus whatever is now closest to where the window was.
+        if let oldFrame { focusNearest(to: oldFrame) } else { focusedID = nil }
+        badge.show(space: index, count: Self.spaceCount, caption: "Window sent to space \(index + 1)", on: display)
+    }
+
+    /// Focuses the visible window closest to `frame`, or the desktop when this space is empty.
+    private func focusNearest(to frame: CGRect) {
         let visible = visibleFrames()
-        if let old = oldFrame, let next = visible.min(by: {
-            hypot($0.value.midX - old.midX, $0.value.midY - old.midY) < hypot($1.value.midX - old.midX, $1.value.midY - old.midY)
+        if let next = visible.min(by: {
+            hypot($0.value.midX - frame.midX, $0.value.midY - frame.midY) < hypot($1.value.midX - frame.midX, $1.value.midY - frame.midY)
         })?.key {
             activate(next)
+            if let f = visible[next] { ring.flash(f, on: displays) }
         } else {
             focusedID = nil
+            if let finder = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first {
+                AXUIElementCreateApplication(finder.processIdentifier).set(kAXFrontmostAttribute, true)
+            }
         }
-        badge.show(space: index, count: Self.spaceCount, caption: "Window sent to space \(index + 1)", on: display)
+    }
+
+    /// Presses the focused window's close button, exactly like clicking it, so apps
+    /// still ask about unsaved changes. Focus moves on once the window is gone.
+    private func closeFocused() {
+        guard let front = NSWorkspace.shared.frontmostApplication, let app = apps[front.processIdentifier] else { return }
+        let known = focusedID.flatMap { id in windows[id].flatMap { $0.handle.app === app ? $0.handle.element : nil } }
+        app.queue.async {
+            guard let window = known ?? app.element.element(kAXFocusedWindowAttribute) else { return }
+            Self.pressClose(window)
+        }
+    }
+
+    /// Closes one specific window, whatever has focus. Used by the `close-<id>` script command.
+    func close(windowID id: CGWindowID) {
+        guard let w = windows[id] else { return }
+        let element = w.handle.element
+        w.handle.app.queue.async { Self.pressClose(element) }
+    }
+
+    private static func pressClose(_ window: AXUIElement) {
+        guard let button = window.element(kAXCloseButtonAttribute) else { return }
+        AXUIElementPerformAction(button, kAXPressAction as CFString)
     }
 
     private func activate(_ id: CGWindowID) {
         guard let w = windows[id] else { return }
         focusedID = id
         if let space = place(of: id)?.space { lastFocused[space] = id }
+        lastActivation = CACurrentMediaTime()
         let element = w.handle.element, app = w.handle.app
+        let focused = WindowFocus.focus(pid: app.pid, windowID: id)
         app.queue.async {
             element.raise()
             element.set(kAXMainAttribute, true)
-            app.element.set(kAXFrontmostAttribute, true)
+            if !focused { app.element.set(kAXFrontmostAttribute, true) }
         }
     }
 
@@ -786,6 +882,7 @@ final class Tiler {
         }
         return [
             "enabled": enabled, "currentSpace": currentSpace + 1, "focused": focusedID ?? 0,
+            "useAllDisplays": useAllDisplays, "windowServerFocus": WindowFocus.isAvailable,
             "displays": displays.map { "\($0.name) \(NSStringFromRect($0.visible))" },
             "spaces": spaceList, "windows": windowList,
         ]

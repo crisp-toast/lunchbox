@@ -2,15 +2,6 @@ import AppKit
 import os
 import TesselCore
 
-enum KeyAction: Equatable {
-    case focus(Direction)
-    case move(Direction)
-    case grow
-    case shrink
-    case switchSpace(Int)
-    case sendToSpace(Int)
-}
-
 /// Watches the keyboard with a CGEventTap on its own high-priority thread, so a
 /// busy main thread can never delay typing. Only the left Command key triggers
 /// the arrow and size shortcuts; right Command passes through untouched, so
@@ -105,36 +96,11 @@ final class HotkeyTap {
             DispatchQueue.main.async { learner(code) }
             return nil
         }
-        guard s.enabled, let action = Self.action(for: code, flags: event.flags, spaceKeys: s.spaceKeys) else {
+        guard s.enabled, let action = Shortcuts.action(for: code, flags: event.flags, spaceKeys: s.spaceKeys) else {
             return pass
         }
         swallowed.insert(code)
         DispatchQueue.main.async { [onAction] in onAction(action) }
         return nil
-    }
-
-    /// NX_DEVICELCMDKEYMASK: set only while the left Command key is down.
-    static let leftCommandMask: UInt64 = 0x08
-
-    static func action(for code: Int64, flags: CGEventFlags, spaceKeys: [Int64]) -> KeyAction? {
-        guard flags.contains(.maskCommand), !flags.contains(.maskControl) else { return nil }
-        let shift = flags.contains(.maskShift)
-        let option = flags.contains(.maskAlternate)
-
-        // Shift-⌘ + one of the three space keys (either Command key).
-        if shift, let index = spaceKeys.firstIndex(of: code) {
-            return option ? .sendToSpace(index) : .switchSpace(index)
-        }
-
-        guard flags.rawValue & leftCommandMask != 0, !option else { return nil }
-        switch code {
-        case 123: return shift ? .move(.left) : .focus(.left)
-        case 124: return shift ? .move(.right) : .focus(.right)
-        case 125: return shift ? .move(.down) : .focus(.down)
-        case 126: return shift ? .move(.up) : .focus(.up)
-        case 24, 69: return shift ? .grow : nil   // = (plus with Shift), keypad +
-        case 27, 78: return shift ? .shrink : nil // -, keypad -
-        default: return nil
-        }
     }
 }

@@ -65,16 +65,23 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             "Left ⌘ + arrows: focus the next window",
             "Left ⌘⇧ + arrows: move the window",
             "Left ⌘⇧ + plus / minus: more or less space",
+            "Left ⌘⇧ + Delete: close the window",
+            "Left ⌘⇧ + H: hide the window in the next space",
             "⌘⇧ + space key: switch to space 1, 2 or 3",
             "⌥⌘⇧ + space key: send the window to that space",
             "Right ⌘ + arrows still move the text cursor",
         ] { list.addItem(disabled: line) }
         shortcuts.submenu = list
         menu.addItem(shortcuts)
-        let teach = action("Set Up Space Keys…") { [weak self] in self?.onTeachKeys?() }
-        teach.isEnabled = trusted
-        menu.addItem(teach)
-        menu.addItem(action("Launch at Login", checked: SMAppService.mainApp.status == .enabled) {
+        let settings = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
+        let options = NSMenu()
+        let displays = action("Use All Displays", checked: tiler.useAllDisplays) { [weak self] in
+            guard let self else { return }
+            self.tiler.setUseAllDisplays(!self.tiler.useAllDisplays)
+        }
+        displays.toolTip = "Turn off to tile only on the main display, for example when the other display is a dummy plug."
+        options.addItem(displays)
+        options.addItem(action("Launch at Login", checked: SMAppService.mainApp.status == .enabled) {
             let service = SMAppService.mainApp
             do {
                 if service.status == .enabled { try service.unregister() } else { try service.register() }
@@ -82,6 +89,11 @@ final class StatusMenu: NSObject, NSMenuDelegate {
                 log.error("launch at login: \(error.localizedDescription, privacy: .public)")
             }
         })
+        let teach = action("Set Up Space Keys…") { [weak self] in self?.onTeachKeys?() }
+        teach.isEnabled = trusted
+        options.addItem(teach)
+        settings.submenu = options
+        menu.addItem(settings)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Tessel", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }

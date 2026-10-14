@@ -15,6 +15,8 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + ← → | Move the window one step sideways: first it stacks with its neighbor, a second press moves it past |
 | Left ⌘ ⇧ + ↑ ↓ | Swap with the window above or below in a stack |
 | Left ⌘ ⇧ + plus / minus | Give the window more or less space (a lone window grows or shrinks around the center) |
+| Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
+| Left ⌘ ⇧ + H | Hide the window by sending it to the next space (1 → 2 → 3 → 1) |
 | ⌘ ⇧ + space key 1 / 2 / 3 | Switch to that space |
 | ⌥ ⌘ ⇧ + space key 1 / 2 / 3 | Send the focused window to that space |
 
@@ -25,7 +27,9 @@ With the mouse: drag a tiled window onto another to swap them, onto the other sc
 there, or drag its edge to resize. ⌘-Tab to a window in another space switches to that space.
 
 The menu bar shows the current space. Its menu can pause tiling, float or tile the focused window,
-even out sizes, re-tile everything, and turn on Launch at Login.
+even out sizes, and re-tile everything. **Settings** holds Launch at Login, Set Up Space Keys, and
+**Use All Displays** (on by default). Turn that off to tile only on the main display, for example
+when the second display is a dummy plug: windows on other displays move to the main one.
 
 ## How it works
 
@@ -61,8 +65,8 @@ Tessel listens for distributed notifications named `com.tyleryouens.tessel.comma
 osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately("com.tyleryouens.tessel.command", "focus-left", $(), true)'
 ```
 
-Commands: `focus-left|right|up|down`, `move-…`, `grow`, `shrink`, `space-1…3`, `send-1…3`,
-`balance`, `retile`, `pause`, `resume`, and `dump`, which writes the current state to
+Commands: `focus-left|right|up|down`, `move-…`, `grow`, `shrink`, `close` (the focused window) or `close-<windowID>`, `hide`, `space-1…3`, `send-1…3`,
+`balance`, `retile`, `displays-all`, `displays-main`, `pause`, `resume`, and `dump`, which writes the current state to
 `~/Library/Application Support/Tessel/state.json`.
 
 `pause` and `resume` do what the menu's **Tiling** item does. Pausing brings back windows parked in
