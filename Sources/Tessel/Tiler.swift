@@ -136,7 +136,9 @@ final class Tiler {
 
         mouseMonitors = [
             NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
-                self?.mouseDown = NSScreen.topLeftPoint(fromCocoa: NSEvent.mouseLocation)
+                let point = NSScreen.topLeftPoint(fromCocoa: NSEvent.mouseLocation)
+                self?.mouseDown = point
+                self?.lastClick = (CACurrentMediaTime(), point)
                 self?.draggedByUser.removeAll()
             },
             NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { [weak self] _ in self?.mouseUp() },
@@ -464,8 +466,28 @@ final class Tiler {
         }
     }
 
+    /// Where and when the last click happened, to tell a Dock click from ⌘-Tab.
+    private var lastClick: (at: CFTimeInterval, point: CGPoint)?
+    /// An app just activated from the Dock: its window comes to this space.
+    private var dockActivation: (pid: pid_t, until: CFTimeInterval)?
+
+    /// Whether a click was on the Dock (wherever it sits, shown or auto-hidden).
+    private func isDockClick(_ point: CGPoint) -> Bool {
+        let side = UserDefaults(suiteName: "com.apple.dock")?.string(forKey: "orientation") ?? "bottom"
+        guard let d = displays.first(where: { $0.frame.contains(point) }) else { return false }
+        let reach: CGFloat = 110
+        switch side {
+        case "left": return point.x < d.frame.minX + reach
+        case "right": return point.x > d.frame.maxX - reach
+        default: return point.y > d.frame.maxY - reach
+        }
+    }
+
     private func appActivated(_ running: NSRunningApplication) {
         guard let app = apps[running.processIdentifier] else { return }
+        if let click = lastClick, CACurrentMediaTime() - click.at < 1.2, isDockClick(click.point) {
+            dockActivation = (app.pid, CACurrentMediaTime() + 1.5)
+        }
         app.queue.async { [weak self] in
             let id = app.element.element(kAXFocusedWindowAttribute)?.windowID
             DispatchQueue.main.async { if let id { self?.focusChanged(to: id, app: app) } }
@@ -484,6 +506,12 @@ final class Tiler {
             if windows[id] == nil { scheduleScan(app) }
             return
         }
+        if space != currentSpace, let dock = dockActivation, dock.pid == app.pid, CACurrentMediaTime() < dock.until {
+            // Opened from the Dock: bring the window here instead of going to it.
+            dockActivation = nil
+            bringToCurrentSpace(id)
+            return
+        }
         if space != currentSpace {
             // Right after we switch spaces or a window closes, macOS often hands focus
             // to some other window of the app, which may be parked in another space.
@@ -497,6 +525,26 @@ final class Tiler {
         focusedID = id
         lastFocused[space] = id
         endSpotlight(unlessShowing: id)
+    }
+
+    /// Moves a window from another space into the one being viewed, next to
+    /// the focused window, and focuses it.
+    private func bringToCurrentSpace(_ id: CGWindowID) {
+        guard let (space, _) = place(of: id), space != currentSpace, windows[id] != nil else { return }
+        let point = lastClick?.point ?? .zero
+        guard let display = activeDisplays.first(where: { $0.frame.contains(point) })
+            ?? activeDisplays.first(where: \.isMain) ?? activeDisplays.first else { return }
+        removeFromLayouts(id)
+        var layout = spaces[currentSpace][display.uuid] ?? Layout()
+        let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
+        layout.insert(id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
+        spaces[currentSpace][display.uuid] = layout
+        quietFocus()
+        relayout(animated: true)
+        persist()
+        activate(id)
+        showRing(on: id)
+        log.notice("brought window \(id) to space \(self.currentSpace + 1) from the Dock")
     }
 
     /// Focus changes before this time don't switch spaces.
@@ -998,21 +1046,44 @@ final class Tiler {
         return true
     }
 
-    /// Opens a new window of a running app with its own menu command (File ›
-    /// New Window and the like, as if chosen by hand). Tessel tiles it in the
-    /// current space and focuses it when it appears. Reports false when the app
-    /// has no such command.
+    /// Opens a new window of a running app, tiled in the current space and
+    /// focused once it appears. Brings the app forward first (many apps ignore
+    /// menu commands while in the background), without jumping to a space where
+    /// its other windows live; then uses its own File › New Window (or the
+    /// like), falling back to sending it ⌘N. Reports false if neither worked.
     func openNewWindow(ofApp pid: pid_t, completion: @escaping (Bool) -> Void) {
         guard let app = apps[pid] else { return completion(false) }
-        let existing = Set(windows.values.filter { $0.pid == pid }.map(\.id))
-        app.queue.async { [weak self] in
-            let pressed = Self.newWindowMenuItem(in: app.element)
+        let mine = windows.values.filter { $0.pid == pid }
+        let existing = Set(mine.map(\.id))
+        quietFocus()
+        lastActivation = CACurrentMediaTime()
+        pendingNewWindow = (pid, existing, CACurrentMediaTime() + 4)
+        let anchor = mine.first { place(of: $0.id)?.space == currentSpace && !$0.hidden }
+            ?? mine.first { !$0.minimized } ?? mine.first
+        if !(anchor.map { WindowFocus.focus(pid: pid, windowID: $0.id) } ?? false) {
+            app.element.set(kAXFrontmostAttribute, true)
+        }
+        app.queue.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+            var opened = Self.newWindowMenuItem(in: app.element)
                 .map { AXUIElementPerformAction($0, kAXPressAction as CFString) == .success } ?? false
+            if !opened { opened = Self.sendCommandN(to: pid) }
             DispatchQueue.main.async {
-                if pressed { self?.pendingNewWindow = (pid, existing, CACurrentMediaTime() + 4) }
-                completion(pressed)
+                if !opened { self?.pendingNewWindow = nil }
+                completion(opened)
             }
         }
+    }
+
+    /// ⌘N straight to one app, for apps without a findable New Window item.
+    private static func sendCommandN(to pid: pid_t) -> Bool {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let down = CGEvent(keyboardEventSource: source, virtualKey: 45, keyDown: true),
+              let up = CGEvent(keyboardEventSource: source, virtualKey: 45, keyDown: false) else { return false }
+        down.flags = .maskCommand
+        up.flags = .maskCommand
+        down.postToPid(pid)
+        up.postToPid(pid)
+        return true
     }
 
     /// Runs on the app's queue. Looks through the File, Shell and Window menus

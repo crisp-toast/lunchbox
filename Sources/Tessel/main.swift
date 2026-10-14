@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         tiler.onChange = { [weak self] in self?.menu.refresh() }
+        _ = launcher // build the app list now, so the first ⇧Space already finds apps
         tiler.onSpotlightChange = { [weak self] on in self?.tap.escapeLeavesSpotlight = on }
         menu.onToggle = { [weak self] in self?.toggleTiling() }
         menu.onTeachKeys = { [weak self] in self?.teacher.begin() }

@@ -37,11 +37,11 @@ and a space quickly never opens it). Type part of an app's name: prefixes, word 
 Apps you open often rise to the top.
 
 - An app with a window you can get to (tiled in a space, minimized, or floating on screen) shows two rows: **go to its window** (switching spaces if
-  needed) and **New … window**, which uses the app's own File › New Window and lands
+  needed) and **New … window** (⌘↩), which uses the app's own File › New Window and lands
   tiled and focused in the current space.
 - When no app matches, it searches Spotlight's index for files and folders, most
   recently used first.
-- ↑ ↓ to choose, Return to open, Esc or ⇧ Space to close.
+- ↑ ↓ to choose, Return to open, ⌘↩ for a new window, Esc or ⇧ Space to close. When nothing matches, it offers to search the web with your Mac's search engine in your default browser (or opens a typed address).
 
 With the mouse: drag a tiled window onto another to swap them, onto the other screen to move it
 there, or drag its edge to resize. A centered window (alone, or in spotlight) keeps any shape you

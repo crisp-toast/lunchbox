@@ -15,17 +15,20 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     }
 
     /// One entry in the list. Return runs the main action; an app with a window
-    /// you can reach also offers a second one, a new window, on Shift-Return.
+    /// you can reach also offers a second one, a new window, on ⌘-Return.
     enum Result {
         /// `reachable`: it has a window you can get to, so Return goes there and
         /// Shift-Return opens a new one. Otherwise Return opens the app.
         case app(App, running: NSRunningApplication?, reachable: Bool)
         case file(URL)
+        /// Nothing matched: search the web for the text, or open it if it's an address.
+        case web(String)
 
         var path: String {
             switch self {
             case .app(let a, _, _): return a.url.path
             case .file(let url): return url.path
+            case .web: return ""
             }
         }
 
@@ -95,7 +98,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         ["visible": isVisible, "query": field.stringValue, "selected": selected,
          "results": results.map { r -> String in
              let d = describe(r)
-             return d.title + " | " + d.subtitle + " [↩]" + (r.hasNewWindowAction ? " + New window [⇧↩]" : "")
+             return d.title + " | " + d.subtitle + " [↩]" + (r.hasNewWindowAction ? " + New window [⌘↩]" : "")
          }]
     }
 
@@ -105,7 +108,11 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         appsLoadedAt = Date()
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let found = Self.scanApplications()
-            DispatchQueue.main.async { self?.apps = found }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.apps = found
+                if self.isVisible { self.update() } // a search typed before the list was ready
+            }
         }
     }
 
@@ -179,6 +186,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             return .app(app, running: running, reachable: reachable)
         }
         results = list
+        if list.isEmpty, !query.isEmpty { results = [.web(query)] }
         selected = 0
         render()
 
@@ -223,7 +231,8 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             files.append(.file(URL(fileURLWithPath: path)))
             if files.count == Self.maxRows { break }
         }
-        results = files
+        let query = field.stringValue.trimmingCharacters(in: .whitespaces)
+        results = files + (query.isEmpty ? [] : [.web(query)])
         selected = 0
         render()
     }
@@ -251,7 +260,53 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             launch(app)
         case .file(let url):
             NSWorkspace.shared.open(url)
+        case .web(let text):
+            if let url = Self.webURL(for: text) { NSWorkspace.shared.open(url) }
         }
+    }
+
+    // MARK: Web
+
+    /// The search engine chosen in macOS (Safari's setting is system-wide),
+    /// as a display name and a URL template.
+    private static var searchEngine: (name: String, template: String) {
+        let provider = (UserDefaults.standard.dictionary(forKey: "NSPreferredWebServices")?["NSWebServicesProviderWebSearch"]) as? [String: Any]
+        let id = (provider?["NSProviderIdentifier"] as? String ?? "com.google.www").lowercased()
+        let name = provider?["NSDefaultDisplayName"] as? String
+        let known: [(String, String, String)] = [
+            ("duckduckgo", "DuckDuckGo", "https://duckduckgo.com/?q=%@"),
+            ("bing", "Bing", "https://www.bing.com/search?q=%@"),
+            ("yahoo", "Yahoo", "https://search.yahoo.com/search?p=%@"),
+            ("ecosia", "Ecosia", "https://www.ecosia.org/search?q=%@"),
+            ("baidu", "Baidu", "https://www.baidu.com/s?wd=%@"),
+            ("yandex", "Yandex", "https://yandex.com/search/?text=%@"),
+            ("sogou", "Sogou", "https://www.sogou.com/web?query=%@"),
+        ]
+        if let match = known.first(where: { id.contains($0.0) }) { return (name ?? match.1, match.2) }
+        return (name ?? "Google", "https://www.google.com/search?q=%@")
+    }
+
+    /// Text that looks like a web address ("github.com", "apple.com/mac").
+    private static func address(in text: String) -> URL? {
+        let t = text.trimmingCharacters(in: .whitespaces)
+        guard !t.contains(" "), t.range(of: #"^(https?://)?[\w-]+(\.[\w-]+)+(:\d+)?(/\S*)?$"#, options: .regularExpression) != nil
+        else { return nil }
+        return URL(string: t.hasPrefix("http") ? t : "https://\(t)")
+    }
+
+    private static func webURL(for text: String) -> URL? {
+        if let url = address(in: text) { return url }
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "&+=?#")
+        guard let q = text.addingPercentEncoding(withAllowedCharacters: allowed) else { return nil }
+        return URL(string: searchEngine.template.replacingOccurrences(of: "%@", with: q))
+    }
+
+    private static var defaultBrowser: (name: String, path: String)? {
+        guard let url = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "https://example.com")!) else { return nil }
+        var name = FileManager.default.displayName(atPath: url.path)
+        if name.hasSuffix(".app") { name.removeLast(4) }
+        return (name, url.path)
     }
 
     private func launch(_ app: App) {
@@ -270,10 +325,10 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         case #selector(NSResponder.moveUp(_:)): select(selected - 1)
         case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)),
              #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
-            // Read Shift from the keyboard itself: the panel doesn't activate Tessel,
-            // so NSApp.currentEvent can be stale and miss it.
-            let shift = NSEvent.modifierFlags.contains(.shift) || (NSApp.currentEvent?.modifierFlags.contains(.shift) ?? false)
-            openSelection(newWindow: shift)
+            // ⌘↩ (or ⇧↩) opens a new window. Read the modifiers from the keyboard
+            // itself: the panel doesn't activate Tessel, so NSApp.currentEvent can be stale.
+            let flags = NSEvent.modifierFlags.union(NSApp.currentEvent?.modifierFlags ?? [])
+            openSelection(newWindow: flags.contains(.command) || flags.contains(.shift))
         case #selector(NSResponder.cancelOperation(_:)): hide()
         default: return false
         }
@@ -304,6 +359,13 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         case .file(let url):
             let folder = url.deletingLastPathComponent().path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
             return (url.lastPathComponent, folder, url.path)
+        case .web(let text):
+            let browser = Self.defaultBrowser
+            let inBrowser = browser.map { " in \($0.name)" } ?? ""
+            if Self.address(in: text) != nil {
+                return ("Open \(text)", "Website\(inBrowser)", browser?.path ?? "/Applications/Safari.app")
+            }
+            return ("Search the web for “\(text)”", "\(Self.searchEngine.name)\(inBrowser)", browser?.path ?? "/Applications/Safari.app")
         }
     }
 
@@ -403,7 +465,7 @@ final class LauncherPanel: NSPanel {
 }
 
 /// One app (or file) in the list. The main line carries a ↩ keycap; an app with
-/// a window to go to gets a second, smaller line, "New … window", with ⇧↩.
+/// a window to go to gets a second, smaller line, "New … window", with ⌘↩.
 /// Both lines are one selection, so a key press can only ever do one thing.
 private final class ResultRow: NSView {
     static let mainHeight: CGFloat = 46
@@ -463,7 +525,7 @@ private final class ResultRow: NSView {
             label.lineBreakMode = .byTruncatingTail
             let plus = NSImageView(image: NSImage(systemSymbolName: "plus.rectangle.on.rectangle", accessibilityDescription: nil) ?? NSImage())
             plus.contentTintColor = .secondaryLabelColor
-            let key = Keycap(text: "⇧↩")
+            let key = Keycap(text: "⌘↩")
             for v in [plus, label, key] as [NSView] {
                 v.translatesAutoresizingMaskIntoConstraints = false
                 addSubview(v)
@@ -503,7 +565,7 @@ private final class ResultRow: NSView {
     }
 }
 
-/// A small key-shaped label like ↩ or ⇧↩.
+/// A small key-shaped label like ↩ or ⌘↩.
 final class Keycap: NSView {
     private let label: NSTextField
     var onAccent = false { didSet { refresh() } }

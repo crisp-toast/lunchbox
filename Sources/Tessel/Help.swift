@@ -40,7 +40,7 @@ struct ShortcutGuide {
             ("Launcher", [
                 (["⇧", "Space"], "Open the launcher: apps first, then files and folders"),
                 (["↩"], "Open the app, or go to its window if it has one"),
-                (["⇧", "↩"], "Open a new window of an app that's already open"),
+                (["⌘", "↩"], "Open a new window of an app that's already open"),
                 (["↑ ↓"], "Choose a result"),
                 (["Esc"], "Close the launcher"),
             ]),
