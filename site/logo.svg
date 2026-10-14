@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Tessel">
+  <defs>
+    <linearGradient id="t-bg" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#4c8dff"/>
+      <stop offset="1" stop-color="#1f45d6"/>
+    </linearGradient>
+    <linearGradient id="t-sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#t-bg)"/>
+  <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#t-sheen)"/>
+  <!-- a tall tile and two stacked: the layout Tessel makes -->
+  <rect x="236" y="236" width="252" height="552" rx="44" fill="#ffffff" fill-opacity="0.96"/>
+  <rect x="536" y="236" width="252" height="252" rx="44" fill="#ffffff" fill-opacity="0.96"/>
+  <rect x="536" y="536" width="252" height="252" rx="44" fill="#ffffff" fill-opacity="0.62"/>
+  <!-- the focus ring -->
+  <rect x="514" y="214" width="296" height="296" rx="62" fill="none" stroke="#bfe0ff" stroke-width="14"/>
+</svg>

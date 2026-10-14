@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tessel</title>
+<meta name="description" content="Tessel is a tiny, native tiling window manager for macOS. Every window finds its place, and your whole desktop lives under a few keys. $14.99 once, lifetime updates.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='.15' y1='0' x2='.85' y2='1'%3E%3Cstop offset='0' stop-color='%234c8dff'/%3E%3Cstop offset='1' stop-color='%231f45d6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='64' y='64' width='896' height='896' rx='212' fill='url(%23g)'/%3E%3Crect x='236' y='236' width='252' height='552' rx='44' fill='%23fff'/%3E%3Crect x='536' y='236' width='252' height='252' rx='44' fill='%23fff'/%3E%3Crect x='536' y='536' width='252' height='252' rx='44' fill='%23fff' fill-opacity='.62'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one calm, centered column; the product itself (a live mini Mac) is the only loud thing on the page. */
+:root {
+  color-scheme: light;
+  --paper: #fbfbfd;
+  --ink: #1d2126;
+  --muted: #69707a;
+  --line: #e6e8ec;
+  --soft: #f2f4f8;
+  --accent: #2f6bff;
+  --accent-deep: #1f45d6;
+  --ring: #3d7bff;
+  --display: "Figtree", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  --text: "Figtree", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --ease: cubic-bezier(.22, .9, .3, 1);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 16px/1.55 var(--text);
+  -webkit-font-smoothing: antialiased;
+  padding-inline: 16px;
+  overflow-x: hidden;
+}
+a { color: inherit; }
+.wrap { max-width: 1080px; margin: 0 auto; }
+h1, h2, h3 { font-family: var(--display); color: var(--ink); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(40px, 7.2vw, 70px); font-weight: 600; line-height: 1.02; letter-spacing: -0.047em; }
+h2 { font-size: clamp(30px, 4.6vw, 46px); font-weight: 600; line-height: 1.06; letter-spacing: -0.04em; }
+h3 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+p { margin: 0; }
+.lede { color: var(--muted); font-size: 18px; max-width: 34em; margin-inline: auto; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+
+/* Nav: floats as a pill once you scroll */
+.nav {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  margin: 0 auto; max-width: 1080px; padding-top: 14px;
+}
+.nav-inner {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 10px 10px 10px 16px; border-radius: 18px;
+  transition: background .3s, box-shadow .3s, border-color .3s;
+  border: 1px solid transparent;
+}
+.nav.scrolled .nav-inner { background: rgba(255,255,255,.86); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-color: var(--line); box-shadow: 0 8px 30px rgba(20,30,60,.08); }
+.brand { display: flex; align-items: center; gap: 10px; font: 600 17px var(--display); letter-spacing: -0.02em; text-decoration: none; }
+.brand svg { width: 28px; height: 28px; }
+.nav-links { display: flex; gap: 28px; font-size: 14.5px; color: var(--muted); }
+.nav-links a { text-decoration: none; }
+.nav-links a:hover { color: var(--ink); }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 18px;
+  border-radius: 12px; font: 600 15px var(--text); text-decoration: none; cursor: pointer;
+  border: 1px solid var(--line); background: #fff; color: var(--ink);
+  transition: transform .15s var(--ease), box-shadow .2s;
+}
+.btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(20,30,60,.08); }
+.btn:focus-visible, .chapter:focus-visible, summary:focus-visible, .ctl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.dark { background: #16191d; color: #fff; border-color: #16191d; }
+.btn.dark .sep { width: 1px; align-self: stretch; margin: 11px 0; background: rgba(255,255,255,.22); }
+.btn.dark .price { font-weight: 500; color: rgba(255,255,255,.78); }
+.btn svg { width: 16px; height: 16px; }
+.btn.small { height: 38px; padding: 0 14px; font-size: 14px; border-radius: 11px; }
+.buy-note { font-size: 13px; color: var(--accent-deep); min-height: 1.4em; }
+
+/* Hero */
+.hero { text-align: center; padding-block: 72px 28px; display: grid; gap: 22px; justify-items: center; }
+.hero .actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.meta span::before { content: "·"; margin-right: 18px; color: #b9bec6; }
+.meta span:first-child::before { content: none; }
+
+/* The mini Mac */
+.mac {
+  position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 10;
+  border-radius: 18px; overflow: hidden; isolation: isolate;
+  background: radial-gradient(120% 90% at 15% 10%, #d9e7ff 0%, transparent 55%),
+              radial-gradient(90% 80% at 90% 20%, #ffe1ec 0%, transparent 60%),
+              radial-gradient(100% 90% at 60% 100%, #ffe9cf 0%, #f6efe8 70%);
+  box-shadow: 0 0 0 1px rgba(20,30,60,.08), 0 30px 80px -20px rgba(20,30,60,.28);
+  font-family: var(--text);
+}
+.mac.dim { background: radial-gradient(120% 90% at 15% 10%, #dfe3f6 0%, transparent 55%), radial-gradient(100% 90% at 60% 100%, #efe7f3 0%, #eceef6 70%); }
+.menubar {
+  position: absolute; inset: 0 0 auto 0; height: 4.2%; min-height: 14px;
+  display: flex; align-items: center; gap: 2.2%; padding: 0 1.6%;
+  font-size: clamp(7px, 1.05vw, 11px); font-weight: 600; color: #20242a;
+  background: rgba(255,255,255,.55); backdrop-filter: blur(6px);
+}
+.menubar .grow { flex: 1; }
+.menubar .item { font-weight: 500; opacity: .8; }
+.spaces { display: flex; gap: 4px; align-items: center; }
+.spaces .glyph { width: 1.3em; height: .9em; border: 1.5px solid currentColor; border-radius: 2px; position: relative; }
+.spaces .glyph::after { content: ""; position: absolute; inset: 1px 45% 1px 1px; background: currentColor; border-radius: 1px; }
+.spaces b { font-variant-numeric: tabular-nums; }
+.desk { position: absolute; left: 0; right: 0; bottom: 0; top: 4.2%; }
+.win {
+  position: absolute; border-radius: clamp(4px, .7vw, 8px); overflow: hidden;
+  background: #fff; box-shadow: 0 0 0 .5px rgba(0,0,0,.12), 0 6px 18px -6px rgba(20,30,60,.3);
+  transition: left .55s var(--ease), top .55s var(--ease), width .55s var(--ease), height .55s var(--ease),
+              transform .55s var(--ease), opacity .4s, box-shadow .25s;
+  display: flex; flex-direction: column;
+}
+.win.gone { opacity: 0; transform: scale(.92); pointer-events: none; }
+.win.away { opacity: 0; transform: translateX(-12%) scale(.96); }
+.win.focused { box-shadow: 0 0 0 2px var(--ring), 0 0 0 6px rgba(61,123,255,.18), 0 10px 26px -8px rgba(20,30,60,.35); z-index: 3; }
+.win.shelved { transform: perspective(500px) rotateY(32deg) scale(.96); transform-origin: left center; z-index: 1; box-shadow: 0 0 0 .5px rgba(0,0,0,.12), 0 14px 26px -10px rgba(20,30,60,.45); }
+.win.shelved .content { opacity: .9; }
+.bar { height: clamp(9px, 1.7vw, 18px); flex: none; display: flex; align-items: center; gap: 3px; padding: 0 6px; background: #f3f4f6; border-bottom: .5px solid rgba(0,0,0,.08); font-size: clamp(6px, .85vw, 10px); font-weight: 600; color: #4b525b; }
+.bar i { width: clamp(3px, .55vw, 6px); height: clamp(3px, .55vw, 6px); border-radius: 50%; background: #ff5f57; }
+.bar i:nth-child(2) { background: #febc2e; }
+.bar i:nth-child(3) { background: #28c840; margin-right: 4px; }
+.content { flex: 1; padding: 6% 7%; display: grid; gap: 5%; align-content: start; transition: opacity .3s; }
+.ln { height: clamp(2px, .4vw, 5px); border-radius: 3px; background: #e4e6ea; }
+.notes { background: #fffaf0; }
+.notes .ln { background: #eadfc8; }
+.notes .ln.h { background: #c7b48c; width: 45%; height: clamp(3px, .6vw, 7px); }
+.browser .block { border-radius: 4px; background: linear-gradient(135deg, #dfe8ff, #f1e7ff); aspect-ratio: 16 / 7; }
+.browser .ln.b { background: #cfd8ea; }
+.term { background: #16191d; }
+.term .bar { background: #24282e; color: #b4bac3; border-color: rgba(255,255,255,.06); }
+.term .ln { background: #2e343c; }
+.term .ln.g { background: #3fbf72; width: 30%; }
+.finder .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10%; }
+.finder .fold { aspect-ratio: 4 / 3; border-radius: 3px; background: linear-gradient(#8cc4ff, #5aa5f5); }
+.music { background: #fff5f7; }
+.music .art { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8%; }
+.music .art span { aspect-ratio: 1; border-radius: 4px; background: linear-gradient(135deg, #ff9db0, #ffc58f); }
+.music .art span:nth-child(2) { background: linear-gradient(135deg, #a3b8ff, #d7a8ff); }
+.music .art span:nth-child(3) { background: linear-gradient(135deg, #8fe3c8, #a6d5ff); }
+
+/* overlays inside the mini Mac */
+.panel {
+  position: absolute; left: 50%; top: 14%; width: 52%; transform: translateX(-50%);
+  border-radius: clamp(6px, 1vw, 12px); background: rgba(250,250,252,.94); backdrop-filter: blur(10px);
+  box-shadow: 0 0 0 .5px rgba(0,0,0,.14), 0 18px 40px -10px rgba(20,30,60,.4);
+  padding: 2% 2.2%; z-index: 5; transition: opacity .25s, transform .25s var(--ease);
+  font-size: clamp(7px, 1.15vw, 13px);
+}
+.panel[hidden] { display: block !important; opacity: 0; transform: translateX(-50%) translateY(-6px) scale(.98); pointer-events: none; }
+.panel .q { font-size: 1.5em; padding: .2em .3em .35em; border-bottom: 1px solid #e8eaee; color: #1d2126; min-height: 1.9em; }
+.panel .q .ph { color: #9aa1aa; }
+.panel .q .caret { display: inline-block; width: 1px; height: 1em; background: var(--accent); vertical-align: -.12em; margin-left: 1px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.row { display: grid; grid-template-columns: 1.9em 1fr auto; gap: .2em .7em; align-items: center; padding: .55em .6em; border-radius: .6em; margin-top: .3em; }
+.row.sel { background: var(--accent); color: #fff; }
+.row .ic { width: 1.9em; height: 1.9em; border-radius: .45em; background: linear-gradient(135deg, #ff8a65, #8e7dff); grid-row: span 2; }
+.row .t { font-weight: 600; }
+.row .s { font-size: .82em; opacity: .75; grid-column: 2; }
+.row .ret { grid-row: 1; grid-column: 3; }
+.row .sub { grid-column: 2 / 4; display: flex; justify-content: space-between; align-items: center; font-size: .92em; padding-top: .35em; }
+.mini-kc { font: 600 .82em var(--text); border: 1px solid currentColor; border-radius: .35em; padding: .05em .45em; opacity: .85; }
+.help-row { display: grid; grid-template-columns: 8.5em 1fr; gap: .8em; padding: .35em .3em; align-items: center; }
+.help-row .k { display: flex; gap: .25em; flex-wrap: wrap; }
+.help-group { font: 600 .72em var(--text); letter-spacing: .08em; color: #8b929c; padding: .8em .3em .2em; }
+
+/* Showreel + walkthrough */
+.showcase { padding-block: 8px 40px; }
+.features { padding-block: 80px 40px; display: grid; gap: 44px; text-align: center; }
+.trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; text-align: left; }
+.trio article { display: grid; gap: 10px; }
+.trio .art { aspect-ratio: 4 / 3; border-radius: 16px; background: var(--soft); border: 1px solid var(--line); position: relative; overflow: hidden; }
+.trio p { color: var(--muted); font-size: 15px; }
+.art-tiles { position: absolute; inset: 14%; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8%; }
+.art-tiles span { border-radius: 8px; background: #fff; box-shadow: 0 0 0 1px var(--line), 0 6px 14px -8px rgba(20,30,60,.3); }
+.art-tiles span:first-child { grid-row: span 2; }
+.art-tiles span.on { box-shadow: 0 0 0 2px var(--ring), 0 0 0 6px rgba(61,123,255,.16); animation: hop 4s var(--ease) infinite; }
+@keyframes hop { 0%, 40% { transform: none; } 50%, 90% { transform: translateY(4%); } }
+.art-keys { position: absolute; inset: 0; display: grid; place-content: center; gap: 10px; justify-items: center; }
+.art-keys .row-k { display: flex; gap: 8px; }
+.kc {
+  display: inline-grid; place-items: center; min-width: 30px; height: 30px; padding: 0 9px;
+  border-radius: 8px; background: #fff; border: 1px solid #dfe2e7; border-bottom-width: 3px;
+  font: 600 13px var(--text); color: var(--ink); white-space: nowrap;
+  transition: transform .12s, background .2s, border-color .2s, color .2s;
+}
+.kc.big { min-width: 46px; height: 44px; font-size: 16px; border-radius: 10px; }
+.kc.press { transform: translateY(2px); border-bottom-width: 1px; background: var(--accent); border-color: var(--accent-deep); color: #fff; }
+.art-speed { position: absolute; inset: 16% 12%; display: grid; gap: 9%; align-content: center; }
+.art-speed .bar2 { height: 12px; border-radius: 6px; background: #fff; box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
+.art-speed .bar2 b { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), #7aa6ff); border-radius: 6px; }
+.art-speed small { font: 500 11px var(--mono); color: var(--muted); }
+
+.walk { padding-block: 80px 40px; display: grid; gap: 34px; }
+.walk header { text-align: center; display: grid; gap: 14px; }
+.player { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 28px; align-items: start; }
+.chapters { display: grid; gap: 4px; }
+.chapter {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; text-align: left; cursor: pointer;
+  padding: 12px 14px; border-radius: 12px; border: 1px solid transparent; background: none; font: inherit; color: var(--muted);
+}
+.chapter .ct { font-weight: 600; color: var(--ink); font-size: 15px; }
+.chapter .ck { font: 500 11.5px var(--mono); grid-column: 1 / 3; }
+.chapter.on { background: #fff; border-color: var(--line); box-shadow: 0 6px 20px -10px rgba(20,30,60,.25); }
+.chapter.on .ck { color: var(--accent-deep); }
+.chapter .progress { grid-column: 1 / 3; height: 2px; border-radius: 2px; background: var(--line); overflow: hidden; margin-top: 6px; opacity: 0; }
+.chapter.on .progress { opacity: 1; }
+.chapter .progress b { display: block; height: 100%; width: 0; background: var(--accent); }
+.stage { display: grid; gap: 16px; min-width: 0; }
+.howto { display: flex; align-items: center; gap: 14px; min-height: 48px; flex-wrap: wrap; }
+.howto .keys { display: flex; gap: 6px; flex-wrap: wrap; min-height: 44px; align-items: center; }
+.howto .keys .plus { color: #a5abb4; font-weight: 600; }
+.howto .cap { flex: 1; min-width: 200px; color: var(--ink); font-size: 16px; }
+.ctls { display: flex; gap: 6px; }
+.ctl { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: #fff; cursor: pointer; display: grid; place-items: center; color: var(--ink); }
+.ctl svg { width: 14px; height: 14px; }
+
+/* Pricing */
+.pricing { padding-block: 90px 40px; display: grid; gap: 34px; justify-items: center; text-align: center; }
+.price-card {
+  width: 100%; max-width: 460px; text-align: left; display: grid; gap: 22px;
+  padding: 30px; border-radius: 24px; background: #fff; border: 1px solid var(--line);
+  box-shadow: 0 30px 70px -30px rgba(20,30,60,.25);
+}
+.price-top { display: flex; align-items: center; gap: 14px; }
+.price-top svg { width: 52px; height: 52px; }
+.price-top div { display: grid; }
+.price-top b { font: 600 20px var(--display); letter-spacing: -0.02em; }
+.price-top small { color: var(--muted); font-size: 14px; }
+.amount { display: flex; align-items: baseline; gap: 10px; }
+.amount strong { font: 600 56px/1 var(--display); letter-spacing: -0.05em; font-variant-numeric: tabular-nums; }
+.amount span { color: var(--muted); font-size: 15px; }
+.lifetime { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--accent-deep); background: #edf3ff; border-radius: 999px; padding: 6px 12px; justify-self: start; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; font-size: 15px; }
+.checks li { display: grid; grid-template-columns: 20px 1fr; gap: 10px; }
+.checks li::before { content: ""; width: 18px; height: 18px; margin-top: 2px; border-radius: 50%; background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat; }
+.price-card .btn { justify-content: center; height: 50px; font-size: 16px; }
+.fine { font-size: 13px; color: var(--muted); text-align: center; }
+
+/* FAQ */
+.faq { padding-block: 70px 40px; display: grid; gap: 26px; max-width: 760px; margin: 0 auto; }
+.faq h2 { text-align: center; }
+details { border-bottom: 1px solid var(--line); padding: 18px 4px; }
+summary { cursor: pointer; font-weight: 600; font-size: 17px; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; color: var(--muted); font-weight: 400; font-size: 22px; line-height: 1; transition: transform .2s; }
+details[open] summary::after { transform: rotate(45deg); }
+details p { color: var(--muted); padding-top: 10px; max-width: 62ch; }
+
+/* Closing */
+.closing { padding-block: 100px 70px; display: grid; gap: 22px; justify-items: center; text-align: center; background: radial-gradient(60% 70% at 50% 40%, #eef3ff 0%, transparent 70%); }
+.closing svg.icon { width: 76px; height: 76px; filter: drop-shadow(0 12px 22px rgba(31,69,214,.3)); }
+footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+
+@media (max-width: 860px) {
+  .player { grid-template-columns: minmax(0, 1fr); }
+  .chapters { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; }
+  .chapter { padding: 9px 12px; }
+  .chapter .ck, .chapter .progress { display: none; }
+  .trio { grid-template-columns: minmax(0, 1fr); }
+  .nav-links { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; animation: none !important; }
+  html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="logo-bg" x1="0.15" y1="0" x2="0.85" y2="1"><stop offset="0" stop-color="#4c8dff"/><stop offset="1" stop-color="#1f45d6"/></linearGradient>
+    <linearGradient id="logo-sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <symbol id="logo" viewBox="64 64 896 896">
+      <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#logo-bg)"/>
+      <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#logo-sheen)"/>
+      <rect x="236" y="236" width="252" height="552" rx="44" fill="#fff" fill-opacity=".96"/>
+      <rect x="536" y="236" width="252" height="252" rx="44" fill="#fff" fill-opacity=".96"/>
+      <rect x="536" y="536" width="252" height="252" rx="44" fill="#fff" fill-opacity=".62"/>
+      <rect x="514" y="214" width="296" height="296" rx="62" fill="none" stroke="#bfe0ff" stroke-width="14"/>
+    </symbol>
+    <symbol id="apple" viewBox="0 0 16 16"><path fill="currentColor" d="M11.2 8.5c0-1.6 1.3-2.4 1.4-2.4-.8-1.1-2-1.3-2.4-1.3-1-.1-2 .6-2.5.6s-1.3-.6-2.2-.6c-1.1 0-2.2.7-2.8 1.7-1.2 2-.3 5.1.9 6.8.6.8 1.2 1.7 2.1 1.7.8 0 1.2-.5 2.2-.5s1.3.5 2.2.5c.9 0 1.5-.8 2-1.7.6-.9.9-1.8.9-1.9 0 0-1.8-.7-1.8-2.9zM9.6 3.6c.5-.6.8-1.3.7-2.1-.7 0-1.5.5-2 1.1-.4.5-.8 1.3-.7 2 .8.1 1.5-.4 2-1z"/></symbol>
+  </defs>
+</svg>
+
+<nav class="nav" id="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top"><svg><use href="#logo"/></svg>Tessel</a>
+    <div class="nav-links"><a href="#features">Features</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></div>
+    <a class="btn dark small" href="#pricing"><svg><use href="#apple"/></svg>Buy<span class="sep"></span><span class="price">$14.99</span></a>
+  </div>
+</nav>
+
+<main class="wrap" id="top">
+  <section class="hero">
+    <h1>Every window,<br>right where it belongs.</h1>
+    <p class="lede">Tessel tiles your Mac's windows the moment they open and puts the whole desktop under a few keys. Native, tiny, and quick enough to feel instant.</p>
+    <div class="actions">
+      <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Buy Tessel<span class="sep"></span><span class="price">$14.99</span></a>
+      <a class="btn" href="#how">See how it works</a>
+    </div>
+    <div class="meta"><span>One-time purchase</span><span>Lifetime updates</span><span>macOS 14 or later</span><span>Apple silicon</span></div>
+  </section>
+
+  <section class="showcase" aria-label="Tessel in action">
+    <div class="mac" id="hero-mac"></div>
+  </section>
+
+  <section class="features" id="features">
+    <div style="display:grid;gap:14px">
+      <h2>Calm by default.<br>Fast when you need it.</h2>
+      <p class="lede">No grids to draw, no config files. Open a window and Tessel finds it a place.</p>
+    </div>
+    <div class="trio">
+      <article>
+        <div class="art"><div class="art-tiles"><span></span><span class="on"></span><span></span></div></div>
+        <h3>It tiles itself</h3>
+        <p>One window sits centered at a comfortable size. Open more and they share the screen in tidy columns.</p>
+      </article>
+      <article>
+        <div class="art"><div class="art-keys"><div class="row-k"><span class="kc big">Left ⌘</span><span class="kc big">⇧</span></div><div class="row-k"><span class="kc">←</span><span class="kc">↑</span><span class="kc">↓</span><span class="kc">→</span></div></div></div>
+        <h3>Built for the keyboard</h3>
+        <p>⌘ goes somewhere, ⌘⇧ moves something. Learn two ideas and you know Tessel. Right ⌘ keeps its usual job.</p>
+      </article>
+      <article>
+        <div class="art"><div class="art-speed"><small>Fast app · glides</small><div class="bar2"><b style="width:100%"></b></div><small>Busy app · slides</small><div class="bar2"><b style="width:70%"></b></div><small>Struggling app · snaps</small><div class="bar2"><b style="width:30%"></b></div></div></div>
+        <h3>Never in the way</h3>
+        <p>Tessel measures how quickly each app responds. Quick ones glide, slow ones snap, so moving windows never adds lag.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="walk" id="how">
+    <header>
+      <span class="eyebrow">How it works</span>
+      <h2>Eight things to know.<br>Most days you'll use three.</h2>
+    </header>
+    <div class="player">
+      <div class="chapters" id="chapters" role="tablist" aria-label="Walkthroughs"></div>
+      <div class="stage">
+        <div class="mac" id="walk-mac"></div>
+        <div class="howto">
+          <div class="keys" id="keys" aria-live="polite"></div>
+          <p class="cap" id="caption"></p>
+          <div class="ctls">
+            <button class="ctl" id="prev" type="button" aria-label="Previous step"><svg viewBox="0 0 16 16"><path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <button class="ctl" id="play" type="button" aria-label="Pause"><svg viewBox="0 0 16 16"><path id="play-icon" d="M5 3v10M11 3v10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+            <button class="ctl" id="next" type="button" aria-label="Next step"><svg viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="pricing" id="pricing">
+    <div style="display:grid;gap:14px">
+      <span class="eyebrow">Pricing</span>
+      <h2>Pay once.<br>Keep every update.</h2>
+      <p class="lede">No subscription and no account. One price, and every version of Tessel we ever ship is yours.</p>
+    </div>
+    <div class="price-card">
+      <div class="price-top"><svg><use href="#logo"/></svg><div><b>Tessel</b><small>For your Mac, for good</small></div></div>
+      <div class="amount"><strong>$14.99</strong><span>USD, one-time</span></div>
+      <span class="lifetime">Lifetime updates included</span>
+      <ul class="checks">
+        <li>Automatic tiling, spotlight and three instant spaces</li>
+        <li>The ⇧Space launcher for apps, files and new windows</li>
+        <li>Every shortcut searchable with Left ⌘⇧Space</li>
+        <li>Multi-display support, or main display only</li>
+        <li>All future updates, free, forever</li>
+      </ul>
+      <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Buy Tessel for $14.99</a>
+      <p class="buy-note" id="buy-note" aria-live="polite"></p>
+      <p class="fine">macOS 14 Sonoma or later · Apple silicon</p>
+    </div>
+  </section>
+
+  <section class="faq" id="faq">
+    <h2>Questions</h2>
+    <div>
+      <details><summary>What does Tessel need permission for?</summary><p>Accessibility, so it can move and resize other apps' windows and listen for its shortcuts. Screen Recording is optional: allow it and the spotlight shelf shows live previews of your windows instead of app icons.</p></details>
+      <details><summary>Will it take over my keyboard?</summary><p>Only the left ⌘ key's arrow shortcuts, plus the few combinations listed in the help. Right ⌘ keeps doing what it always did, so ⌘← still jumps to the start of a line. Esc only goes to Tessel while spotlight is on.</p></details>
+      <details><summary>How do the three spaces work?</summary><p>On first launch Tessel asks you to press three keys you rarely use, like Page Up, Page Down and End. ⌘ plus one of them switches spaces instantly; add ⇧ to take the focused window with you.</p></details>
+      <details><summary>Does it work with more than one display?</summary><p>Yes. Each display has its own layout and focus crosses between them at the edges. If a second display is a dummy plug or you only want your main screen tiled, turn off Use All Displays in Settings.</p></details>
+      <details><summary>What does "lifetime updates" mean?</summary><p>You buy Tessel once and every future version is included. No upgrade fees, no subscription, no catch.</p></details>
+    </div>
+  </section>
+
+  <section class="closing">
+    <svg class="icon"><use href="#logo"/></svg>
+    <h2>Give every window a place.</h2>
+    <p class="lede">Your Mac, finally tidy. Your hands, finally on the keyboard.</p>
+    <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Buy Tessel<span class="sep"></span><span class="price">$14.99</span></a>
+    <p class="fine">One-time purchase · Lifetime updates</p>
+  </section>
+
+  <footer>
+    <a class="brand" href="#top" style="font-size:15px"><svg style="width:22px;height:22px"><use href="#logo"/></svg>Tessel</a>
+    <span>A tiling window manager for people who live on the keyboard.</span>
+    <span>© 2026 Tessel</span>
+  </footer>
+</main>
+
+<script>
+// Where "Buy" goes once a checkout (Lemon Squeezy, Paddle, Stripe…) exists. Empty: the
+// buttons scroll to pricing and say checkout is coming, rather than pretending to sell.
+const CHECKOUT_URL = "";
+
+(() => {
+  const nav = document.getElementById("nav");
+  const onScroll = () => nav.classList.toggle("scrolled", scrollY > 24);
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  for (const b of document.querySelectorAll(".buy")) {
+    b.addEventListener("click", (e) => {
+      if (CHECKOUT_URL) { b.href = CHECKOUT_URL; return; }
+      e.preventDefault();
+      document.getElementById("pricing").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      document.getElementById("buy-note").textContent = "Checkout opens soon. Thanks for your patience.";
+    });
+  }
+
+  // ---------- the mini Mac ----------
+  const APPS = {
+    A: { name: "Notes", kind: "notes" },
+    B: { name: "Arc", kind: "browser" },
+    C: { name: "Terminal", kind: "term" },
+    D: { name: "Finder", kind: "finder" },
+    E: { name: "Music", kind: "music" },
+    F: { name: "Arc", kind: "browser" },
+  };
+  const body = (kind) => ({
+    notes: '<div class="ln h"></div><div class="ln"></div><div class="ln" style="width:85%"></div><div class="ln"></div><div class="ln" style="width:60%"></div>',
+    browser: '<div class="block"></div><div class="ln b" style="width:70%"></div><div class="ln"></div><div class="ln" style="width:80%"></div>',
+    term: '<div class="ln g"></div><div class="ln" style="width:75%"></div><div class="ln" style="width:55%"></div><div class="ln g" style="width:20%"></div><div class="ln" style="width:65%"></div>',
+    finder: '<div class="grid"><span class="fold"></span><span class="fold"></span><span class="fold"></span><span class="fold"></span><span class="fold"></span><span class="fold"></span><span class="fold"></span><span class="fold"></span></div>',
+    music: '<div class="art"><span></span><span></span><span></span></div><div class="ln" style="width:60%"></div><div class="ln" style="width:40%"></div>',
+  })[kind];
+
+  function buildMac(root) {
+    root.innerHTML = `
+      <div class="menubar"><svg style="width:1em;height:1em"><use href="#apple"/></svg><span>Finder</span><span class="item">File</span><span class="item">Edit</span><span class="item">View</span><span class="grow"></span><span class="spaces"><span class="glyph"></span><b class="space-num">1</b></span><span class="item">9:41</span></div>
+      <div class="desk">
+        ${Object.entries(APPS).map(([id, a]) => `<div class="win gone ${a.kind}" data-id="${id}"><div class="bar"><i></i><i></i><i></i><span>${a.name}</span></div><div class="content">${body(a.kind)}</div></div>`).join("")}
+        <div class="panel launcher" hidden></div>
+        <div class="panel help" hidden></div>
+      </div>`;
+    const wins = {};
+    for (const el of root.querySelectorAll(".win")) wins[el.dataset.id] = el;
+    return {
+      root, wins,
+      num: root.querySelector(".space-num"),
+      launcher: root.querySelector(".launcher"),
+      help: root.querySelector(".help"),
+    };
+  }
+
+  // Tile rectangles, in % of the desktop: [x, y, w, h]
+  const R = {
+    single: [20, 10, 60, 80],
+    halfL: [1.5, 2, 47.75, 96], halfR: [50.75, 2, 47.75, 96],
+    c1: [1.5, 2, 31.33, 96], c2: [34.33, 2, 31.33, 96], c3: [67.17, 2, 31.33, 96],
+    c1t: [1.5, 2, 31.33, 47.25], c1b: [1.5, 50.75, 31.33, 47.25],
+    c2t: [34.33, 2, 31.33, 47.25], c2b: [34.33, 50.75, 31.33, 47.25],
+    c3t: [67.17, 2, 31.33, 47.25], c3b: [67.17, 50.75, 31.33, 47.25],
+    f1: [1.5, 2, 23.13, 96], f2: [26.13, 2, 23.13, 96], f3: [50.75, 2, 23.13, 96], f4: [75.38, 2, 23.13, 96],
+    s1: [3, 14, 16, 15], s2: [3, 36, 16, 15], s3: [3, 58, 16, 15],
+  };
+  const four = { A: R.c1, B: R.c2, C: R.c3t, D: R.c3b };
+  const shelf = (r) => ({ r, shelf: true });
+  const away = (r) => ({ r, away: true });
+
+  function apply(mac, step) {
+    for (const [id, el] of Object.entries(mac.wins)) {
+      let v = step.win[id];
+      const spec = Array.isArray(v) ? { r: v } : v;
+      el.classList.toggle("gone", !spec);
+      el.classList.toggle("shelved", !!(spec && spec.shelf));
+      el.classList.toggle("away", !!(spec && spec.away));
+      el.classList.toggle("focused", id === step.focus && !!spec && !spec.away);
+      if (spec) {
+        const [x, y, w, h] = spec.r;
+        el.style.left = x + "%"; el.style.top = y + "%"; el.style.width = w + "%"; el.style.height = h + "%";
+      }
+    }
+    mac.num.textContent = step.space || 1;
+    mac.root.classList.toggle("dim", (step.space || 1) !== 1);
+    const L = step.launcher;
+    mac.launcher.hidden = !L;
+    if (L) {
+      const rows = (L.rows || []).map((r, i) => `<div class="row ${i === (L.sel ?? 0) ? "sel" : ""}"><span class="ic" style="${r.ic || ""}"></span><span class="t">${r.t}</span><span class="mini-kc ret">↩</span><span class="s">${r.s}</span>${r.sub ? `<div class="sub"><span>＋ ${r.sub}</span><span class="mini-kc">⇧↩</span></div>` : ""}</div>`).join("");
+      mac.launcher.innerHTML = `<div class="q">${L.q ? L.q : '<span class="ph">Open an app or file</span>'}<span class="caret"></span></div>${rows}`;
+    }
+    const H = step.help;
+    mac.help.hidden = !H;
+    if (H) {
+      const all = [
+        ["WINDOWS", [["Left ⌘", "←→"], "Focus the next window"], [["Left ⌘⇧", "←→"], "Move the window"], [["Left ⌘⇧", "F"], "Spotlight"], [["Left ⌘⇧", "0"], "Normalize"]],
+        ["SPACES", [["⌘", "Page Up"], "Go to space 1"], [["⌘⇧", "Page Down"], "Move the window to space 2"], [["Left ⌘⇧", "H"], "Hide in space 3"]],
+        ["LAUNCHER", [["⇧", "Space"], "Open the launcher"]],
+      ];
+      const q = (H.q || "").toLowerCase();
+      let html = `<div class="q">${H.q || '<span class="ph">Search shortcuts</span>'}<span class="caret"></span></div>`;
+      for (const [group, ...rows] of all) {
+        const shown = rows.filter(([k, t]) => !q || (k.join(" ") + " " + t).toLowerCase().includes(q));
+        if (!shown.length) continue;
+        html += `<div class="help-group">${group}</div>` + shown.map(([k, t]) => `<div class="help-row"><span class="k">${k.map((x) => `<span class="mini-kc">${x}</span>`).join("")}</span><span>${t}</span></div>`).join("");
+      }
+      mac.help.innerHTML = html;
+    }
+  }
+
+  const arcRows = [
+    { t: "Arc", s: "Go to its window", sub: "New Arc window" },
+    { t: "Archive Utility", s: "Open", ic: "background:linear-gradient(135deg,#d9c6a5,#a88a5f)" },
+  ];
+
+  const CHAPTERS = [
+    { title: "It tiles itself", hint: "just open windows", steps: [
+      { win: { A: R.single }, focus: "A", keys: [], cap: "One window sits centered at a calm 16:10. Never stretched edge to edge." },
+      { win: { A: R.halfL, B: R.halfR }, focus: "B", keys: [], cap: "Open a second and they share the screen." },
+      { win: { A: R.c1, B: R.c2, C: R.c3 }, focus: "C", keys: [], cap: "A third gets its own column." },
+      { win: four, focus: "D", keys: [], cap: "After that, new windows stack where there's room." },
+    ]},
+    { title: "Move focus", hint: "left ⌘ + arrows", steps: [
+      { win: four, focus: "A", keys: [], cap: "Hold the left ⌘ key and point with the arrows." },
+      { win: four, focus: "B", keys: ["Left ⌘", "→"], cap: "Focus jumps to the window on the right." },
+      { win: four, focus: "C", keys: ["Left ⌘", "→"], cap: "And again." },
+      { win: four, focus: "D", keys: ["Left ⌘", "↓"], cap: "Down into the stack." },
+      { win: four, focus: "B", keys: ["Left ⌘", "←"], cap: "Right ⌘ is left alone, so it still moves your text cursor." },
+    ]},
+    { title: "Move windows", hint: "left ⌘⇧ + arrows", steps: [
+      { win: four, focus: "D", keys: [], cap: "Add ⇧ to carry the focused window with you." },
+      { win: { A: R.c1, B: R.c2t, D: R.c2b, C: R.c3 }, focus: "D", keys: ["Left ⌘", "⇧", "←"], cap: "First press: it stacks with its neighbor." },
+      { win: { A: R.f1, D: R.f2, B: R.f3, C: R.f4 }, focus: "D", keys: ["Left ⌘", "⇧", "←"], cap: "Press again: it moves past it." },
+      { win: { A: R.c1, B: R.c2t, D: R.c2b, C: R.c3 }, focus: "D", keys: ["Left ⌘", "⇧", "→"], cap: "Any layout is a few presses away." },
+      { win: { A: R.c1, D: R.c2t, B: R.c2b, C: R.c3 }, focus: "D", keys: ["Left ⌘", "⇧", "↑"], cap: "↑ and ↓ swap places in a stack." },
+    ]},
+    { title: "Resize", hint: "left ⌘⇧ + − / 0", steps: [
+      { win: four, focus: "B", keys: [], cap: "Give the focused window more room when it needs it." },
+      { win: { A: [1.5, 2, 24, 96], B: [27, 2, 44, 96], C: [72.5, 2, 26, 47.25], D: [72.5, 50.75, 26, 47.25] }, focus: "B", keys: ["Left ⌘", "⇧", "+"], cap: "Its neighbors make space." },
+      { win: { A: [1.5, 2, 19, 96], B: [22, 2, 54, 96], C: [77.5, 2, 21, 47.25], D: [77.5, 50.75, 21, 47.25] }, focus: "B", keys: ["Left ⌘", "⇧", "+"], cap: "A bit more." },
+      { win: four, focus: "B", keys: ["Left ⌘", "⇧", "0"], cap: "Normalize puts every split back to even." },
+    ]},
+    { title: "Spotlight", hint: "left ⌘⇧F, Esc", steps: [
+      { win: four, focus: "A", keys: [], cap: "Need to concentrate on one window?" },
+      { win: { A: R.single, B: shelf(R.s1), C: shelf(R.s2), D: shelf(R.s3) }, focus: "A", keys: ["Left ⌘", "⇧", "F"], cap: "It takes the center. The rest wait on a tilted shelf." },
+      { win: four, focus: "A", keys: ["Esc"], cap: "Esc, ⌘⇧F again, or a click on any card brings it all back." },
+    ]},
+    { title: "Three spaces", hint: "⌘ + your space keys", steps: [
+      { win: four, focus: "C", space: 1, keys: [], cap: "Pick three keys you never use, like Page Up, Page Down and End." },
+      { win: { A: away(R.c1), B: away(R.c2), C: away(R.c3t), D: away(R.c3b), E: R.single }, focus: "E", space: 2, keys: ["⌘", "Page Down"], cap: "⌘ plus a space key switches instantly. No slide, no wait." },
+      { win: four, focus: "C", space: 1, keys: ["⌘", "Page Up"], cap: "Back again, focused on the rightmost window." },
+      { win: { A: away(R.c1), B: away(R.c2), D: away(R.c3b), E: R.halfL, C: R.halfR }, focus: "C", space: 2, keys: ["⌘", "⇧", "Page Down"], cap: "Add ⇧ and the window comes with you." },
+      { win: { A: away(R.c1), B: away(R.c2), D: away(R.c3b), E: R.single }, focus: "E", space: 2, keys: ["Left ⌘", "⇧", "H"], cap: "⌘⇧H tucks a window away in space 3." },
+    ]},
+    { title: "Launcher", hint: "⇧ Space", steps: [
+      { win: four, focus: "B", keys: [], cap: "Faster than Spotlight for the apps you use every day." },
+      { win: four, focus: "B", keys: ["⇧", "Space"], launcher: { q: "", rows: [] }, cap: "Shift, then Space. It's there instantly." },
+      { win: four, focus: "B", keys: ["A", "R"], launcher: { q: "ar", rows: arcRows, sel: 0 }, cap: "Apps first. An open app offers two choices." },
+      { win: { A: R.c1t, F: R.c1b, B: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: ["⇧", "↩"], cap: "↩ goes to its window. ⇧↩ opens a new one, tiled and focused." },
+    ]},
+    { title: "Every shortcut", hint: "left ⌘⇧ Space", steps: [
+      { win: four, focus: "C", keys: [], cap: "Forget a shortcut? There's one to show them all." },
+      { win: four, focus: "C", keys: ["Left ⌘", "⇧", "Space"], help: { q: "" }, cap: "Every shortcut, grouped." },
+      { win: four, focus: "C", keys: ["M", "O", "V", "E"], help: { q: "move" }, cap: "Type to find one." },
+      { win: four, focus: "C", keys: ["Esc"], cap: "Esc to close. Back to work." },
+    ]},
+  ];
+
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Hero: a quiet showreel, no keys.
+  const hero = buildMac(document.getElementById("hero-mac"));
+  const reel = [
+    ...CHAPTERS[0].steps, CHAPTERS[1].steps[1], CHAPTERS[1].steps[2], CHAPTERS[4].steps[1], CHAPTERS[4].steps[2],
+    CHAPTERS[2].steps[1], CHAPTERS[2].steps[2], { win: four, focus: "A" },
+  ];
+  let reelAt = 0;
+  apply(hero, reduce ? { win: four, focus: "B" } : reel[0]);
+  if (!reduce) setInterval(() => { if (heroVisible) { reelAt = (reelAt + 1) % reel.length; apply(hero, reel[reelAt]); } }, 1700);
+  let heroVisible = true;
+  new IntersectionObserver(([e]) => { heroVisible = e.isIntersecting; }).observe(hero.root);
+
+  // Walkthrough player
+  const walk = buildMac(document.getElementById("walk-mac"));
+  const list = document.getElementById("chapters");
+  const keysEl = document.getElementById("keys");
+  const capEl = document.getElementById("caption");
+  const playBtn = document.getElementById("play");
+  const playIcon = document.getElementById("play-icon");
+  let ch = 0, st = 0, playing = !reduce, timer = null, walkVisible = false;
+  const STEP_MS = 2200;
+
+  CHAPTERS.forEach((c, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chapter"; b.setAttribute("role", "tab");
+    b.innerHTML = `<span class="ct">${c.title}</span><span class="ck">${c.hint}</span><span class="progress"><b></b></span>`;
+    b.addEventListener("click", () => { ch = i; st = 0; show(); schedule(); });
+    list.appendChild(b);
+  });
+
+  function show() {
+    const c = CHAPTERS[ch], s = c.steps[st];
+    apply(walk, s);
+    [...list.children].forEach((b, i) => {
+      b.classList.toggle("on", i === ch);
+      b.setAttribute("aria-selected", i === ch);
+      const bar = b.querySelector(".progress b");
+      bar.style.transition = "none";
+      bar.style.width = i === ch ? ((st / c.steps.length) * 100) + "%" : "0";
+      if (i === ch && playing) requestAnimationFrame(() => { bar.style.transition = `width ${STEP_MS}ms linear`; bar.style.width = (((st + 1) / c.steps.length) * 100) + "%"; });
+    });
+    keysEl.innerHTML = s.keys.length ? s.keys.map((k) => `<span class="kc big">${k}</span>`).join('<span class="plus">+</span>') : "";
+    if (/^[A-Z]$/.test(s.keys[0] || "")) keysEl.innerHTML = s.keys.map((k) => `<span class="kc big">${k}</span>`).join("");
+    capEl.textContent = s.cap;
+    if (!reduce) {
+      const caps = keysEl.querySelectorAll(".kc");
+      caps.forEach((k, i) => setTimeout(() => k.classList.add("press"), 120 + i * 90));
+      setTimeout(() => caps.forEach((k) => k.classList.remove("press")), 700 + caps.length * 90);
+    }
+  }
+  function advance(d = 1) {
+    const c = CHAPTERS[ch];
+    st += d;
+    if (st >= c.steps.length) { st = 0; ch = (ch + 1) % CHAPTERS.length; }
+    if (st < 0) { ch = (ch - 1 + CHAPTERS.length) % CHAPTERS.length; st = CHAPTERS[ch].steps.length - 1; }
+    show();
+  }
+  function schedule() {
+    clearInterval(timer);
+    if (playing) timer = setInterval(() => { if (walkVisible) advance(1); }, STEP_MS);
+  }
+  document.getElementById("next").addEventListener("click", () => { advance(1); schedule(); });
+  document.getElementById("prev").addEventListener("click", () => { advance(-1); schedule(); });
+  playBtn.addEventListener("click", () => {
+    playing = !playing;
+    playBtn.setAttribute("aria-label", playing ? "Pause" : "Play");
+    playIcon.setAttribute("d", playing ? "M5 3v10M11 3v10" : "M5 3l8 5-8 5z");
+    show(); schedule();
+  });
+  if (!playing) { playBtn.setAttribute("aria-label", "Play"); playIcon.setAttribute("d", "M5 3l8 5-8 5z"); }
+  new IntersectionObserver(([e]) => { walkVisible = e.isIntersecting; }, { threshold: 0.35 }).observe(walk.root);
+  show(); schedule();
+})();
+</script>
+</body>
+</html>
