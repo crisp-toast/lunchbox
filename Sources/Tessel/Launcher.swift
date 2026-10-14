@@ -164,7 +164,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         var list: [Result] = []
         for app in ranked {
             guard list.count < Self.maxRows else { break }
-            if let running = runningApp(app) {
+            if let running = runningApp(app), tiler.hasReachableWindow(ofApp: running.processIdentifier) {
                 list.append(.goTo(app, running))
                 if list.count < Self.maxRows { list.append(.newWindow(app, running)) }
             } else {
@@ -280,7 +280,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
 
     private func describe(_ result: Result) -> (title: String, subtitle: String, icon: String) {
         switch result {
-        case .open(let app): return (app.name, "Open", app.url.path)
+        case .open(let app): return (app.name, runningApp(app) == nil ? "Open" : "Open · running with no windows", app.url.path)
         case .goTo(let app, _): return (app.name, "Already open · go to its window", app.url.path)
         case .newWindow(let app, _): return ("New \(app.name) window", "Opens next to your other windows", app.url.path)
         case .file(let url):

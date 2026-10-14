@@ -21,7 +21,7 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + H | Hide the window: it always moves to space 3 |
 | Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
 | ⌘ + space key 1 / 2 / 3 | Go to that space |
-| ⌘ ⇧ + space key 1 / 2 / 3 | Move the focused window to that space |
+| ⌘ ⇧ + space key 1 / 2 / 3 | Move the focused window to that space and go there with it |
 
 The space keys are whatever three keys you teach it on first launch (menu → **Set Up Space Keys…**).
 On Tyler's Boop65 they're the three keys on the far right, above the right arrow.
@@ -33,7 +33,7 @@ and a space quickly never opens it). Type part of an app's name: prefixes, word 
 ("code" for Visual Studio Code), initials ("vsc") and letters in order ("xcd") all match.
 Apps you open often rise to the top.
 
-- An app that's already open shows two rows: **go to its window** (switching spaces if
+- An app with a window you can get to (tiled in a space, minimized, or floating on screen) shows two rows: **go to its window** (switching spaces if
   needed) and **New … window**, which uses the app's own File › New Window and lands
   tiled and focused in the current space.
 - When no app matches, it searches Spotlight's index for files and folders, most

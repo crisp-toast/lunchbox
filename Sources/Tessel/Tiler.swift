@@ -12,6 +12,9 @@ final class ManagedWindow {
     var target: CGRect?
     /// Parked off screen because it belongs to another space.
     var hidden = false
+    var minimized = false
+    /// A normal document window (not a panel, sheet or helper window).
+    var standard = false
 
     init(handle: WindowHandle, frame: CGRect) {
         self.handle = handle
@@ -27,6 +30,8 @@ private struct WindowInfo {
     let element: AXUIElement
     let frame: CGRect
     let tileable: Bool
+    let minimized: Bool
+    let standard: Bool
 }
 
 private func axCallback(_ observer: AXObserver, _ element: AXUIElement, _ notification: CFString, _ refcon: UnsafeMutableRawPointer?) {
@@ -248,12 +253,10 @@ final class Tiler {
     private static func readWindows(of app: AppHandle) -> [WindowInfo] {
         app.element.elements(kAXWindowsAttribute).compactMap { element in
             guard let id = element.windowID, let frame = element.frame else { return nil }
-            let tileable = element.role == kAXWindowRole
-                && element.subrole == kAXStandardWindowSubrole
-                && !element.isMinimized
-                && !element.isFullScreen
-                && element.isResizable
-            return WindowInfo(id: id, element: element, frame: frame, tileable: tileable)
+            let standard = element.role == kAXWindowRole && element.subrole == kAXStandardWindowSubrole
+            let minimized = element.isMinimized
+            let tileable = standard && !minimized && !element.isFullScreen && element.isResizable
+            return WindowInfo(id: id, element: element, frame: frame, tileable: tileable, minimized: minimized, standard: standard)
         }
     }
 
@@ -318,6 +321,8 @@ final class Tiler {
     private func consider(_ info: WindowInfo, app: AppHandle, onScreen: Set<CGWindowID>) -> Bool {
         let window = windows[info.id] ?? register(info, app: app)
         if !window.hidden { window.frame = info.frame }
+        window.minimized = info.minimized
+        window.standard = info.standard
         let appHidden = NSRunningApplication(processIdentifier: app.pid)?.isHidden ?? false
         let wantsTile = info.tileable
             && !appHidden
@@ -697,9 +702,9 @@ final class Tiler {
         case .grow: resize(by: Self.resizeStep)
         case .shrink: resize(by: -Self.resizeStep)
         case .switchSpace(let i): switchSpace(to: i, focusing: nil)
-        case .sendToSpace(let i): send(toSpace: i)
+        case .sendToSpace(let i): send(toSpace: i, follow: true)
         case .close: closeFocused()
-        case .hide: send(toSpace: Self.spaceCount - 1, caption: "Hidden in space \(Self.spaceCount)")
+        case .hide: send(toSpace: Self.spaceCount - 1, caption: "Hidden in space \(Self.spaceCount)", follow: false)
         case .spotlight: toggleSpotlight()
         case .launcher: break // handled by the app delegate
         }
@@ -799,7 +804,9 @@ final class Tiler {
         badge.show(space: index, count: Self.spaceCount, on: display)
     }
 
-    private func send(toSpace index: Int, caption: String? = nil) {
+    /// Moves the focused window to another space. With `follow`, you go along
+    /// and it stays focused; without, focus moves to its nearest neighbor here.
+    private func send(toSpace index: Int, caption: String? = nil, follow: Bool) {
         guard let id = focusedID, let (space, uuid) = place(of: id), space == currentSpace, index != space,
               (0..<Self.spaceCount).contains(index) else { return }
         let display = displays.first { $0.uuid == uuid }
@@ -809,6 +816,13 @@ final class Tiler {
         var destination = spaces[index][uuid] ?? Layout()
         destination.insert(id, near: destination.windows.last, maxColumns: Layout.maxColumns(forWidth: display?.visible.width ?? 1600))
         spaces[index][uuid] = destination
+        if follow {
+            lastFocused[index] = id
+            switchSpace(to: index, focusing: id) // shows the space badge
+            activate(id)
+            showRing(on: id)
+            return
+        }
         relayout(animated: true)
         persist()
 
@@ -873,10 +887,39 @@ final class Tiler {
 
     // MARK: Launcher
 
-    /// Focuses the app's most recently used window, switching spaces if needed.
-    /// Returns false when Tessel doesn't know any window of that app.
+    /// Windows of an app you can actually get to: tiled in one of the spaces,
+    /// minimized (they can be restored), or a normal window floating on screen.
+    /// A running app with none of these (in the background, or with windows
+    /// only on another macOS desktop) doesn't count as open.
+    private func reachableWindows(ofApp pid: pid_t) -> [ManagedWindow] {
+        let onScreen = recentOnScreenWindowIDs()
+        return windows.values.filter { w in
+            guard w.pid == pid else { return false }
+            if place(of: w.id) != nil { return true }
+            return w.standard && (w.minimized || onScreen.contains(w.id))
+                && w.frame.width >= 100 && w.frame.height >= 80
+        }
+    }
+
+    func hasReachableWindow(ofApp pid: pid_t) -> Bool { !reachableWindows(ofApp: pid).isEmpty }
+
+    private var onScreenCache: (ids: Set<CGWindowID>, at: CFTimeInterval)?
+
+    /// The launcher asks once per app per keystroke; one window-server query a
+    /// quarter second is plenty.
+    private func recentOnScreenWindowIDs() -> Set<CGWindowID> {
+        let now = CACurrentMediaTime()
+        if let cache = onScreenCache, now - cache.at < 0.25 { return cache.ids }
+        let ids = onScreenWindowIDs()
+        onScreenCache = (ids, now)
+        return ids
+    }
+
+    /// Focuses the app's most recently used window, switching spaces or
+    /// restoring it from the Dock if needed. Returns false when the app has no
+    /// window you could get to.
     func goToWindow(ofApp pid: pid_t) -> Bool {
-        let mine = windows.values.filter { $0.pid == pid }
+        let mine = reachableWindows(ofApp: pid)
         guard !mine.isEmpty else { return false }
         let recent = ([currentSpace] + (0..<Self.spaceCount).filter { $0 != currentSpace })
             .compactMap { lastFocused[$0] }
@@ -884,8 +927,14 @@ final class Tiler {
         let choice = recent.flatMap { windows[$0] }
             ?? mine.first { place(of: $0.id)?.space == currentSpace }
             ?? mine.first { place(of: $0.id) != nil }
+            ?? mine.first { !$0.minimized }
             ?? mine.first
-        guard let w = choice else { return false }
+        guard let w = choice, mine.contains(where: { $0 === w }) else { return false }
+        if w.minimized {
+            // Restore it; Tessel tiles it again when it comes back.
+            let element = w.handle.element
+            w.handle.app.queue.async { element.set(kAXMinimizedAttribute, false) }
+        }
         if let space = place(of: w.id)?.space, space != currentSpace { switchSpace(to: space, focusing: w.id) }
         activate(w.id)
         showRing(on: w.id)

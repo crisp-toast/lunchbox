@@ -100,17 +100,13 @@ final class FocusRing {
 /// The badge that shows which of the three spaces you're on.
 final class SpaceBadge {
     private var panel: NSPanel?
-    private var dots: [NSTextField] = []
+    private var dots: [NumberDot] = []
     private var caption: NSTextField?
     private var hide: DispatchWorkItem?
 
     func show(space: Int, count: Int, caption text: String? = nil, on display: Display?) {
         let panel = self.panel ?? makePanel(count: count)
-        for (i, label) in dots.enumerated() {
-            let active = i == space
-            label.layer?.backgroundColor = active ? NSColor.controlAccentColor.cgColor : NSColor.white.withAlphaComponent(0.08).cgColor
-            label.textColor = active ? .white : NSColor.white.withAlphaComponent(0.55)
-        }
+        for (i, dot) in dots.enumerated() { dot.isActive = i == space }
         caption?.stringValue = text ?? ""
         caption?.isHidden = text == nil
 
@@ -157,16 +153,12 @@ final class SpaceBadge {
         row.orientation = .horizontal
         row.spacing = 12
         for i in 0..<count {
-            let label = NSTextField(labelWithString: "\(i + 1)")
-            label.font = .systemFont(ofSize: 15, weight: .semibold)
-            label.alignment = .center
-            label.wantsLayer = true
-            label.layer?.cornerRadius = 15
-            label.translatesAutoresizingMaskIntoConstraints = false
-            label.widthAnchor.constraint(equalToConstant: 30).isActive = true
-            label.heightAnchor.constraint(equalToConstant: 30).isActive = true
-            dots.append(label)
-            row.addArrangedSubview(label)
+            let dot = NumberDot(number: i + 1)
+            dot.translatesAutoresizingMaskIntoConstraints = false
+            dot.widthAnchor.constraint(equalToConstant: 30).isActive = true
+            dot.heightAnchor.constraint(equalToConstant: 30).isActive = true
+            dots.append(dot)
+            row.addArrangedSubview(dot)
         }
         let caption = NSTextField(labelWithString: "")
         caption.font = .systemFont(ofSize: 12, weight: .medium)
@@ -186,5 +178,36 @@ final class SpaceBadge {
         panel.contentView = blur
         self.panel = panel
         return panel
+    }
+}
+
+/// A space number in a circle. Drawn by hand so the digit is centered on its
+/// own height: a text field centers its whole line box, which leaves room for
+/// descenders that digits don't have, so the number sat high.
+final class NumberDot: NSView {
+    private let number: String
+    var isActive = false { didSet { needsDisplay = true } }
+
+    init(number: Int) {
+        self.number = String(number)
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override func draw(_ dirtyRect: NSRect) {
+        (isActive ? NSColor.controlAccentColor : NSColor.white.withAlphaComponent(0.08)).setFill()
+        NSBezierPath(ovalIn: bounds).fill()
+        let font = NSFont.systemFont(ofSize: 15, weight: .semibold)
+        let text = NSAttributedString(string: number, attributes: [
+            .font: font,
+            .foregroundColor: isActive ? NSColor.white : NSColor.white.withAlphaComponent(0.55),
+        ])
+        // Put the middle of the digits (half their cap height above the
+        // baseline) on the middle of the circle. draw(at:) takes the bottom of
+        // the line box, which sits `descender` below the baseline.
+        let baseline = bounds.midY - font.capHeight / 2
+        let origin = NSPoint(x: (bounds.midX - text.size().width / 2).rounded(), y: (baseline + font.descender).rounded())
+        text.draw(at: origin)
     }
 }
