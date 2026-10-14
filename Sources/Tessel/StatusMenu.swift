@@ -9,6 +9,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     var onToggle: (() -> Void)?
     var onTeachKeys: (() -> Void)?
     var onGrantAccess: (() -> Void)?
+    var onShowHelp: (() -> Void)?
 
     init(tiler: Tiler) {
         self.tiler = tiler
@@ -59,22 +60,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
-        let shortcuts = NSMenuItem(title: "Shortcuts", action: nil, keyEquivalent: "")
-        let list = NSMenu()
-        for line in [
-            "Left ⌘ + arrows: focus the next window",
-            "Left ⌘⇧ + arrows: move the window",
-            "Left ⌘⇧ + plus / minus: more or less space",
-            "Left ⌘⇧ + Delete: close the window",
-            "Left ⌘⇧ + H: hide the window in space 3",
-            "Left ⌘⇧ + F: spotlight the window, the rest shelved at the side",
-            "Left ⌘⇧ + 0: normalize every window in this space",
-            "⌘ + space key: go to space 1, 2 or 3",
-            "⌘⇧ + space key: move the window to that space and go with it",
-            "⇧ Space: open the launcher (apps, then files)",
-            "Right ⌘ + arrows still move the text cursor",
-        ] { list.addItem(disabled: line) }
-        shortcuts.submenu = list
+        let shortcuts = action("Keyboard Shortcuts…") { [weak self] in self?.onShowHelp?() }
+        shortcuts.toolTip = "Left ⌘⇧Space shows this anywhere"
         menu.addItem(shortcuts)
         let settings = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
         let options = NSMenu()

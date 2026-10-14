@@ -16,6 +16,10 @@ public enum KeyAction: Equatable, Sendable {
     case sendToSpace(Int)
     /// Shows or hides the launcher.
     case launcher
+    /// Shows or hides the list of every shortcut.
+    case help
+    /// Esc while spotlight is on: leave it. (Only claimed while spotlight is on.)
+    case escape
 }
 
 public enum Shortcuts {
@@ -52,6 +56,7 @@ public enum Shortcuts {
         case 4: return shift ? .hide : nil        // H
         case 3: return shift ? .spotlight : nil   // F
         case 29: return shift ? .normalize : nil  // 0
+        case 49: return shift ? .help : nil       // Space (⌘Space stays Spotlight's)
         default: return nil
         }
     }

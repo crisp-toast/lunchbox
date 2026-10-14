@@ -4,20 +4,28 @@ import TesselCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let tiler = Tiler()
-    private lazy var tap = HotkeyTap { [weak self] action in
+    private lazy var tap: HotkeyTap = HotkeyTap { [weak self] action in
         guard let self else { return }
-        if action == .launcher { self.launcher.toggle() } else { self.tiler.perform(action) }
+        switch action {
+        case .launcher: self.launcher.toggle()
+        case .help: self.help.toggle()
+        case .escape: self.escape()
+        default: self.tiler.perform(action)
+        }
     }
-    private lazy var launcher = Launcher(tiler: tiler)
-    private lazy var menu = StatusMenu(tiler: tiler)
-    private lazy var teacher = KeyTeacher(tap: tap) { [weak self] keys in self?.saveSpaceKeys(keys) }
+    private lazy var launcher: Launcher = Launcher(tiler: tiler)
+    private lazy var help: HelpPanel = HelpPanel { [weak self] in self?.tap.spaceKeys ?? [] }
+    private lazy var menu: StatusMenu = StatusMenu(tiler: tiler)
+    private lazy var teacher: KeyTeacher = KeyTeacher(tap: tap) { [weak self] keys in self?.saveSpaceKeys(keys) }
     private var trustPoll: Timer?
     private var signalSource: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         tiler.onChange = { [weak self] in self?.menu.refresh() }
+        tiler.onSpotlightChange = { [weak self] on in self?.tap.escapeLeavesSpotlight = on }
         menu.onToggle = { [weak self] in self?.toggleTiling() }
         menu.onTeachKeys = { [weak self] in self?.teacher.begin() }
+        menu.onShowHelp = { [weak self] in self?.help.show() }
         menu.onGrantAccess = { Self.openAccessibilitySettings() }
         tap.spaceKeys = (UserDefaults.standard.array(forKey: "spaceKeys") as? [Int]).map { $0.map(Int64.init) } ?? []
 
@@ -72,6 +80,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Esc while spotlight is on: close the launcher or help if open, else leave spotlight.
+    private func escape() {
+        if launcher.isVisible { launcher.hide() }
+        else if help.isVisible { help.hide() }
+        else { tiler.exitSpotlight() }
+    }
+
     private func toggleTiling() {
         setTiling(!tiler.enabled)
     }
@@ -121,6 +136,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             launcher.show(query: String(command.dropFirst(5)))
             return
         }
+        if command.hasPrefix("help:") {
+            help.show(query: String(command.dropFirst(5)))
+            return
+        }
         let parts = command.split(separator: "-").map(String.init)
         switch (parts.first, parts.count > 1 ? parts[1] : nil) {
         case ("focus", let d?): if let dir = Direction(rawValue: d) { tiler.perform(.focus(dir)) }
@@ -136,6 +155,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("launcher", "down"?): launcher.moveSelection(by: 1)
         case ("launcher", "up"?): launcher.moveSelection(by: -1)
         case ("launcher", _): launcher.toggle()
+        case ("help", _): help.toggle()
+        case ("escape", _): escape()
         case ("space", let n?): if let i = Int(n) { tiler.perform(.switchSpace(i - 1)) }
         case ("send", let n?): if let i = Int(n) { tiler.perform(.sendToSpace(i - 1)) }
         case ("displays", "all"?): tiler.setUseAllDisplays(true)
@@ -155,6 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var state = tiler.stateDescription()
         state["spaceKeys"] = tap.spaceKeys
         state["launcher"] = launcher.stateDescription
+        state["help"] = help.stateDescription
         if let data = try? JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: dir.appendingPathComponent("state.json"))
         }

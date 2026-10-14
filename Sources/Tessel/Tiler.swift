@@ -47,6 +47,8 @@ final class Tiler {
     static let gap: CGFloat = 8
     static let spaceCount = 3
     static let resizeStep = 0.08
+    /// Apps whose new windows open in spotlight (alone in the center, the rest shelved).
+    static let opensInSpotlight: Set<String> = ["com.apple.finder"]
     /// Apps whose windows always float.
     static let floatingApps: Set<String> = [
         "com.apple.systempreferences", "com.apple.iphonesimulator", "com.1password.1password",
@@ -291,6 +293,7 @@ final class Tiler {
             self.relayout(animated: false)
             self.persist()
             self.refreshFocus()
+            self.initialScanDone = true
         }
     }
 
@@ -363,8 +366,14 @@ final class Tiler {
         return window
     }
 
+    /// Set once the windows that were already open at launch are placed, so
+    /// only windows opened afterwards count as new.
+    private var initialScanDone = false
+
     private func insert(_ window: ManagedWindow) {
         let saved = savedPlacement.removeValue(forKey: window.id)
+        let opensInSpotlight = initialScanDone && saved == nil
+            && Self.opensInSpotlight.contains(window.handle.app.bundleID ?? "")
         let display = saved.flatMap { s in activeDisplays.first { $0.uuid == s.display } }
             ?? activeDisplays.first { $0.frame.contains(window.frame.center) }
             ?? activeDisplays.first { $0.isMain }
@@ -374,6 +383,13 @@ final class Tiler {
         var layout = spaces[space][display.uuid] ?? Layout()
         let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
         layout.insert(window.id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
+        if opensInSpotlight, layout.windowCount > 1 {
+            layout.spotlight = window.id
+            let shelved = layout.shelved
+            Snapshotter.capture(shelved) { [weak self] images in
+                for (wid, image) in images { self?.shelf.setSnapshot(image, for: wid) }
+            }
+        }
         spaces[space][display.uuid] = layout
         log.notice("tiling window \(window.id) (\(window.handle.app.bundleID ?? "?")) in space \(space + 1)")
     }
@@ -723,7 +739,7 @@ final class Tiler {
         case .hide: send(toSpace: Self.spaceCount - 1, caption: "Hidden in space \(Self.spaceCount)", follow: false)
         case .spotlight: toggleSpotlight()
         case .normalize: normalize()
-        case .launcher: break // handled by the app delegate
+        case .launcher, .help, .escape: break // handled by the app delegate
         }
         let ms = (CACurrentMediaTime() - t0) * 1000
         log.notice("\(String(describing: action), privacy: .public) handled in \(ms, format: .fixed(precision: 2)) ms")
@@ -1071,9 +1087,26 @@ final class Tiler {
                 )
             }
             shelf.show(cards, on: d)
+            onSpotlightChange?(true)
             return
         }
         shelf.hide(animated: true)
+        onSpotlightChange?(false)
+    }
+
+    /// Whether the space being viewed has a spotlight on (for Esc).
+    var onSpotlightChange: ((Bool) -> Void)?
+
+    /// Esc: leave spotlight in the space being viewed, keeping focus where it is.
+    func exitSpotlight() {
+        var changed = false
+        for uuid in spaces[currentSpace].keys where spaces[currentSpace][uuid]?.spotlight != nil {
+            spaces[currentSpace][uuid]?.spotlight = nil
+            changed = true
+        }
+        guard changed else { return }
+        relayout(animated: true)
+        if let id = focusedID { showRing(on: id) }
     }
 
     // MARK: Focus ring

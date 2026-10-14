@@ -19,9 +19,12 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + plus / minus | Give the window more or less space (a lone or spotlighted window grows or shrinks around the center) |
 | Left ⌘ ⇧ + F | Spotlight: the window alone in the center, the rest of the space shelved as small windows on the left. Again, a click on a shelved window, or ⌘-arrowing to one puts everything back |
 | Left ⌘ ⇧ + H | Hide the window: it always moves to space 3 |
+| Esc | Leave spotlight (only claimed while spotlight is on). New Finder windows open in spotlight |
 | Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
 | ⌘ + space key 1 / 2 / 3 | Go to that space |
 | ⌘ ⇧ + space key 1 / 2 / 3 | Move the focused window to that space and go there with it |
+| ⇧ Space | Open the launcher |
+| Left ⌘ ⇧ + Space | Show every shortcut, with search |
 
 The space keys are whatever three keys you teach it on first launch (menu → **Set Up Space Keys…**).
 On Tyler's Boop65 they're the three keys on the far right, above the right arrow.
@@ -44,7 +47,7 @@ With the mouse: drag a tiled window onto another to swap them, onto the other sc
 there, or drag its edge to resize. ⌘-Tab to a window in another space switches to that space.
 
 The menu bar shows the current space. Its menu can pause tiling, float or tile the focused window,
-even out sizes, and re-tile everything. **Settings** holds Launch at Login, Set Up Space Keys, and
+normalize, re-tile everything, and open **Keyboard Shortcuts…** (the same searchable list as Left ⌘⇧Space). **Settings** holds Launch at Login, Set Up Space Keys, and
 **Use All Displays** (on by default). Turn that off to tile only on the main display, for example
 when the second display is a dummy plug: windows on other displays move to the main one.
 
@@ -82,7 +85,7 @@ Tessel listens for distributed notifications named `com.tyleryouens.tessel.comma
 osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately("com.tyleryouens.tessel.command", "focus-left", $(), true)'
 ```
 
-Commands: `find:<text>` (opens the launcher with that text), `launcher`, `launcher-open|up|down`, `focus-left|right|up|down`, `move-…`, `grow`, `shrink`, `close` (the focused window) or `close-<windowID>`, `hide`, `spotlight`, `space-1…3`, `send-1…3`,
+Commands: `find:<text>` (opens the launcher with that text), `help`, `help:<text>`, `launcher`, `launcher-open|up|down`, `focus-left|right|up|down`, `move-…`, `grow`, `shrink`, `close` (the focused window) or `close-<windowID>`, `hide`, `spotlight`, `space-1…3`, `send-1…3`,
 `balance`, `retile`, `displays-all`, `displays-main`, `pause`, `resume`, and `dump`, which writes the current state to
 `~/Library/Application Support/Tessel/state.json`.
 

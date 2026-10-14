@@ -358,6 +358,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         background.layer?.cornerRadius = 18
         background.layer?.cornerCurve = .continuous
         background.layer?.masksToBounds = true
+        background.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.75).cgColor
 
         field.isBordered = false
         field.drawsBackground = false
@@ -500,7 +501,7 @@ private final class ResultRow: NSView {
 }
 
 /// A small key-shaped label like ↩ or ⇧↩.
-private final class Keycap: NSView {
+final class Keycap: NSView {
     private let label: NSTextField
     var onAccent = false { didSet { refresh() } }
 

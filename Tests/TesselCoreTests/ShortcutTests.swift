@@ -40,6 +40,9 @@ func flags(leftCommand: Bool = true, rightCommand: Bool = false, shift: Bool = f
         #expect(action(3, flags(shift: true)) == .spotlight)
         #expect(action(29, flags(shift: true)) == .normalize)
         #expect(action(29, flags()) == nil)
+        #expect(action(49, flags(shift: true)) == .help)
+        #expect(action(49, flags()) == nil) // ⌘Space is Spotlight's
+        #expect(action(49, flags(leftCommand: false, rightCommand: true, shift: true)) == nil)
         // Without Shift these stay with the app: ⌘-Delete and ⌘-H keep their usual jobs.
         #expect(action(51, flags()) == nil)
         #expect(action(4, flags()) == nil)

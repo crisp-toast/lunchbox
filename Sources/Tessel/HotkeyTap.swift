@@ -11,6 +11,8 @@ final class HotkeyTap {
         var enabled = false
         var spaceKeys: [Int64] = []
         var learner: ((Int64) -> Void)?
+        /// Esc leaves spotlight; only while it's on, so Esc reaches apps otherwise.
+        var escapeLeavesSpotlight = false
     }
 
     private let state = OSAllocatedUnfairLock(initialState: State())
@@ -34,6 +36,11 @@ final class HotkeyTap {
     var spaceKeys: [Int64] {
         get { state.withLock { $0.spaceKeys } }
         set { state.withLock { $0.spaceKeys = newValue } }
+    }
+
+    var escapeLeavesSpotlight: Bool {
+        get { state.withLock { $0.escapeLeavesSpotlight } }
+        set { state.withLock { $0.escapeLeavesSpotlight = newValue } }
     }
 
     /// While set, the next key press goes to `learner` instead of the app in front.
@@ -103,6 +110,13 @@ final class HotkeyTap {
             return nil
         }
         let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        let modifiers: CGEventFlags = [.maskCommand, .maskAlternate, .maskControl, .maskShift]
+        if code == 53, s.enabled, s.escapeLeavesSpotlight, event.flags.intersection(modifiers).isEmpty {
+            _ = chord.keyDown(code: code, flags: event.flags, isRepeat: isRepeat)
+            swallowed.insert(code)
+            DispatchQueue.main.async { [onAction] in onAction(.escape) }
+            return nil
+        }
         if chord.keyDown(code: code, flags: event.flags, isRepeat: isRepeat), s.enabled {
             swallowed.insert(code)
             DispatchQueue.main.async { [onAction] in onAction(.launcher) }
