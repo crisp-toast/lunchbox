@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let tiler = Tiler()
     private lazy var tap: HotkeyTap = HotkeyTap { [weak self] action in
         guard let self else { return }
+        self.onboarding.noted(action)
         switch action {
         case .launcher: self.launcher.toggle()
         case .help: self.help.toggle()
@@ -16,7 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var launcher: Launcher = Launcher(tiler: tiler)
     private lazy var help: HelpPanel = HelpPanel { [weak self] in self?.tap.spaceKeys ?? [] }
     private lazy var menu: StatusMenu = StatusMenu(tiler: tiler)
-    private lazy var teacher: KeyTeacher = KeyTeacher(tap: tap) { [weak self] keys in self?.saveSpaceKeys(keys) }
+    private lazy var onboarding: Onboarding = Onboarding(tap: tap, tiler: tiler)
     private var trustPoll: Timer?
     private var signalSource: DispatchSourceSignal?
 
@@ -25,7 +26,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = launcher // build the app list now, so the first ⇧Space already finds apps
         tiler.onSpotlightChange = { [weak self] on in self?.tap.escapeLeavesSpotlight = on }
         menu.onToggle = { [weak self] in self?.toggleTiling() }
-        menu.onTeachKeys = { [weak self] in self?.teacher.begin() }
+        menu.onTeachKeys = { [weak self] in self?.onboarding.show(at: .keys) }
+        menu.onShowWelcome = { [weak self] in self?.onboarding.show() }
+        onboarding.onSpaceKeys = { [weak self] keys in self?.saveSpaceKeys(keys) }
+        onboarding.onRequestAccess = {
+            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            if !AXIsProcessTrustedWithOptions(options) { Self.openAccessibilitySettings() }
+        }
         menu.onShowHelp = { [weak self] in self?.help.show() }
         menu.onGrantAccess = { Self.openAccessibilitySettings() }
         tap.spaceKeys = (UserDefaults.standard.array(forKey: "spaceKeys") as? [Int]).map { $0.map(Int64.init) } ?? []
@@ -39,8 +46,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         listenForCommands()
 
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        if AXIsProcessTrustedWithOptions(options) {
+        // New here (or setup unfinished): the welcome window walks through
+        // Accessibility and the space keys instead of a bare system prompt.
+        let setUp = AXIsProcessTrusted() && tap.spaceKeys.count == 3
+        if !setUp { onboarding.show() }
+        if AXIsProcessTrusted() {
             begin()
         } else {
             log.notice("waiting for Accessibility access")
@@ -76,8 +86,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 log.error("launch at login: \(error.localizedDescription, privacy: .public)")
             }
         }
-        if tap.spaceKeys.count != 3 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.teacher.begin() }
+        if tap.spaceKeys.count != 3, !onboarding.isVisible {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.onboarding.show(at: .keys) }
         }
     }
 
@@ -157,6 +167,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("launcher", "up"?): launcher.moveSelection(by: -1)
         case ("launcher", _): launcher.toggle()
         case ("help", _): help.toggle()
+        case ("welcome", let n?): if let i = Int(n), let step = Onboarding.Step(rawValue: i) { onboarding.show(at: step) }
+        case ("welcome", _): onboarding.show()
+        case ("welcomeclose", _): onboarding.close()
         case ("escape", _): escape()
         case ("space", let n?): if let i = Int(n) { tiler.perform(.switchSpace(i - 1)) }
         case ("send", let n?): if let i = Int(n) { tiler.perform(.sendToSpace(i - 1)) }

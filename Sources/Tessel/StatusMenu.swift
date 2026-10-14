@@ -10,6 +10,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     var onTeachKeys: (() -> Void)?
     var onGrantAccess: (() -> Void)?
     var onShowHelp: (() -> Void)?
+    var onShowWelcome: (() -> Void)?
 
     init(tiler: Tiler) {
         self.tiler = tiler
@@ -51,7 +52,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             }
             float.isEnabled = tiler.enabled && tiler.focusedID != nil
             menu.addItem(float)
-            let even = action("Normalize Windows") { [weak self] in self?.tiler.normalize() }
+            let even = action("Tidy This Space") { [weak self] in self?.tiler.normalize() }
             even.isEnabled = tiler.enabled
             menu.addItem(even)
             let retile = action("Re-tile All Windows") { [weak self] in self?.tiler.retile() }
@@ -60,7 +61,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
-        let shortcuts = action("Keyboard Shortcuts…") { [weak self] in self?.onShowHelp?() }
+        let shortcuts = action("Cheat Sheet…") { [weak self] in self?.onShowHelp?() }
         shortcuts.toolTip = "Left ⌘⇧Space shows this anywhere"
         menu.addItem(shortcuts)
         let settings = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
@@ -82,6 +83,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         let teach = action("Set Up Space Keys…") { [weak self] in self?.onTeachKeys?() }
         teach.isEnabled = trusted
         options.addItem(teach)
+        options.addItem(action("Welcome & Setup…") { [weak self] in self?.onShowWelcome?() })
         settings.submenu = options
         menu.addItem(settings)
         menu.addItem(.separator())

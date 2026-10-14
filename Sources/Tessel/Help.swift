@@ -23,34 +23,34 @@ struct ShortcutGuide {
                 (["Left ⌘ ⇧", "↑ ↓"], "Swap the window with the one above or below"),
                 (["Left ⌘ ⇧", "+"], "Give the window more space"),
                 (["Left ⌘ ⇧", "−"], "Give the window less space"),
-                (["Left ⌘ ⇧", "F"], "Spotlight: this window centered, the rest on a shelf (again to undo)"),
-                (["Esc"], "Leave spotlight (new Finder windows open in spotlight)"),
-                (["Left ⌘ ⇧", "0"], "Normalize: even out every window in this space (a centered window goes back to its default size)"),
+                (["Left ⌘ ⇧", "F"], "Focus: this window centered, the rest on the Shelf (again to leave)"),
+                (["Esc"], "Leave Focus (new Finder windows open in Focus)"),
+                (["Left ⌘ ⇧", "0"], "Tidy: even out every window in this space (a centered window goes back to its default size)"),
                 (["Left ⌘ ⇧", "Delete"], "Close the window"),
             ]),
             ("Spaces", [
-                (["⌘", k[0]], "Go to space 1"),
-                (["⌘", k[1]], "Go to space 2"),
-                (["⌘", k[2]], "Go to space 3"),
-                (["⌘ ⇧", k[0]], "Move the window to space 1 and go with it"),
-                (["⌘ ⇧", k[1]], "Move the window to space 2 and go with it"),
-                (["⌘ ⇧", k[2]], "Move the window to space 3 and go with it"),
-                (["Left ⌘ ⇧", "H"], "Hide the window in space 3 and stay here"),
+                (["⌘", k[0]], "Go to Space 1"),
+                (["⌘", k[1]], "Go to Space 2"),
+                (["⌘", k[2]], "Go to Space 3"),
+                (["⌘ ⇧", k[0]], "Move the window to Space 1 and go with it"),
+                (["⌘ ⇧", k[1]], "Move the window to Space 2 and go with it"),
+                (["⌘ ⇧", k[2]], "Move the window to Space 3 and go with it"),
+                (["Left ⌘ ⇧", "H"], "Stash: send the window to Space 3 and stay here"),
             ]),
-            ("Launcher", [
-                (["⇧", "Space"], "Open the launcher: apps first, then files and folders"),
+            ("Summon", [
+                (["⇧", "Space"], "Summon: apps first, then files and folders, then the web"),
                 (["↩"], "Open the app, or go to its window if it has one"),
                 (["⌘", "↩"], "Open a new window of an app that's already open"),
                 (["↑ ↓"], "Choose a result"),
-                (["Esc"], "Close the launcher"),
+                (["Esc"], "Close Summon"),
             ]),
             ("Mouse", [
                 (["Drag"], "Drop a window onto another to swap them"),
                 (["Drag edge"], "Resize a window; its neighbors make room. A centered window keeps any shape and stays centered"),
-                (["Click"], "Click a card on the spotlight shelf to bring everything back"),
+                (["Click"], "Click a card on the Shelf to leave Focus with that window"),
             ]),
-            ("Help", [
-                (["Left ⌘ ⇧", "Space"], "Show or hide this list"),
+            ("Cheat Sheet", [
+                (["Left ⌘ ⇧", "Space"], "Show or hide this Cheat Sheet"),
             ]),
         ]
         return all.flatMap { group, rows in rows.map { Entry(keys: $0.0, action: $0.1, group: group) } }
@@ -162,7 +162,7 @@ final class HelpPanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         background.layer?.masksToBounds = true
         background.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.82).cgColor
 
-        let title = NSTextField(labelWithString: "Tessel Shortcuts")
+        let title = NSTextField(labelWithString: "Tessel Cheat Sheet")
         title.font = .systemFont(ofSize: 13, weight: .semibold)
         title.textColor = .secondaryLabelColor
 
@@ -172,7 +172,7 @@ final class HelpPanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = .systemFont(ofSize: 20)
-        field.placeholderString = "Search shortcuts (try \"space\" or \"move\")"
+        field.placeholderString = "Search shortcuts (try \"focus\" or \"move\")"
         field.delegate = self
 
         list.orientation = .vertical

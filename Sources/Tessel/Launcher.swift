@@ -429,7 +429,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = .systemFont(ofSize: 24, weight: .regular)
-        field.placeholderString = "Open an app or file"
+        field.placeholderString = "Summon an app, file or website"
         field.delegate = self
         field.cell?.isScrollable = true
         field.cell?.wraps = false

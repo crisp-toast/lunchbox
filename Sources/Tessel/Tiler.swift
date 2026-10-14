@@ -796,7 +796,7 @@ final class Tiler {
         case .switchSpace(let i): switchSpace(to: i, focusing: nil)
         case .sendToSpace(let i): send(toSpace: i, follow: true)
         case .close: closeFocused()
-        case .hide: send(toSpace: Self.spaceCount - 1, caption: "Hidden in space \(Self.spaceCount)", follow: false)
+        case .hide: send(toSpace: Self.spaceCount - 1, caption: "Stashed in Space \(Self.spaceCount)", follow: false)
         case .spotlight: toggleSpotlight()
         case .normalize: normalize()
         case .launcher, .help, .escape: break // handled by the app delegate
@@ -921,7 +921,7 @@ final class Tiler {
         persist()
 
         if let oldFrame { focusNearest(to: oldFrame) } else { focusedID = nil }
-        badge.show(space: index, count: Self.spaceCount, caption: caption ?? "Window moved to space \(index + 1)", on: display)
+        badge.show(space: index, count: Self.spaceCount, caption: caption ?? "Moved to Space \(index + 1)", on: display)
     }
 
     /// Focuses the visible window closest to `frame`, or the desktop when this space is empty.
