@@ -296,7 +296,8 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
 
 @media (max-width: 860px) {
   .player { grid-template-columns: minmax(0, 1fr); }
-  .chapters { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; }
+  /* A scrolling strip clips what's drawn outside it, so give the selected chapter's shadow room inside. */
+  .chapters { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; scrollbar-width: none; padding: 8px 12px 20px; margin: -8px -12px -14px; }
   .chapter { padding: 9px 12px; }
   .chapter .ck, .chapter .progress { display: none; }
   .trio { grid-template-columns: minmax(0, 1fr); }
