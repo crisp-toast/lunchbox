@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tessel</title>
-<meta name="description" content="Tessel is a tiny, native tiling window manager for macOS. Every window finds its place, and your whole desktop lives under a few keys. $14.99 once, lifetime updates.">
+<meta name="description" content="Tessel puts your Mac's windows on the arrow keys. Every window tiles the moment it opens. $14.99 once, lifetime updates.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='.15' y1='0' x2='.85' y2='1'%3E%3Cstop offset='0' stop-color='%234c8dff'/%3E%3Cstop offset='1' stop-color='%231f45d6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='64' y='64' width='896' height='896' rx='212' fill='url(%23g)'/%3E%3Crect x='236' y='236' width='252' height='552' rx='44' fill='%23fff'/%3E%3Crect x='536' y='236' width='252' height='252' rx='44' fill='%23fff'/%3E%3Crect x='536' y='536' width='252' height='252' rx='44' fill='%23fff' fill-opacity='.62'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -172,8 +172,33 @@ p { margin: 0; }
 .help-row .k { display: flex; gap: .25em; flex-wrap: wrap; }
 .help-group { font: 600 .72em var(--text); letter-spacing: .08em; color: #8b929c; padding: .8em .3em .2em; }
 
-/* Showreel + walkthrough */
-.showcase { padding-block: 8px 40px; }
+/* The real recording, in a display */
+.showcase { padding-block: 8px 40px; display: grid; gap: 18px; }
+.display {
+  position: relative; max-width: 100%; border-radius: clamp(14px, 2vw, 24px);
+  padding: clamp(6px, 1.1vw, 14px); background: linear-gradient(180deg, #2b2e34, #15171b);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.09), 0 50px 100px -40px rgba(20,30,60,.55);
+}
+.display video { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; border-radius: clamp(6px, .9vw, 10px); background: #141518; object-fit: cover; }
+.display .toggle {
+  position: absolute; right: clamp(14px, 2vw, 26px); bottom: clamp(14px, 2vw, 26px); width: 34px; height: 34px;
+  border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center;
+  background: rgba(20,22,26,.55); color: #fff; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  opacity: .0; transition: opacity .2s;
+}
+.display:hover .toggle, .display .toggle:focus-visible, .display.paused .toggle { opacity: 1; }
+.display .toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.display .toggle svg { width: 13px; height: 13px; }
+.live { display: flex; align-items: center; justify-content: center; gap: 10px 16px; flex-wrap: wrap; min-height: 52px; }
+.live .keys { display: flex; gap: 6px; align-items: center; min-height: 44px; }
+.live .keys:empty { display: none; }
+.live .keys .plus { color: #a5abb4; font-weight: 600; }
+.live .cap { font-size: 17px; font-weight: 500; color: var(--ink); min-width: 0; text-align: center; transition: opacity .25s; }
+.live.swap .cap, .live.swap .keys { opacity: 0; }
+.live .keys { transition: opacity .25s; }
+.real { text-align: center; font-size: 13px; color: var(--muted); }
+
+/* Walkthrough */
 .features { padding-block: 80px 40px; display: grid; gap: 44px; text-align: center; }
 .trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; text-align: left; }
 .trio article { display: grid; gap: 10px; }
@@ -256,6 +281,8 @@ details[open] summary::after { transform: rotate(45deg); }
 details p { color: var(--muted); padding-top: 10px; max-width: 62ch; }
 
 /* Closing */
+.still { margin: 0; width: 100%; max-width: 100%; aspect-ratio: 16 / 7; border-radius: 24px; overflow: hidden; background: #efe9e0; }
+.still img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .closing { padding-block: 100px 70px; display: grid; gap: 22px; justify-items: center; text-align: center; background: radial-gradient(60% 70% at 50% 40%, #eef3ff 0%, transparent 70%); }
 .closing svg.icon { width: 76px; height: 76px; filter: drop-shadow(0 12px 22px rgba(31,69,214,.3)); }
 footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
@@ -302,8 +329,8 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
 
 <main class="wrap" id="top">
   <section class="hero">
-    <h1>Every window,<br>right where it belongs.</h1>
-    <p class="lede">Tessel tiles your Mac's windows the moment they open and puts the whole desktop under a few keys. Native, tiny, and quick enough to feel instant.</p>
+    <h1>Put your windows<br>on the arrow keys.</h1>
+    <p class="lede">Tessel tiles every window the moment it opens. Left ⌘ and an arrow moves your focus. Add ⇧ and the window comes with you.</p>
     <div class="actions">
       <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Buy Tessel<span class="sep"></span><span class="price">$14.99</span></a>
       <a class="btn" href="#how">See how it works</a>
@@ -312,29 +339,37 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   </section>
 
   <section class="showcase" aria-label="Tessel in action">
-    <div class="mac" id="hero-mac"></div>
+    <div class="display" id="display">
+      <video id="reel" muted loop playsinline preload="auto" poster="media/hero.jpg" aria-label="Screen recording: three windows open and tile, then move, resize, focus, stash and close with Tessel's shortcuts">
+        <source src="media/hero.webm" type="video/webm">
+        <source src="media/hero.mp4" type="video/mp4">
+      </video>
+      <button class="toggle" id="reel-toggle" type="button" aria-label="Pause the recording"><svg viewBox="0 0 16 16"><path id="reel-icon" d="M5 3v10M11 3v10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="live" id="live" aria-live="off"><div class="keys" id="live-keys"></div><p class="cap" id="live-cap">Open a window. It sits centered at 16:10.</p></div>
+    <p class="real">A real, unedited screen recording of Tessel on macOS. The colored windows stand in for your apps.</p>
   </section>
 
   <section class="features" id="features">
     <div style="display:grid;gap:14px">
-      <h2>Calm by default.<br>Fast when you need it.</h2>
-      <p class="lede">No grids to draw, no config files. Open a window and Tessel finds it a place.</p>
+      <h2>Built to disappear.</h2>
+      <p class="lede">No config file, no grid to draw, no lag. Tessel does the arranging, so you can get on with the work.</p>
     </div>
     <div class="trio">
       <article>
         <div class="art"><div class="art-tiles"><span></span><span class="on"></span><span></span></div></div>
-        <h3>It tiles itself</h3>
-        <p>One window sits centered at a comfortable size. Open more and they share the screen in tidy columns.</p>
+        <h3>No grid to draw</h3>
+        <p>Open a window and it takes a column. A lone window sits centered at a calm 16:10, never stretched edge to edge.</p>
       </article>
       <article>
         <div class="art"><div class="art-keys"><div class="row-k"><span class="kc big">Left ⌘</span><span class="kc big">⇧</span></div><div class="row-k"><span class="kc">←</span><span class="kc">↑</span><span class="kc">↓</span><span class="kc">→</span></div></div></div>
-        <h3>Built for the keyboard</h3>
-        <p>⌘ goes somewhere, ⌘⇧ moves something. Learn two ideas and you know Tessel. Right ⌘ keeps its usual job.</p>
+        <h3>Two ideas, the whole desktop</h3>
+        <p>Left ⌘ goes somewhere. Left ⌘⇧ moves something. Right ⌘ keeps its usual job, and every shortcut can be rebound.</p>
       </article>
       <article>
         <div class="art"><div class="art-speed"><small>Fast app · glides</small><div class="bar2"><b style="width:100%"></b></div><small>Busy app · slides</small><div class="bar2"><b style="width:70%"></b></div><small>Struggling app · snaps</small><div class="bar2"><b style="width:30%"></b></div></div></div>
-        <h3>Never in the way</h3>
-        <p>Tessel measures how quickly each app responds. Quick ones glide, slow ones snap, so moving windows never adds lag.</p>
+        <h3>Never waits on a slow app</h3>
+        <p>Tessel times how quickly each app moves its windows. Quick ones glide, slow ones snap, so moving never adds lag.</p>
       </article>
     </div>
   </section>
@@ -342,7 +377,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   <section class="walk" id="how">
     <header>
       <span class="eyebrow">How it works</span>
-      <h2>Eight things to know.<br>Most days you'll use three.</h2>
+      <h2>Learn it before your<br>coffee cools.</h2>
     </header>
     <div class="player">
       <div class="chapters" id="chapters" role="tablist" aria-label="Walkthroughs"></div>
@@ -364,17 +399,18 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   <section class="pricing" id="pricing">
     <div style="display:grid;gap:14px">
       <span class="eyebrow">Pricing</span>
-      <h2>Pay once.<br>Keep every update.</h2>
-      <p class="lede">No subscription and no account. One price, and every version of Tessel we ever ship is yours.</p>
+      <h2>One price.<br>Every version after it.</h2>
+      <p class="lede">No subscription and no account. Pay $14.99 once, and every Tessel we ever ship is yours.</p>
     </div>
     <div class="price-card">
       <div class="price-top"><svg><use href="#logo"/></svg><div><b>Tessel</b><small>For your Mac, for good</small></div></div>
       <div class="amount"><strong>$14.99</strong><span>USD, one-time</span></div>
       <span class="lifetime">Lifetime updates included</span>
       <ul class="checks">
-        <li>Automatic tiling, Focus, and three instant Spaces</li>
-        <li>Summon (⇧Space) for apps, files, the web and new windows</li>
-        <li>The Cheat Sheet: every shortcut, searchable</li>
+        <li>Automatic tiling, Focus, Tidy and three instant Workspaces</li>
+        <li>Summon (⇧ then Space) for apps, files, the web and new windows</li>
+        <li>Every shortcut rebindable, with Restore Defaults one click away</li>
+        <li>The Cheat Sheet: every shortcut, searchable in plain words</li>
         <li>Multi-display support, or main display only</li>
         <li>All future updates, free, forever</li>
       </ul>
@@ -385,21 +421,24 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   </section>
 
   <section class="faq" id="faq">
-    <h2>Questions</h2>
+    <h2>Questions, answered.</h2>
     <div>
       <details><summary>What does Tessel need permission for?</summary><p>Accessibility, so it can move and resize other apps' windows and listen for its shortcuts. Screen Recording is optional: allow it and the Shelf in Focus shows live previews of your windows instead of app icons.</p></details>
-      <details><summary>Will it take over my keyboard?</summary><p>Only the left ⌘ key's arrow shortcuts, plus the few combinations listed in the help. Right ⌘ keeps doing what it always did, so ⌘← still jumps to the start of a line. Esc only goes to Tessel while Focus is on.</p></details>
-      <details><summary>How do I set it up?</summary><p>Tessel walks you through it the first time it opens: allow Accessibility, tap the three keys you want for your Spaces, and try the essentials once. It takes about a minute, and you can run it again from the menu bar.</p></details>
-      <details><summary>How do the three Spaces work?</summary><p>During setup you tap three keys you never use, ideally out of the way on the right, like Page Up, Page Down and End. ⌘ plus one of them switches Spaces instantly; add ⇧ to take the focused window with you. Stash (⌘⇧H) sends a window to Space 3 without leaving.</p></details>
+      <details><summary>Will it take over my keyboard?</summary><p>Only a handful of combinations, and only with the left ⌘ key. Right ⌘ keeps doing what it always did, so ⌘← still jumps to the start of a line.</p></details>
+      <details><summary>Can I change the shortcuts?</summary><p>Yes, every one. Open Keyboard Shortcuts from the menu bar, click a command and press the keys you want. Tessel turns down combinations that would get in the way of typing or that another command already uses, and Restore Defaults puts everything back.</p></details>
+      <details><summary>How do I set it up?</summary><p>Tessel walks you through it the first time it opens: allow Accessibility, tap the three keys you want for your Workspaces, and try every shortcut on a practice screen that can't touch your real windows. It takes about a minute, and you can run it again from the menu bar.</p></details>
+      <details><summary>How do the three Workspaces work?</summary><p>During setup you tap three keys you never use, ideally out of the way on the right, like Page Up, Page Down and End. ⌘ plus one of them switches Workspaces instantly; add ⇧ to take the focused window with you. Stash (⌘⇧H) sends a window to Workspace 3 without leaving the one you're in.</p></details>
       <details><summary>Does it work with more than one display?</summary><p>Yes. Each display has its own layout and focus crosses between them at the edges. If a second display is a dummy plug or you only want your main screen tiled, turn off Use All Displays in Settings.</p></details>
       <details><summary>What does "lifetime updates" mean?</summary><p>You buy Tessel once and every future version is included. No upgrade fees, no subscription, no catch.</p></details>
     </div>
   </section>
 
+  <figure class="still"><img src="media/glass.jpg" alt="Three frosted glass tiles in coral, amber and mint, resting in a neat row" loading="lazy" width="1600" height="900"></figure>
+
   <section class="closing">
     <svg class="icon"><use href="#logo"/></svg>
-    <h2>Give every window a place.</h2>
-    <p class="lede">Your Mac, finally tidy. Your hands, finally on the keyboard.</p>
+    <h2>Go on, open another window.</h2>
+    <p class="lede">It already knows where to go.</p>
     <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Buy Tessel<span class="sep"></span><span class="price">$14.99</span></a>
     <p class="fine">One-time purchase · Lifetime updates</p>
   </section>
@@ -430,6 +469,94 @@ const CHECKOUT_URL = "";
       document.getElementById("buy-note").textContent = "Checkout opens soon. Thanks for your patience.";
     });
   }
+
+  // Keycaps joined by +, or by "then" for a key you tap after another (⇧ then Space).
+  const keyHTML = (keys) => keys.map((k, i) => {
+    if (k === "then") return '<span class="plus">then</span>';
+    const join = i > 0 && keys[i - 1] !== "then" ? '<span class="plus">+</span>' : "";
+    return join + `<span class="kc big">${k}</span>`;
+  }).join("");
+
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---------- the real recording ----------
+  // Times are seconds into hero.webm: what's happening, and when each key went down.
+  const BEATS = [
+    { t: 0, keys: [], cap: "An empty Workspace on a real Mac." },
+    { t: 1.1, keys: [], cap: "Open a window. It sits centered at 16:10." },
+    { t: 3.0, keys: [], cap: "Open another and they share the screen." },
+    { t: 4.8, keys: [], cap: "A third gets its own column." },
+    { t: 6.75, keys: ["⌘", "←"], cap: "Move focus with ⌘ and an arrow." },
+    { t: 8.75, keys: ["⌘", "⇧", "→"], cap: "Add ⇧ to carry the window. It stacks, then passes." },
+    { t: 11.4, keys: ["⌘", "⇧", "+"], cap: "Give it more room." },
+    { t: 13.25, keys: ["⌘", "⇧", "0"], cap: "Tidy evens everything out." },
+    { t: 14.65, keys: ["⌘", "⇧", "F"], cap: "Focus. The others wait on the Shelf." },
+    { t: 16.9, keys: ["⌘", "⇧", "F"], cap: "Press it again and they come back." },
+    { t: 18.3, keys: ["⌘", "⇧", "H"], cap: "Stash sends a window to Workspace 3." },
+    { t: 20.2, keys: ["⌘", "⇧", "⌫"], cap: "Close it, and the rest re-tile." },
+  ];
+  const PRESSES = [6.81, 7.71, 8.79, 10.07, 11.45, 12.23, 13.31, 14.7, 16.98, 18.36, 20.24, 21.53];
+
+  const video = document.getElementById("reel");
+  const display = document.getElementById("display");
+  const live = document.getElementById("live");
+  const liveKeys = document.getElementById("live-keys");
+  const liveCap = document.getElementById("live-cap");
+  const toggle = document.getElementById("reel-toggle");
+  const reelIcon = document.getElementById("reel-icon");
+  let beatAt = -1, lastT = 0, userPaused = reduce, reelVisible = false;
+
+  function pressCaps() {
+    const caps = liveKeys.querySelectorAll(".kc");
+    caps.forEach((k) => k.classList.add("press"));
+    setTimeout(() => caps.forEach((k) => k.classList.remove("press")), 240);
+  }
+  function syncCaptions() {
+    const t = video.currentTime;
+    let i = 0;
+    while (i + 1 < BEATS.length && BEATS[i + 1].t <= t) i++;
+    let swapped = false;
+    if (i !== beatAt) {
+      beatAt = i;
+      swapped = true;
+      live.classList.add("swap");
+      setTimeout(() => {
+        liveKeys.innerHTML = keyHTML(BEATS[i].keys);
+        liveCap.textContent = BEATS[i].cap;
+        live.classList.remove("swap");
+      }, 150);
+    }
+    // A key press between the last frame and this one (the loop wraps from the end to 0).
+    const crossed = PRESSES.some((p) => lastT <= t ? p > lastT && p <= t : p > lastT || p <= t);
+    if (crossed) setTimeout(pressCaps, swapped ? 190 : 0);
+    lastT = t;
+  }
+  function frame() {
+    if (video.paused) return;
+    syncCaptions();
+    requestAnimationFrame(frame);
+  }
+  function updatePlay() {
+    if (reelVisible && !userPaused) video.play().catch(() => display.classList.add("paused"));
+    else video.pause();
+  }
+  video.addEventListener("play", () => {
+    display.classList.remove("paused");
+    toggle.setAttribute("aria-label", "Pause the recording");
+    reelIcon.setAttribute("d", "M5 3v10M11 3v10");
+    lastT = video.currentTime;
+    requestAnimationFrame(frame);
+  });
+  video.addEventListener("pause", () => {
+    display.classList.add("paused");
+    toggle.setAttribute("aria-label", "Play the recording");
+    reelIcon.setAttribute("d", "M5 3l8 5-8 5z");
+  });
+  // Animation frames stop in a background tab; the video's own clock keeps captions honest.
+  video.addEventListener("timeupdate", syncCaptions);
+  toggle.addEventListener("click", () => { userPaused = !video.paused; updatePlay(); });
+  new IntersectionObserver(([e]) => { reelVisible = e.isIntersecting; updatePlay(); }, { threshold: 0.25 }).observe(display);
+  if (reduce) { display.classList.add("paused"); reelIcon.setAttribute("d", "M5 3l8 5-8 5z"); toggle.setAttribute("aria-label", "Play the recording"); }
 
   // ---------- the mini Mac ----------
   const APPS = {
@@ -506,14 +633,14 @@ const CHECKOUT_URL = "";
     mac.help.hidden = !H;
     if (H) {
       const all = [
-        ["WINDOWS", [["Left ⌘", "←→"], "Focus the next window"], [["Left ⌘⇧", "←→"], "Move the window"], [["Left ⌘⇧", "F"], "Focus"], [["Left ⌘⇧", "0"], "Tidy"]],
-        ["SPACES", [["⌘", "Page Up"], "Go to space 1"], [["⌘⇧", "Page Down"], "Move the window to space 2"], [["Left ⌘⇧", "H"], "Stash in Space 3"]],
-        ["SUMMON", [["⇧", "Space"], "Summon an app, file or website"]],
+        ["WINDOWS", [["Left ⌘", "←→"], "Focus the next window", "select switch"], [["Left ⌘⇧", "←→"], "Move the window", "arrange swap"], [["Left ⌘⇧", "F"], "Focus", "maximize fullscreen center"], [["Left ⌘⇧", "0"], "Tidy", "reset even balance"]],
+        ["WORKSPACES", [["⌘", "Page Up"], "Go to Workspace 1", "desktop space switch"], [["⌘⇧", "Page Down"], "Move the window to Workspace 2", "send desktop space"], [["Left ⌘⇧", "H"], "Stash in Workspace 3", "hide minimize away"]],
+        ["SUMMON", [["⇧ then", "Space"], "Summon an app, file or website", "launcher open search spotlight"]],
       ];
       const q = (H.q || "").toLowerCase();
       let html = `<div class="q">${H.q || '<span class="ph">Search shortcuts</span>'}<span class="caret"></span></div>`;
       for (const [group, ...rows] of all) {
-        const shown = rows.filter(([k, t]) => !q || (k.join(" ") + " " + t).toLowerCase().includes(q));
+        const shown = rows.filter(([k, t, words]) => !q || (k.join(" ") + " " + t + " " + words).toLowerCase().includes(q));
         if (!shown.length) continue;
         html += `<div class="help-group">${group}</div>` + shown.map(([k, t]) => `<div class="help-row"><span class="k">${k.map((x) => `<span class="mini-kc">${x}</span>`).join("")}</span><span>${t}</span></div>`).join("");
       }
@@ -524,6 +651,9 @@ const CHECKOUT_URL = "";
   const arcRows = [
     { t: "Arc", s: "Go to its window", sub: "New Arc window" },
     { t: "Archive Utility", s: "Open", ic: "background:linear-gradient(135deg,#d9c6a5,#a88a5f)" },
+  ];
+  const webRows = [
+    { t: "Search the web for “best desk lamp”", s: "Google, in your browser", ic: "background:linear-gradient(135deg,#7aa6ff,#2f6bff)" },
   ];
 
   const CHAPTERS = [
@@ -553,45 +683,32 @@ const CHECKOUT_URL = "";
       { win: { A: [1.5, 2, 19, 96], B: [22, 2, 54, 96], C: [77.5, 2, 21, 47.25], D: [77.5, 50.75, 21, 47.25] }, focus: "B", keys: ["Left ⌘", "⇧", "+"], cap: "A bit more." },
       { win: four, focus: "B", keys: ["Left ⌘", "⇧", "0"], cap: "Tidy puts every split back to even." },
     ]},
-    { title: "Focus", hint: "left ⌘⇧F, Esc", steps: [
+    { title: "Focus", hint: "left ⌘⇧F", steps: [
       { win: four, focus: "A", keys: [], cap: "Need to concentrate on one window?" },
       { win: { A: R.single, B: shelf(R.s1), C: shelf(R.s2), D: shelf(R.s3) }, focus: "A", keys: ["Left ⌘", "⇧", "F"], cap: "It takes the center. The rest wait on the Shelf, tilted out of the way." },
-      { win: four, focus: "A", keys: ["Esc"], cap: "Esc, ⌘⇧F again, or a click on any card on the Shelf brings it all back." },
+      { win: four, focus: "A", keys: ["Left ⌘", "⇧", "F"], cap: "⌘⇧F again, or a click on any card on the Shelf, brings everything back." },
     ]},
-    { title: "Three spaces", hint: "⌘ + your space keys", steps: [
+    { title: "Three Workspaces", hint: "⌘ + your Workspace keys", steps: [
       { win: four, focus: "C", space: 1, keys: [], cap: "Pick three keys you never use, like Page Up, Page Down and End." },
-      { win: { A: away(R.c1), B: away(R.c2), C: away(R.c3t), D: away(R.c3b), E: R.single }, focus: "E", space: 2, keys: ["⌘", "Page Down"], cap: "⌘ plus a space key switches instantly. No slide, no wait." },
+      { win: { A: away(R.c1), B: away(R.c2), C: away(R.c3t), D: away(R.c3b), E: R.single }, focus: "E", space: 2, keys: ["⌘", "Page Down"], cap: "⌘ plus a Workspace key switches instantly. No slide, no wait." },
       { win: four, focus: "C", space: 1, keys: ["⌘", "Page Up"], cap: "Back again, focused on the rightmost window." },
       { win: { A: away(R.c1), B: away(R.c2), D: away(R.c3b), E: R.halfL, C: R.halfR }, focus: "C", space: 2, keys: ["⌘", "⇧", "Page Down"], cap: "Add ⇧ and the window comes with you." },
-      { win: { A: away(R.c1), B: away(R.c2), D: away(R.c3b), E: R.single }, focus: "E", space: 2, keys: ["Left ⌘", "⇧", "H"], cap: "Stash (⌘⇧H) tucks a window away in Space 3." },
+      { win: { A: away(R.c1), B: away(R.c2), D: away(R.c3b), E: R.single }, focus: "E", space: 2, keys: ["Left ⌘", "⇧", "H"], cap: "Stash (⌘⇧H) tucks a window away in Workspace 3." },
     ]},
-    { title: "Summon", hint: "⇧ Space", steps: [
+    { title: "Summon", hint: "⇧ then Space", steps: [
       { win: four, focus: "B", keys: [], cap: "Faster than Spotlight for the apps you use every day." },
-      { win: four, focus: "B", keys: ["⇧", "Space"], launcher: { q: "", rows: [] }, cap: "Shift, then Space, and Summon is there instantly." },
+      { win: four, focus: "B", keys: ["⇧", "then", "Space"], launcher: { q: "", rows: [] }, cap: "Tap ⇧, then Space, and Summon is there instantly." },
       { win: four, focus: "B", keys: ["A", "R"], launcher: { q: "ar", rows: arcRows, sel: 0 }, cap: "Apps first, then files, then the web. An open app offers two choices." },
       { win: { A: R.c1t, F: R.c1b, B: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: ["⇧", "↩"], cap: "↩ goes to its window. ⇧↩ opens a new one, tiled and focused." },
+      { win: { A: R.c1t, F: R.c1b, B: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: [], launcher: { q: "best desk lamp", rows: webRows, sel: 0 }, cap: "No match? It searches the web, in a tab right here. Never a pop-up." },
     ]},
     { title: "Cheat Sheet", hint: "left ⌘⇧ Space", steps: [
       { win: four, focus: "C", keys: [], cap: "Forget a shortcut? There's one to show them all." },
       { win: four, focus: "C", keys: ["Left ⌘", "⇧", "Space"], help: { q: "" }, cap: "The Cheat Sheet: every shortcut, grouped." },
-      { win: four, focus: "C", keys: ["M", "O", "V", "E"], help: { q: "move" }, cap: "Type to find one." },
+      { win: four, focus: "C", keys: ["H", "I", "D", "E"], help: { q: "hide" }, cap: "Search in your own words. “hide” finds Stash." },
       { win: four, focus: "C", keys: ["Esc"], cap: "Esc to close. Back to work." },
     ]},
   ];
-
-  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  // Hero: a quiet showreel, no keys.
-  const hero = buildMac(document.getElementById("hero-mac"));
-  const reel = [
-    ...CHAPTERS[0].steps, CHAPTERS[1].steps[1], CHAPTERS[1].steps[2], CHAPTERS[4].steps[1], CHAPTERS[4].steps[2],
-    CHAPTERS[2].steps[1], CHAPTERS[2].steps[2], { win: four, focus: "A" },
-  ];
-  let reelAt = 0;
-  apply(hero, reduce ? { win: four, focus: "B" } : reel[0]);
-  if (!reduce) setInterval(() => { if (heroVisible) { reelAt = (reelAt + 1) % reel.length; apply(hero, reel[reelAt]); } }, 1700);
-  let heroVisible = true;
-  new IntersectionObserver(([e]) => { heroVisible = e.isIntersecting; }).observe(hero.root);
 
   // Walkthrough player
   const walk = buildMac(document.getElementById("walk-mac"));
@@ -622,8 +739,8 @@ const CHECKOUT_URL = "";
       bar.style.width = i === ch ? ((st / c.steps.length) * 100) + "%" : "0";
       if (i === ch && playing) requestAnimationFrame(() => { bar.style.transition = `width ${STEP_MS}ms linear`; bar.style.width = (((st + 1) / c.steps.length) * 100) + "%"; });
     });
-    keysEl.innerHTML = s.keys.length ? s.keys.map((k) => `<span class="kc big">${k}</span>`).join('<span class="plus">+</span>') : "";
-    if (/^[A-Z]$/.test(s.keys[0] || "")) keysEl.innerHTML = s.keys.map((k) => `<span class="kc big">${k}</span>`).join("");
+    // Letters being typed sit side by side; shortcuts are joined with +.
+    keysEl.innerHTML = /^[A-Z]$/.test(s.keys[0] || "") ? s.keys.map((k) => `<span class="kc big">${k}</span>`).join("") : keyHTML(s.keys);
     capEl.textContent = s.cap;
     if (!reduce) {
       const caps = keysEl.querySelectorAll(".kc");
