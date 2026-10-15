@@ -346,7 +346,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       </video>
       <button class="toggle" id="reel-toggle" type="button" aria-label="Pause the recording"><svg viewBox="0 0 16 16"><path id="reel-icon" d="M5 3v10M11 3v10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
     </div>
-    <div class="live" id="live" aria-live="off"><div class="keys" id="live-keys"></div><p class="cap" id="live-cap">Open a window. It sits centered at 16:10.</p></div>
+    <div class="live" id="live" aria-live="off"><div class="keys" id="live-keys"></div><p class="cap" id="live-cap">Open a window. It sits centered, never stretched.</p></div>
     <p class="real">A real, unedited screen recording of Tessel on macOS. The colored windows stand in for your apps.</p>
   </section>
 
@@ -359,7 +359,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       <article>
         <div class="art"><div class="art-tiles"><span></span><span class="on"></span><span></span></div></div>
         <h3>No grid to draw</h3>
-        <p>Open a window and it takes a column. A lone window sits centered at a calm 16:10, never stretched edge to edge.</p>
+        <p>Open a window and it takes a column. A lone window sits centered at the size its app likes, never stretched edge to edge.</p>
       </article>
       <article>
         <div class="art"><div class="art-keys"><div class="row-k"><span class="kc big">Left ⌘</span><span class="kc big">⇧</span></div><div class="row-k"><span class="kc">←</span><span class="kc">↑</span><span class="kc">↓</span><span class="kc">→</span></div></div></div>
@@ -483,7 +483,7 @@ const CHECKOUT_URL = "";
   // Times are seconds into hero.webm: what's happening, and when each key went down.
   const BEATS = [
     { t: 0, keys: [], cap: "An empty Workspace on a real Mac." },
-    { t: 1.1, keys: [], cap: "Open a window. It sits centered at 16:10." },
+    { t: 1.1, keys: [], cap: "Open a window. It sits centered, never stretched." },
     { t: 3.0, keys: [], cap: "Open another and they share the screen." },
     { t: 4.8, keys: [], cap: "A third gets its own column." },
     { t: 6.75, keys: ["⌘", "←"], cap: "Move focus with ⌘ and an arrow." },
@@ -658,7 +658,7 @@ const CHECKOUT_URL = "";
 
   const CHAPTERS = [
     { title: "It tiles itself", hint: "just open windows", steps: [
-      { win: { A: R.single }, focus: "A", keys: [], cap: "One window sits centered at a calm 16:10. Never stretched edge to edge." },
+      { win: { A: R.single }, focus: "A", keys: [], cap: "One window sits centered at the size its app likes. Never stretched edge to edge." },
       { win: { A: R.halfL, B: R.halfR }, focus: "B", keys: [], cap: "Open a second and they share the screen." },
       { win: { A: R.c1, B: R.c2, C: R.c3 }, focus: "C", keys: [], cap: "A third gets its own column." },
       { win: four, focus: "D", keys: [], cap: "After that, new windows stack where there's room." },
