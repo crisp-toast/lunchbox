@@ -87,6 +87,8 @@ final class Tiler {
     private var mouseDown: CGPoint?
     private var notificationTokens: [NSObjectProtocol] = []
     private var mouseMonitors: [Any] = []
+    /// A slow safety net for windows that vanish without any event at all.
+    private var ghostTimer: Timer?
 
     private let animator = Animator()
     private let ring = FocusRing()
@@ -154,6 +156,10 @@ final class Tiler {
             },
             NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { [weak self] _ in self?.mouseUp() },
         ].compactMap { $0 }
+        let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in self?.checkForGhosts() }
+        timer.tolerance = 0.5
+        RunLoop.main.add(timer, forMode: .common)
+        ghostTimer = timer
 
         for app in NSWorkspace.shared.runningApplications { track(app, scan: false) }
         mergeInactiveDisplays()
@@ -173,6 +179,8 @@ final class Tiler {
         }
         notificationTokens = []
         mouseMonitors.forEach { NSEvent.removeMonitor($0) }
+        ghostTimer?.invalidate()
+        ghostTimer = nil
         mouseMonitors = []
         for pid in Array(apps.keys) { detach(apps[pid]!) }
         apps = [:]
@@ -325,6 +333,8 @@ final class Tiler {
         guard enabled, apps[app.pid] === app else { return }
         let onScreen = onScreenWindowIDs()
         let seen = Set(infos.map(\.id))
+        let visibleBefore = visibleFrames().filter { windows[$0.key]?.pid == app.pid }
+        let focusedBefore = focusedID
         var changed = false
         for w in windows.values where w.pid == app.pid && !seen.contains(w.id) {
             forget(w.id)
@@ -350,6 +360,13 @@ final class Tiler {
         if let arrived, place(of: arrived) != nil {
             activate(arrived)
             showRing(on: arrived)
+        }
+        // A window you were using left without saying so (Chess after ⌘W): keep
+        // the keyboard on a window you can see.
+        let after = visibleFrames()
+        if arrived == nil, let (_, frame) = visibleBefore.first(where: { after[$0.key] == nil }),
+           visibleBefore.keys.contains(where: { $0 == focusedBefore }) || NSWorkspace.shared.frontmostApplication?.processIdentifier == app.pid {
+            focusNearest(to: frame)
         }
         // A window the launcher asked for has appeared: bring it forward.
         if let pending = pendingNewWindow, pending.pid == app.pid {
@@ -494,7 +511,9 @@ final class Tiler {
         case kAXFocusedWindowChangedNotification:
             app.queue.async { [weak self] in
                 let id = element.windowID
-                DispatchQueue.main.async { if let id { self?.focusChanged(to: id, app: app) } }
+                DispatchQueue.main.async {
+                    if let id { self?.focusChanged(to: id, app: app) } else { self?.checkForGhosts() }
+                }
             }
         case kAXWindowMiniaturizedNotification:
             // Same as closing: keep focus near where the user was looking.
