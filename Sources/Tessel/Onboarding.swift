@@ -267,13 +267,28 @@ final class Onboarding: NSObject, NSWindowDelegate {
         let keymap = tap.keymap
         let keys = tap.spaceKeys
         let caps = { (c: Command) in Keymap.keycaps(for: keymap.binding(for: c), workspaceKeys: keys) }
+        // All four arrows, when the four directions share their modifiers: any direction works.
+        let anyDirection = { (dirs: [Command]) -> [String] in
+            let all = dirs.map(caps)
+            let mods = all[0].dropLast()
+            guard all.allSatisfy({ $0.dropLast() == mods }), Set(all.compactMap(\.last)) == ["←", "→", "↑", "↓"] else { return all[1] }
+            return Array(mods) + ["arrows"]
+        }
+        // ⌘ and every Workspace key the user picked: going between all three.
+        let betweenWorkspaces: [String] = {
+            let all = [Command.workspace1, .workspace2, .workspace3].map(caps)
+            let mods = all[0].dropLast()
+            guard !keys.isEmpty, all.allSatisfy({ $0.dropLast() == mods }) else { return caps(.workspace2) }
+            let short = ["Page Up": "PgUp", "Page Down": "PgDn"]
+            return Array(mods) + all.compactMap(\.last).map { short[$0] ?? $0 }
+        }()
         let items: [(String, [String], String)] = [
-            ("focus", caps(.focusRight), "Move focus to the next window"),
-            ("move", caps(.moveLeft), "Move a window (press again to pass)"),
+            ("focus", anyDirection([.focusLeft, .focusRight, .focusUp, .focusDown]), "Move focus in any direction"),
+            ("move", anyDirection([.moveLeft, .moveRight, .moveUp, .moveDown]), "Move a window any way (press again to pass)"),
             ("size", caps(.grow), "Give a window more space"),
             ("focusMode", caps(.focusMode), "Focus on one window, then again to undo"),
             ("tidy", caps(.tidy), "Tidy everything back to even"),
-            ("space", caps(.workspace2), "Go to Workspace 2, and back"),
+            ("space", betweenWorkspaces, "Go between Workspaces"),
             ("summon", caps(.summon), "Summon an app (Esc closes it)"),
             ("help", caps(.cheatSheet), "Open the Cheat Sheet (Esc closes it)"),
         ]
@@ -311,15 +326,15 @@ final class Onboarding: NSObject, NSWindowDelegate {
         let text = NSTextField(wrappingLabelWithString: "Your shortcuts move the pretend windows on the left, never your real ones. Each one lights up as you use it.")
         text.font = .systemFont(ofSize: 14)
         text.textColor = .secondaryLabelColor
-        text.preferredMaxLayoutWidth = 380
+        text.preferredMaxLayoutWidth = 400
         let right = NSStackView(views: [heading, text, list])
         right.orientation = .vertical
         right.alignment = .leading
         right.spacing = 14
         right.setCustomSpacing(22, after: text)
         right.translatesAutoresizingMaskIntoConstraints = false
-        right.widthAnchor.constraint(equalToConstant: 380).isActive = true
-        for row in rows { row.widthAnchor.constraint(equalToConstant: 380).isActive = true }
+        right.widthAnchor.constraint(equalToConstant: 400).isActive = true
+        for row in rows { row.widthAnchor.constraint(equalToConstant: 400).isActive = true }
 
         let layout = NSStackView(views: [left, right])
         layout.orientation = .horizontal
@@ -567,7 +582,11 @@ private final class PracticeRow: NSStackView {
         check.widthAnchor.constraint(equalToConstant: 18).isActive = true
         check.heightAnchor.constraint(equalToConstant: 18).isActive = true
         let caps = NSStackView(views: keys.map { k in
-            k == "then" ? NSTextField(labelWithString: "then") as NSView : Keycap(text: k)
+            switch k {
+            case "then": return NSTextField(labelWithString: "then") as NSView
+            case "arrows": return ArrowCluster()
+            default: return Keycap(text: k)
+            }
         })
         caps.spacing = 4
         // Every row's keys sit in the same width, so the descriptions line up.
@@ -576,7 +595,7 @@ private final class PracticeRow: NSStackView {
         capsBox.translatesAutoresizingMaskIntoConstraints = false
         capsBox.addSubview(caps)
         NSLayoutConstraint.activate([
-            capsBox.widthAnchor.constraint(equalToConstant: 150),
+            capsBox.widthAnchor.constraint(equalToConstant: 190),
             capsBox.heightAnchor.constraint(equalTo: caps.heightAnchor),
             caps.leadingAnchor.constraint(equalTo: capsBox.leadingAnchor),
             caps.centerYAnchor.constraint(equalTo: capsBox.centerYAnchor),
@@ -599,6 +618,66 @@ private final class PracticeRow: NSStackView {
         pop.values = [0.6, 1.25, 1]
         pop.duration = 0.3
         check.layer?.add(pop, forKey: "pop")
+    }
+}
+
+/// The four arrow keys in their keyboard shape (↑ over ← ↓ →), small enough to
+/// sit beside other keycaps: "any direction works".
+private final class ArrowCluster: NSView {
+    override var isFlipped: Bool { true }
+
+    init() {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        let w: CGFloat = 19, h: CGFloat = 14, gap: CGFloat = 2
+        let spots: [(String, CGFloat, CGFloat)] = [("↑", w + gap, 0), ("←", 0, h + gap), ("↓", w + gap, h + gap), ("→", 2 * (w + gap), h + gap)]
+        for (arrow, x, y) in spots {
+            let key = MiniKey(arrow)
+            key.frame = NSRect(x: x, y: y, width: w, height: h)
+            addSubview(key)
+        }
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: 3 * w + 2 * gap),
+            heightAnchor.constraint(equalToConstant: 2 * h + gap),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    private final class MiniKey: NSView {
+        private let label: NSTextField
+
+        init(_ text: String) {
+            label = NSTextField(labelWithString: text)
+            super.init(frame: .zero)
+            wantsLayer = true
+            layer?.cornerRadius = 3
+            layer?.borderWidth = 1
+            label.font = .systemFont(ofSize: 9, weight: .bold)
+            label.alignment = .center
+            label.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(label)
+            NSLayoutConstraint.activate([
+                label.centerXAnchor.constraint(equalTo: centerXAnchor),
+                label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+            updateColors()
+        }
+
+        required init?(coder: NSCoder) { fatalError("not used") }
+
+        override func viewDidChangeEffectiveAppearance() {
+            super.viewDidChangeEffectiveAppearance()
+            updateColors()
+        }
+
+        private func updateColors() {
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                label.textColor = .secondaryLabelColor
+                layer?.borderColor = NSColor.secondaryLabelColor.withAlphaComponent(0.45).cgColor
+                layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.05).cgColor
+            }
+        }
     }
 }
 

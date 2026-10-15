@@ -342,7 +342,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
 <main class="wrap" id="top">
   <section class="hero">
     <h1>Put your windows<br>on the arrow keys.</h1>
-    <p class="lede">Tessel tiles every window the moment it opens. Left ⌘ and an arrow moves your focus. Add ⇧ and the window comes with you.</p>
+    <p class="lede">Tessel is the ultimate window manager for Mac. Left ⌘ and an arrow moves your focus. Add ⇧ and the window comes with you.</p>
     <div class="actions">
       <a class="btn dark buy" href="#pricing">Get Tessel<span class="sep"></span><span class="price">$9.99</span></a>
       <a class="btn" href="#how">See how it works</a>
@@ -577,11 +577,11 @@ const CHECKOUT_URL = "";
   // ---------- the mini Mac ----------
   const APPS = {
     A: { name: "Notes", kind: "notes" },
-    B: { name: "Arc", kind: "browser" },
+    B: { name: "Browser", kind: "browser" },
     C: { name: "Terminal", kind: "term" },
     D: { name: "Finder", kind: "finder" },
     E: { name: "Music", kind: "music" },
-    F: { name: "Arc", kind: "browser" },
+    F: { name: "Browser", kind: "browser" },
   };
   const body = (kind) => ({
     notes: '<div class="ln h"></div><div class="ln"></div><div class="ln" style="width:85%"></div><div class="ln"></div><div class="ln" style="width:60%"></div>',
@@ -664,9 +664,9 @@ const CHECKOUT_URL = "";
     }
   }
 
-  const arcRows = [
-    { t: "Arc", s: "Go to its window", sub: "New Arc window" },
-    { t: "Archive Utility", s: "Open", ic: "background:linear-gradient(135deg,#d9c6a5,#a88a5f)" },
+  const browserRows = [
+    { t: "Browser", s: "Go to its window", sub: "New Browser window" },
+    { t: "Brochure.pdf", s: "Documents", ic: "background:linear-gradient(135deg,#e9ecf1,#b9c0cc)" },
   ];
   const webRows = [
     { t: "Search the web for “best desk lamp”", s: "Google, in your browser", ic: "background:linear-gradient(135deg,#7aa6ff,#2f6bff)" },
@@ -714,7 +714,7 @@ const CHECKOUT_URL = "";
     { title: "Summon", hint: "⇧ then Space", steps: [
       { win: four, focus: "B", keys: [], cap: "Faster than Spotlight for the apps you use every day." },
       { win: four, focus: "B", keys: ["⇧", "then", "Space"], launcher: { q: "", rows: [] }, cap: "Tap ⇧, then Space, and Summon is there instantly." },
-      { win: four, focus: "B", keys: ["A", "R"], launcher: { q: "ar", rows: arcRows, sel: 0 }, cap: "Apps first, then files, then the web. An open app offers two choices." },
+      { win: four, focus: "B", keys: ["B", "R", "O"], launcher: { q: "bro", rows: browserRows, sel: 0 }, cap: "Apps first, then files, then the web. An open app offers two choices." },
       { win: { A: R.c1t, F: R.c1b, B: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: ["⇧", "↩"], cap: "↩ goes to its window. ⇧↩ opens a new one, tiled and focused." },
       { win: { A: R.c1t, F: R.c1b, B: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: [], launcher: { q: "best desk lamp", rows: webRows, sel: 0 }, cap: "No match? It searches the web, in a tab right here. Never a pop-up." },
     ]},
