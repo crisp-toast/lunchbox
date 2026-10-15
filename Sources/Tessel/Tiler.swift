@@ -1594,6 +1594,13 @@ final class Tiler {
     /// Xcode). Only an item that says "window" counts.
     private static func newWindowMenuItem(in app: AXUIElement) -> AXUIElement? {
         guard let bar = app.element(kAXMenuBarAttribute) else { return nil }
+        // Terminal's Shell › New Window is a submenu (one entry per profile): pressing it only
+        // opens the submenu. Use the entry ⌘N runs, or else the first one that's enabled.
+        func command(in item: AXUIElement) -> AXUIElement {
+            guard let sub = item.elements(kAXChildrenAttribute).first else { return item }
+            let entries = sub.elements(kAXChildrenAttribute).filter { $0.bool(kAXEnabledAttribute) && !title($0).isEmpty }
+            return entries.first { ($0.string(kAXMenuItemCmdCharAttribute) ?? "").uppercased() == "N" } ?? entries.first ?? item
+        }
         func title(_ e: AXUIElement) -> String { (e.string(kAXTitleAttribute) ?? "").lowercased() }
         let preferred = ["file", "shell", "window"]
         let menus = bar.elements(kAXChildrenAttribute)
@@ -1603,8 +1610,8 @@ final class Tiler {
             guard let menu = top.elements(kAXChildrenAttribute).first else { continue }
             for item in menu.elements(kAXChildrenAttribute) where item.bool(kAXEnabledAttribute) {
                 let t = title(item)
-                if t == "new window" { return item }
-                if t.hasPrefix("new "), t.hasSuffix(" window"), !t.contains("private"), !t.contains("incognito") { return item }
+                if t == "new window" { return command(in: item) }
+                if t.hasPrefix("new "), t.hasSuffix(" window"), !t.contains("private"), !t.contains("incognito") { return command(in: item) }
                 if t == "new", let sub = item.elements(kAXChildrenAttribute).first,
                    let window = sub.elements(kAXChildrenAttribute).first(where: { title($0) == "window" && $0.bool(kAXEnabledAttribute) }) {
                     return window
