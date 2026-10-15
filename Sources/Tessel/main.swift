@@ -24,6 +24,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var menu: StatusMenu = StatusMenu(tiler: tiler)
     private lazy var onboarding: Onboarding = Onboarding(tap: tap, tiler: tiler)
     private lazy var shortcuts: ShortcutsWindow = ShortcutsWindow(tap: tap)
+    private let licensing = Licensing()
+    private lazy var licenseWindow = LicenseWindow(licensing: licensing)
+    private var trialTimer: Timer?
     private var trustPoll: Timer?
     private var signalSource: DispatchSourceSignal?
 
@@ -34,6 +37,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.onTeachKeys = { [weak self] in self?.onboarding.show(at: .keys) }
         menu.onShowWelcome = { [weak self] in self?.onboarding.show() }
         menu.onShowShortcuts = { [weak self] in self?.shortcuts.show() }
+        menu.licensing = licensing
+        menu.onEnterLicense = { [weak self] in self?.licenseWindow.show() }
+        menu.onBuy = { NSWorkspace.shared.open(Licensing.buyURL) }
+        licensing.onChange = { [weak self] in self?.licenseChanged() }
         shortcuts.onChange = { KeymapStore.save($0) }
         help.onCustomize = { [weak self] in self?.shortcuts.show() }
         onboarding.onCustomize = { [weak self] in self?.shortcuts.show() }
@@ -87,6 +94,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tap.enabled = true
         tiler.start()
         menu.refresh()
+        checkTrial()
+        // Look again now and then, and after sleep: a trial can end while Tessel runs.
+        trialTimer = Timer.scheduledTimer(withTimeInterval: 1800, repeats: true) { [weak self] _ in self?.checkTrial() }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.checkTrial()
+        }
         // Start at login by default, once; the menu can turn it off and that sticks.
         if !UserDefaults.standard.bool(forKey: "loginItemConfigured") {
             do {
@@ -109,6 +122,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// spaces back and lets every keystroke through. Asking for the current state does nothing.
     private func setTiling(_ on: Bool) {
         guard on != tiler.enabled, menu.trusted || !on else { return }
+        if on, !licensing.canTile {
+            licenseWindow.show()
+            return
+        }
         if on {
             tiler.start()
             tap.enabled = true
@@ -118,6 +135,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         log.notice("tiling \(on ? "resumed" : "paused", privacy: .public)")
         menu.refresh()
+    }
+
+    // MARK: License
+
+    /// The trial ran out: tiling pauses (windows stay where they are) and Tessel says why, once.
+    private func checkTrial() {
+        guard !licensing.canTile, tiler.enabled else { return }
+        log.notice("trial ended; pausing tiling")
+        setTiling(false)
+        licenseWindow.show()
+    }
+
+    private func licenseChanged() {
+        menu.refresh()
+        // Just licensed after the trial ended: pick up where things left off.
+        if licensing.canTile, !tiler.enabled, menu.trusted { setTiling(true) }
+    }
+
+    /// tessel://activate?key=… from the thank-you page or the license email.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls where url.scheme == "tessel" && url.host == "activate" {
+            if let license = licensing.activate(url.absoluteString) {
+                licenseWindow.show(activated: license)
+            } else {
+                licenseWindow.show(error: "That activation link didn't carry a complete license. Email apps sometimes cut long links short: copy the key from the email and paste it here.")
+            }
+        }
     }
 
     private func saveSpaceKeys(_ keys: [Int64]) {
@@ -146,6 +190,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func run(_ command: String) {
+        if command.hasPrefix("license:") {
+            // license:<key> activates; license:window shows the window; license:remove forgets it.
+            let arg = String(command.dropFirst(8))
+            switch arg {
+            case "window": licenseWindow.show()
+            case "remove": licensing.removeLicense()
+            case _ where arg.hasPrefix("snapshot:"):
+                // license:snapshot:<png path>[:ended]
+                let bits = arg.dropFirst(9).split(separator: ":").map(String.init)
+                if let path = bits.first { licenseWindow.snapshot(to: path, trialEnded: bits.last == "ended") }
+            default: if licensing.activate(arg) == nil { licenseWindow.show(error: "Not a valid key.") }
+            }
+            return
+        }
         if command.hasPrefix("find:") {
             launcher.show(query: String(command.dropFirst(5)))
             return

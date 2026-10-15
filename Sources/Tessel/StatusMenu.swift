@@ -12,6 +12,9 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     var onShowHelp: (() -> Void)?
     var onShowWelcome: (() -> Void)?
     var onShowShortcuts: (() -> Void)?
+    var onEnterLicense: (() -> Void)?
+    var onBuy: (() -> Void)?
+    var licensing: Licensing?
 
     init(tiler: Tiler) {
         self.tiler = tiler
@@ -60,6 +63,15 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
+        if let licensing, licensing.license == nil {
+            switch licensing.trial {
+            case .active(let days): menu.addItem(disabled: "Free trial: \(days) day\(days == 1 ? "" : "s") left")
+            case .ended: menu.addItem(disabled: "Free trial ended")
+            }
+            menu.addItem(action("Buy Tessel – $9.99…") { [weak self] in self?.onBuy?() })
+            menu.addItem(action("Enter License…") { [weak self] in self?.onEnterLicense?() })
+            menu.addItem(.separator())
+        }
         let shortcuts = action("Cheat Sheet…") { [weak self] in self?.onShowHelp?() }
         shortcuts.toolTip = "Left ⌘⇧Space shows this anywhere"
         menu.addItem(shortcuts)
@@ -84,6 +96,10 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         teach.isEnabled = trusted
         options.addItem(teach)
         options.addItem(action("Welcome & Setup…") { [weak self] in self?.onShowWelcome?() })
+        if let license = licensing?.license {
+            options.addItem(.separator())
+            options.addItem(action("Licensed to \(license.email)…") { [weak self] in self?.onEnterLicense?() })
+        }
         settings.submenu = options
         menu.addItem(settings)
         menu.addItem(.separator())
