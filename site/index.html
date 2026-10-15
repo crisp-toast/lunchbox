@@ -366,9 +366,9 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
 }
 @media (max-width: 600px) {
   .hero h1 br { display: none; } /* wrap naturally instead of three short lines */
-  /* Phones: the glass gets a band of its own at the top, and the words sit below it, overlapping
-     only its bottom edge, so the break stays in view instead of hiding behind the panel. */
-  .hero { --film: clamp(360px, 108vw, 500px); padding: calc(var(--film) - 92px) 14px 28px; background: #fbfbfd; }
+  /* Phones: the glass gets a band of its own at the top, and the words rise into its lower half,
+     so the break stays in view above them without leaving an awkward gap. */
+  .hero { --film: clamp(380px, 112vw, 520px); padding: calc(var(--film) * .44) 14px 28px; background: #fbfbfd; }
   .hero-film { inset: 0 0 auto 0; height: var(--film); }
   .hero::before {
     inset: 0 0 auto 0; height: var(--film);
@@ -528,7 +528,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       </form>
       <a class="btn" href="download/Tessel.dmg">Download the Free Trial</a>
       <p class="buy-note" id="buy-note" aria-live="polite"></p>
-      <p class="fine">Try it free for 7 days,<sup class="fn" data-fn="trial"><a href="#fn-trial" aria-label="Footnote 5">5</a></sup> then pay $9.99 once to keep tiling. No subscription. Refunds within 30 days, no questions.</p>
+      <p class="fine">Try it free for 7 days,<sup class="fn" data-fn="trial"><a href="#fn-trial" aria-label="Footnote 5">5</a></sup> then pay $9.99 once to keep tiling. No subscription. Refunds within 14 days, no questions.</p>
       <p class="fine">macOS 14 Sonoma or later · Apple silicon<sup class="fn" data-fn="silicon"><a href="#fn-silicon" aria-label="Footnote 2">2</a></sup></p>
       <p class="fine"><a href="recover.html">Already bought it? Get your license again</a></p>
     </div>
@@ -538,7 +538,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     <h2>Frequent Questions</h2>
     <div>
       <details><summary>Is there a subscription?</summary><p>No, and there never will be. You pay $9.99 once and Tessel is yours, including every future version. Nothing renews and you're never charged again.</p></details>
-      <details><summary>Can I try it before I buy?</summary><p>Yes. Download it and every feature works for 7 days, with no email or card needed. If you buy and change your mind, you have 30 days for a full refund.</p></details>
+      <details><summary>Can I try it before I buy?</summary><p>Yes. Download it and every feature works for 7 days, with no email or card needed. If you buy and change your mind, you have 14 days for a full refund.</p></details>
       <details><summary>What does Tessel need permission for?</summary><p>Accessibility, so it can move and resize other apps' windows and listen for its shortcuts. Screen Recording is optional: allow it and the Shelf in Focus shows live previews of your windows instead of app icons.</p></details>
       <details><summary>Will it take over my keyboard?</summary><p>Only a handful of combinations, and only with the left ⌘ key. Right ⌘ keeps doing what it always did, so ⌘← still jumps to the start of a line.</p></details>
       <details><summary>Can I change the shortcuts?</summary><p>Yes, every one. Open Keyboard Shortcuts from the menu bar, click a command and press the keys you want. Tessel turns down combinations that would get in the way of typing or that another command already uses, and Restore Defaults puts everything back.</p></details>
