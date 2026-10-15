@@ -100,7 +100,7 @@ p { margin: 0; }
 }
 .mac.dim { background: radial-gradient(120% 90% at 15% 10%, #dfe3f6 0%, transparent 55%), radial-gradient(100% 90% at 60% 100%, #efe7f3 0%, #eceef6 70%); }
 .menubar {
-  position: absolute; inset: 0 0 auto 0; height: 4.2%; min-height: 14px;
+  position: absolute; inset: 0 0 auto 0; height: max(14px, 4.2%); z-index: 10;
   display: flex; align-items: center; gap: 2.2%; padding: 0 1.6%;
   font-size: clamp(7px, 1.05vw, 11px); font-weight: 600; color: #20242a;
   background: rgba(255,255,255,.55); backdrop-filter: blur(6px);
@@ -111,7 +111,7 @@ p { margin: 0; }
 .spaces .glyph { width: 1.3em; height: .9em; border: 1.5px solid currentColor; border-radius: 2px; position: relative; }
 .spaces .glyph::after { content: ""; position: absolute; inset: 1px 45% 1px 1px; background: currentColor; border-radius: 1px; }
 .spaces b { font-variant-numeric: tabular-nums; }
-.desk { position: absolute; left: 0; right: 0; bottom: 0; top: 4.2%; }
+.desk { position: absolute; left: 0; right: 0; bottom: 0; top: max(14px, 4.2%); } /* starts exactly below the menu bar */
 .win {
   position: absolute; border-radius: clamp(3px, .45vw, 6px); overflow: hidden;
   background: #fff; box-shadow: 0 0 0 .5px rgba(0,0,0,.12), 0 6px 18px -6px rgba(20,30,60,.3);
@@ -241,11 +241,19 @@ p { margin: 0; }
 .chapter.on .progress { opacity: 1; }
 .chapter .progress b { display: block; height: 100%; width: 0; background: var(--accent); }
 .stage { display: grid; gap: 16px; min-width: 0; }
-.howto { display: flex; align-items: center; gap: 14px; min-height: 48px; flex-wrap: wrap; }
-.howto .keys { display: flex; gap: 6px; flex-wrap: wrap; min-height: 44px; align-items: center; }
+/* A fixed grid, so the step buttons never move as the keys and caption change. */
+.howto { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "keys cap ctls"; align-items: center; gap: 10px 14px; }
+.howto .keys { grid-area: keys; display: flex; gap: 6px; min-height: 44px; align-items: center; }
 .howto .keys .plus { color: #a5abb4; font-weight: 600; }
-.howto .cap { flex: 1; min-width: 200px; color: var(--ink); font-size: 16px; }
-.ctls { display: flex; gap: 6px; }
+.howto .cap { grid-area: cap; min-width: 0; min-height: 2.9em; display: flex; align-items: center; color: var(--ink); font-size: 16px; line-height: 1.45; }
+.ctls { grid-area: ctls; display: flex; gap: 6px; align-self: center; }
+@media (max-width: 600px) {
+  .howto { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "keys ctls" "cap cap"; align-items: start; }
+  .howto .keys { flex-wrap: wrap; row-gap: 6px; }
+  .howto .keys .kc.big { min-width: 38px; height: 38px; font-size: 14px; padding: 0 8px; }
+  .howto .cap { min-height: 4.35em; align-items: flex-start; font-size: 15px; }
+  .ctls { align-self: start; padding-top: 4px; }
+}
 .ctl { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: #fff; cursor: pointer; display: grid; place-items: center; color: var(--ink); }
 .ctl svg { width: 14px; height: 14px; }
 
@@ -319,7 +327,6 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       <rect x="536" y="536" width="252" height="252" rx="44" fill="url(#logo-smoke)"/>
       <rect x="514" y="214" width="296" height="296" rx="62" fill="none" stroke="url(#logo-ring)" stroke-width="14"/>
     </symbol>
-    <symbol id="apple" viewBox="0 0 16 16"><path fill="currentColor" d="M11.2 8.5c0-1.6 1.3-2.4 1.4-2.4-.8-1.1-2-1.3-2.4-1.3-1-.1-2 .6-2.5.6s-1.3-.6-2.2-.6c-1.1 0-2.2.7-2.8 1.7-1.2 2-.3 5.1.9 6.8.6.8 1.2 1.7 2.1 1.7.8 0 1.2-.5 2.2-.5s1.3.5 2.2.5c.9 0 1.5-.8 2-1.7.6-.9.9-1.8.9-1.9 0 0-1.8-.7-1.8-2.9zM9.6 3.6c.5-.6.8-1.3.7-2.1-.7 0-1.5.5-2 1.1-.4.5-.8 1.3-.7 2 .8.1 1.5-.4 2-1z"/></symbol>
   </defs>
 </svg>
 
@@ -327,7 +334,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   <div class="nav-inner">
     <a class="brand" href="#top"><svg><use href="#logo"/></svg>Tessel</a>
     <div class="nav-links"><a href="#features">Features</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></div>
-    <a class="btn dark small" href="#pricing"><svg><use href="#apple"/></svg>Buy<span class="sep"></span><span class="price">$9.99</span></a>
+    <a class="btn dark small" href="#pricing">Buy<span class="sep"></span><span class="price">$9.99</span></a>
   </div>
 </nav>
 
@@ -336,7 +343,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     <h1>Put your windows<br>on the arrow keys.</h1>
     <p class="lede">Tessel tiles every window the moment it opens. Left ⌘ and an arrow moves your focus. Add ⇧ and the window comes with you.</p>
     <div class="actions">
-      <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Buy Tessel<span class="sep"></span><span class="price">$9.99</span></a>
+      <a class="btn dark buy" href="#pricing">Buy Tessel<span class="sep"></span><span class="price">$9.99</span></a>
       <a class="btn" href="#how">See how it works</a>
     </div>
     <div class="meta"><span>One-time purchase</span><span>Lifetime updates</span><span>macOS 14 or later</span><span>Apple silicon</span></div>
@@ -418,7 +425,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
         <li>Multi-display support, or main display only</li>
         <li>All future updates, free, forever</li>
       </ul>
-      <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Buy Tessel for $9.99</a>
+      <a class="btn dark buy" href="#pricing">Buy Tessel for $9.99</a>
       <p class="buy-note" id="buy-note" aria-live="polite"></p>
       <p class="fine">macOS 14 Sonoma or later · Apple silicon</p>
     </div>
@@ -441,7 +448,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     <svg class="icon"><use href="#logo"/></svg>
     <h2>Go on, open another window.</h2>
     <p class="lede">It already knows where to go.</p>
-    <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Buy Tessel<span class="sep"></span><span class="price">$9.99</span></a>
+    <a class="btn dark buy" href="#pricing">Buy Tessel<span class="sep"></span><span class="price">$9.99</span></a>
     <p class="fine">One-time purchase · Lifetime updates</p>
   </section>
 
@@ -585,7 +592,7 @@ const CHECKOUT_URL = "";
 
   function buildMac(root) {
     root.innerHTML = `
-      <div class="menubar"><svg style="width:1em;height:1em"><use href="#apple"/></svg><span>Finder</span><span class="item">File</span><span class="item">Edit</span><span class="item">View</span><span class="grow"></span><span class="spaces"><span class="glyph"></span><b class="space-num">1</b></span><span class="item">9:41</span></div>
+      <div class="menubar"><span>Finder</span><span class="item">File</span><span class="item">Edit</span><span class="item">View</span><span class="grow"></span><span class="spaces"><span class="glyph"></span><b class="space-num">1</b></span><span class="item">9:41</span></div>
       <div class="desk">
         ${Object.entries(APPS).map(([id, a]) => `<div class="win gone ${a.kind}" data-id="${id}"><div class="bar"><i></i><i></i><i></i><span>${a.name}</span></div><div class="content">${body(a.kind)}</div></div>`).join("")}
         <div class="panel launcher" hidden></div>
