@@ -159,6 +159,41 @@ public struct Layout: Equatable, Sendable {
         return true
     }
 
+    // MARK: Restoring
+
+    /// Puts a window back in the spot it had in `saved`, an earlier copy of this
+    /// layout (from before Tessel relaunched), going by the windows already back:
+    /// into the stack it shared with them, at the same place in it, or as a
+    /// column of its own in the same order among theirs, with the shares it had.
+    /// Restoring every window of `saved`, in any order, gives `saved` again.
+    /// Returns false when `saved` doesn't have the window.
+    @discardableResult
+    public mutating func restore(_ id: WindowID, from saved: Layout) -> Bool {
+        guard !contains(id), let (sc, sr) = saved.position(of: id) else { return false }
+        spotlight = nil
+        let stack = saved.columns[sc]
+        if let c = columns.firstIndex(where: { column in column.windows.contains { stack.windows.contains($0) } }) {
+            let above = stack.windows[..<sr], below = stack.windows[(sr + 1)...]
+            let row = columns[c].windows.lastIndex { above.contains($0) }.map { $0 + 1 }
+                ?? columns[c].windows.firstIndex { below.contains($0) }
+                ?? columns[c].windows.count
+            columns[c].windows.insert(id, at: row)
+            columns[c].weights.insert(stack.weights[sr], at: row)
+        } else {
+            // Right after the last column holding a window that was to its left.
+            let index = columns.lastIndex { column in
+                column.windows.contains { saved.position(of: $0).map { $0.column < sc } ?? false }
+            }.map { $0 + 1 } ?? 0
+            columns.insert(Column(windows: [id], weights: [stack.weights[sr]], weight: stack.weight), at: index)
+        }
+        if saved.singleOwner == id, singleOwner == nil {
+            singleOwner = id
+            singleScale = saved.singleScale
+            singleHeight = saved.singleHeight
+        }
+        return true
+    }
+
     // MARK: Moving
 
     public enum MoveResult: Equatable, Sendable {
@@ -436,4 +471,27 @@ public struct Layout: Equatable, Sendable {
     public static func maxColumns(forWidth width: CGFloat) -> Int {
         max(1, min(4, Int(width / 800)))
     }
+}
+
+// MARK: Saving
+
+extension Column: Codable {
+    private enum CodingKeys: String, CodingKey { case windows, weights, weight }
+
+    /// Shares that don't fit their windows (a damaged save) start over even.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let windows = try container.decode([WindowID].self, forKey: .windows)
+        let weights = try container.decodeIfPresent([Double].self, forKey: .weights) ?? []
+        let weight = try container.decodeIfPresent(Double.self, forKey: .weight) ?? 1
+        func usable(_ w: Double) -> Bool { w > 0 && w.isFinite }
+        self.init(windows: windows,
+                  weights: weights.count == windows.count && weights.allSatisfy(usable) ? weights : nil,
+                  weight: usable(weight) ? weight : 1)
+    }
+}
+
+extension Layout: Codable {
+    // Focus (`spotlight`) isn't saved: it's a moment's view, not part of the arrangement.
+    private enum CodingKeys: String, CodingKey { case columns, singleScale, singleHeight, singleOwner }
 }

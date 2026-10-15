@@ -101,3 +101,9 @@ func onScreenWindowIDs() -> Set<CGWindowID> {
     }
     return ids
 }
+
+/// Every window that exists, on screen or not (minimized, hidden, on another desktop).
+func allWindowIDs() -> Set<CGWindowID> {
+    let list = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] ?? []
+    return Set(list.compactMap { $0[kCGWindowNumber as String] as? CGWindowID })
+}

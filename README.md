@@ -90,6 +90,10 @@ when the second display is a dummy plug: windows on other displays move to the m
   - `Overlays` draws the focus ring and the space badge with Core Animation in click-through panels.
 - Windows in other spaces are parked just off the bottom-right corner of the right-most screen.
   Quitting Tessel (menu, `kill`, or reinstall) brings them back first.
+- Tessel saves each Workspace's layout as it changes: which windows share a stack, the column
+  order, and the sizes you gave them. Relaunching (or pausing and resuming tiling) puts every
+  window that's still open back in the same Workspace, display, stack and column, at the same
+  size. Windows opened in the meantime join as new windows do.
 
 ## Build and install
 

@@ -81,6 +81,9 @@ final class Tiler {
     private(set) var focusedID: CGWindowID?
     private var lastFocused: [Int: CGWindowID] = [:]
     private var savedPlacement: [CGWindowID: (space: Int, display: String)] = [:]
+    /// Each layout as it was when Tessel last ran (or was paused), by "space|display".
+    /// A window coming back takes its old spot: same stack, column order and shares.
+    private var savedLayouts: [String: Layout] = [:]
     private var settlingUntil: [CGWindowID: CFTimeInterval] = [:]
     private var lastReassert: [CGWindowID: CFTimeInterval] = [:]
     private var draggedByUser = Set<CGWindowID>()
@@ -105,14 +108,24 @@ final class Tiler {
         }
         let defaults = UserDefaults.standard
         currentSpace = min(Self.spaceCount - 1, max(0, defaults.integer(forKey: "currentSpace")))
+        // Window numbers stay the same while a window lives, so this survives a relaunch.
+        adopted = Set(((defaults.array(forKey: "adopted") as? [Int]) ?? []).map(CGWindowID.init))
+    }
+
+    /// Reads where every window was when Tessel last ran or was paused, so the
+    /// windows still open go back to the same Workspace, display and spot.
+    /// Window numbers stay the same while a window lives, so this survives a relaunch.
+    private func loadSaved() {
+        let defaults = UserDefaults.standard
+        savedPlacement = [:]
         for (key, value) in (defaults.dictionary(forKey: "placement") as? [String: String]) ?? [:] {
             let parts = value.split(separator: "|", maxSplits: 1).map(String.init)
             if let id = CGWindowID(key), parts.count == 2, let space = Int(parts[0]) {
                 savedPlacement[id] = (space, parts[1])
             }
         }
-        // Window numbers stay the same while a window lives, so this survives a relaunch.
-        adopted = Set(((defaults.array(forKey: "adopted") as? [Int]) ?? []).map(CGWindowID.init))
+        let json = defaults.string(forKey: "layouts").map { Data($0.utf8) }
+        savedLayouts = json.flatMap { try? JSONDecoder().decode([String: Layout].self, from: $0) } ?? [:]
     }
 
     // MARK: Lifecycle
@@ -120,6 +133,8 @@ final class Tiler {
     func start() {
         guard !enabled else { return }
         enabled = true
+        initialScanDone = false
+        loadSaved()
         displays = Display.current()
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 1.0)
 
@@ -170,6 +185,7 @@ final class Tiler {
     /// Stops managing windows and brings every parked window back into view.
     func stop() {
         guard enabled else { return }
+        persist() // resuming puts everything back where it is now
         revealHiddenWindows()
         enabled = false
         notificationTokens.forEach {
@@ -255,7 +271,10 @@ final class Tiler {
         let focusedFrame = focusedID.flatMap { id in gone.contains(id) ? visibleFrames()[id] : nil }
         if !gone.isEmpty { quietFocus(for: 1) }
         gone.forEach(forget)
-        if !gone.isEmpty { relayout(animated: true) }
+        if !gone.isEmpty {
+            relayout(animated: true)
+            persist()
+        }
         // An app that quits with its last window hands focus to whichever app was
         // before it, maybe one parked in another space. Stay where the user was looking.
         if let focusedFrame { focusNearest(to: focusedFrame) }
@@ -322,6 +341,10 @@ final class Tiler {
             for (app, infos) in results { infos.forEach { all.append((app, $0)) } }
             all.sort { ($0.1.frame.minX, $0.1.frame.minY) < ($1.1.frame.minX, $1.1.frame.minY) }
             for (app, info) in all { self.consider(info, app: app, onScreen: onScreen) }
+            // Windows closed while Tessel wasn't running don't come back, and their
+            // numbers get reused by new windows: forget their spots.
+            let alive = allWindowIDs()
+            if !alive.isEmpty { self.savedPlacement = self.savedPlacement.filter { alive.contains($0.key) } }
             self.relayout(animated: false)
             self.persist()
             self.refreshFocus()
@@ -446,8 +469,12 @@ final class Tiler {
         guard let display else { return }
         let space = saved?.space ?? currentSpace
         var layout = spaces[space][display.uuid] ?? Layout()
-        let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
-        layout.insert(window.id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
+        // Back from before a relaunch: the same stack and column it had, else a new spot.
+        let before = saved.flatMap { s in s.display == display.uuid ? savedLayouts["\(s.space)|\(s.display)"] : nil }
+        if !(before.map { layout.restore(window.id, from: $0) } ?? false) {
+            let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
+            layout.insert(window.id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
+        }
         if opensInSpotlight, layout.windowCount > 1 {
             layout.spotlight = window.id
             let shelved = layout.shelved
@@ -947,15 +974,25 @@ final class Tiler {
     }
 
     private func persist() {
+        // Paused, the layouts are empty: what was saved when tiling stopped stands.
+        guard enabled else { return }
         var placement: [String: String] = [:]
+        var saved: [String: Layout] = [:]
         for (s, layouts) in spaces.enumerated() {
             for (uuid, layout) in layouts {
                 for id in layout.windows { placement[String(id)] = "\(s)|\(uuid)" }
+                saved["\(s)|\(uuid)"] = layout
             }
         }
         // Keep entries for windows not seen yet this session (e.g. right after a relaunch).
         for (id, p) in savedPlacement where placement[String(id)] == nil { placement[String(id)] = "\(p.space)|\(p.display)" }
+        for (key, before) in savedLayouts {
+            for id in before.windows where savedPlacement[id] != nil { saved[key, default: Layout()].restore(id, from: before) }
+        }
         UserDefaults.standard.set(placement, forKey: "placement")
+        if let json = try? JSONEncoder().encode(saved) {
+            UserDefaults.standard.set(String(decoding: json, as: UTF8.self), forKey: "layouts")
+        }
         UserDefaults.standard.set(currentSpace, forKey: "currentSpace")
         UserDefaults.standard.set(tileSizes.mapValues { $0.map { [Double($0.width), Double($0.height)] } }, forKey: "tileSizes")
         UserDefaults.standard.set(appSizes.mapValues { [Double($0.width), Double($0.height)] }, forKey: "appSizes")
@@ -1074,6 +1111,7 @@ final class Tiler {
         if layout.resize(id, by: delta) {
             spaces[space][uuid] = layout
             relayout(animated: true)
+            persist()
         }
         showRing(on: id)
     }
