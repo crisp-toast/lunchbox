@@ -101,14 +101,44 @@ func terminalWindows() -> [CGWindowID: CGRect] {
     return out
 }
 
+/// The app in front: Accessibility's focused app, or else NSWorkspace's (which needs the run
+/// loop to turn over before it notices a change).
 func frontPID() -> pid_t? {
     var app: CFTypeRef?
-    guard AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedApplicationAttribute as CFString, &app) == .success,
-          let element = app else { return nil }
-    var pid: pid_t = 0
-    AXUIElementGetPid(element as! AXUIElement, &pid)
-    return pid
+    if AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedApplicationAttribute as CFString, &app) == .success,
+       let element = app {
+        var pid: pid_t = 0
+        AXUIElementGetPid(element as! AXUIElement, &pid)
+        if pid > 0 { return pid }
+    }
+    RunLoop.current.run(until: Date().addingTimeInterval(0.001))
+    return NSWorkspace.shared.frontmostApplication?.processIdentifier
 }
+
+/// Every on-screen window above the normal level, by number and owner: Spotlight's and
+/// Summon's panels, whatever their owners are called on this version of macOS.
+func floating() -> [CGWindowID: String] {
+    var out: [CGWindowID: String] = [:]
+    let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+    for w in list {
+        guard let id = w[kCGWindowNumber as String] as? CGWindowID, let b = w[kCGWindowBounds as String] as? NSDictionary,
+              let r = CGRect(dictionaryRepresentation: b), r.width > 200, r.height > 40 else { continue }
+        let layer = w[kCGWindowLayer as String] as? Int ?? 0
+        let owner = w[kCGWindowOwnerName as String] as? String ?? "?"
+        if layer != 0 || owner == "Tessel" { out[id] = owner }
+    }
+    return out
+}
+
+/// Waits for a new floating window to appear (the search panel); returns its owner.
+func panelAppears(besides before: [CGWindowID: String]) -> String? {
+    var owner: String?
+    wait(3) { owner = floating().first { before[$0.key] == nil }?.value; return owner != nil }
+    return owner
+}
+
+var reasons: [String] = []
+var panelOwners: [String: String] = [:]
 
 @discardableResult
 func wait(_ timeout: Double, _ condition: () -> Bool) -> Bool {
@@ -161,16 +191,21 @@ func startFromFinder() {
 func spotlight() -> Double? {
     startFromFinder()
     let before = Set(terminalWindows().keys)
+    let panelsBefore = floating()
     let t0 = Date()
     key(49, .maskCommand) // ⌘Space
-    guard wait(3, { !onScreen(owner: "Spotlight").isEmpty }) else { key(53); return nil }
+    guard let owner = panelAppears(besides: panelsBefore) else { reasons.append("spotlight: no panel"); key(53); return nil }
+    panelOwners["spotlight"] = owner
     type(query)
     Thread.sleep(forTimeInterval: glance)
     key(36) // Return: brings Terminal forward
-    guard wait(3, { frontPID() == terminalPID() }) else { key(53); return nil }
+    guard wait(3, { frontPID() == terminalPID() }) else {
+        reasons.append("spotlight: Terminal not in front (front: \(frontPID().flatMap { NSRunningApplication(processIdentifier: $0)?.bundleIdentifier } ?? "?"))")
+        key(53); return nil
+    }
     Thread.sleep(forTimeInterval: glance)
     key(45, .maskCommand) // ⌘N
-    guard let (id, done) = settledNewWindow(besides: before) else { return nil }
+    guard let (id, done) = settledNewWindow(besides: before) else { reasons.append("spotlight: no new window"); return nil }
     close(id)
     return done.timeIntervalSince(t0)
 }
@@ -178,15 +213,16 @@ func spotlight() -> Double? {
 func summon() -> Double? {
     startFromFinder()
     let before = Set(terminalWindows().keys)
-    let tesselBefore = onScreen(owner: "Tessel").count
+    let panelsBefore = floating()
     let t0 = Date()
     tapShift()
     key(49) // Space
-    guard wait(3, { onScreen(owner: "Tessel").count > tesselBefore }) else { key(53); return nil }
+    guard let owner = panelAppears(besides: panelsBefore) else { reasons.append("summon: no panel"); key(53); return nil }
+    panelOwners["summon"] = owner
     type(query)
     Thread.sleep(forTimeInterval: glance)
     key(36, .maskShift) // ⇧Return: a new window
-    guard let (id, done) = settledNewWindow(besides: before) else { return nil }
+    guard let (id, done) = settledNewWindow(besides: before) else { reasons.append("summon: no new window"); return nil }
     close(id)
     return done.timeIntervalSince(t0)
 }
@@ -213,7 +249,9 @@ let result: [String: Any] = [
     "machine": "Mac mini (M4, 16 GB)", "macOS": ProcessInfo.processInfo.operatingSystemVersionString,
     "typing_seconds_per_char": charDelay, "glance_seconds": glance, "query": query,
     "spotlight_seconds": times["spotlight"]!, "summon_seconds": times["summon"]!,
-    "spotlight_median": ms, "summon_median": mm, "speedup": ms / mm, "failures": failures,
+    "spotlight_median": ms.isNaN ? NSNull() : ms, "summon_median": mm.isNaN ? NSNull() : mm,
+    "speedup": (ms / mm).isFinite ? ms / mm : NSNull(), "failures": failures,
+    "failure_reasons": reasons, "panel_owners": panelOwners,
 ]
 let data = try! JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])
 print(String(data: data, encoding: .utf8)!)
