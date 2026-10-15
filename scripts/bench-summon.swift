@@ -64,14 +64,19 @@ func key(_ code: CGKeyCode, _ flags: CGEventFlags = []) {
     }
 }
 
-func tapShift() {
-    for down in [true, false] {
-        let e = CGEvent(keyboardEventSource: source, virtualKey: 56, keyDown: down)!
-        e.type = .flagsChanged
-        e.flags = down ? .maskShift : []
-        e.post(tap: .cghidEventTap)
-        usleep(40_000)
-    }
+/// ⇧ then Space, as Tessel reads it: ⇧ goes down, and Space is the first key pressed while it's held.
+func shiftThenSpace() {
+    let shiftDown = CGEvent(keyboardEventSource: source, virtualKey: 56, keyDown: true)!
+    shiftDown.type = .flagsChanged
+    shiftDown.flags = .maskShift
+    shiftDown.post(tap: .cghidEventTap)
+    usleep(60_000)
+    key(49, .maskShift)
+    let shiftUp = CGEvent(keyboardEventSource: source, virtualKey: 56, keyDown: false)!
+    shiftUp.type = .flagsChanged
+    shiftUp.flags = []
+    shiftUp.post(tap: .cghidEventTap)
+    usleep(20_000)
 }
 
 func type(_ text: String) {
@@ -215,8 +220,7 @@ func summon() -> Double? {
     let before = Set(terminalWindows().keys)
     let panelsBefore = floating()
     let t0 = Date()
-    tapShift()
-    key(49) // Space
+    shiftThenSpace()
     guard let owner = panelAppears(besides: panelsBefore) else { reasons.append("summon: no panel"); key(53); return nil }
     panelOwners["summon"] = owner
     type(query)
