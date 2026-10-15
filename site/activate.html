@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="page.css">
+<title>Activate Tessel</title>
+<meta name="robots" content="noindex">
+</head>
+<body>
+<header class="top"><a class="brand" href="./"><img src="logo.svg" alt="">Tessel</a></header>
+<main>
+  <section id="ok" hidden>
+    <h1>Activate Tessel</h1>
+    <p class="lede">License for <strong id="email"></strong>. Open this page on the Mac where Tessel is installed.</p>
+    <div class="card">
+      <div class="btns"><a class="btn dark" id="activate" href="#">Activate Tessel on this Mac</a><a class="btn" href="download/Tessel.dmg">Download Tessel</a></div>
+      <p class="note">If nothing happens, open Tessel's menu bar icon, choose <strong>Enter License…</strong>, and paste this key:</p>
+      <div class="key" id="key"></div>
+      <div class="btns"><button class="btn" type="button" id="copy">Copy License</button></div>
+    </div>
+  </section>
+  <section id="bad" hidden>
+    <h1>That link looks incomplete.</h1>
+    <p class="lede">Email apps sometimes cut long links short. Copy the license key from your email instead, or <a href="recover.html">have it sent again</a>.</p>
+  </section>
+</main>
+<footer class="foot"><span>© 2026 Sentient Donut LLC</span><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="refunds.html">Refunds</a><a href="recover.html">Lost license</a><a href="mailto:support@sentientdonut.com">support@sentientdonut.com</a></footer>
+<script>
+function copyKey(text, button) {
+  const done = () => { const was = button.textContent; button.textContent = "Copied"; setTimeout(() => (button.textContent = was), 1600); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, () => selectKey());
+  else selectKey();
+}
+function selectKey() { const r = document.createRange(); r.selectNodeContents(document.getElementById("key")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+// The key travels after the # so it never reaches a server.
+const key = decodeURIComponent(location.hash.slice(1)).replace(/\s+/g, "");
+const m = /^tessel1\.([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+$/.exec(key);
+let email = null;
+try { email = m && JSON.parse(atob(m[1].replace(/-/g, "+").replace(/_/g, "/"))).e; } catch {}
+if (email) {
+  document.getElementById("email").textContent = email;
+  document.getElementById("key").textContent = key;
+  document.getElementById("activate").href = "tessel://activate?key=" + encodeURIComponent(key);
+  document.getElementById("copy").onclick = (e) => copyKey(key, e.currentTarget);
+  document.getElementById("ok").hidden = false;
+} else {
+  document.getElementById("bad").hidden = false;
+}
+</script>
+</body>
+</html>
