@@ -112,15 +112,16 @@ p { margin: 0; }
   12% { opacity: 1; }
   100% { opacity: 1; transform: none; }
 }
-/* "pile of windows" gets a red crayon squiggle, like a spelling mistake, scribbled in after the words land. */
-.hero h1 .bad { position: relative; white-space: nowrap; }
-.scrawl { position: absolute; left: -2%; top: .8em; width: 104%; height: auto; overflow: visible; pointer-events: none; }
-.scrawl path { fill: none; stroke: #d3261c; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round;
-  stroke-dasharray: 1; stroke-dashoffset: 0; filter: url(#crayon); }
-.scrawl .wax { stroke: #b81d14; stroke-width: 3.2; opacity: .45; transform: translate(1.2px, 1.6px); }
-.hero-wait .scrawl path { stroke-dashoffset: 1; }
-.hero-rise .scrawl path { animation: scrawl .8s 1s cubic-bezier(.45, 0, .35, 1) both; }
-@keyframes scrawl { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+/* "pile of windows" gets a red crayon squiggle, like a spelling mistake, scribbled in after the words land.
+   It's a background image rather than an element inside the words: WebKit draws text around an inline SVG
+   heavier, as if it had a shadow. The image crops instead of squashing, so widening it draws it left to right. */
+.hero h1 .bad {
+  white-space: nowrap; padding: 0 .05em .2em; margin: 0 -.05em;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 44' preserveAspectRatio='xMinYMid slice'%3E%3Cfilter id='c' x='-4%25' y='-60%25' width='108%25' height='220%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.22 0.3' numOctaves='2' seed='7' result='w'/%3E%3CfeDisplacementMap in='SourceGraphic' in2='w' scale='3' xChannelSelector='R' yChannelSelector='G' result='r'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1 0.45' numOctaves='3' seed='3' result='g'/%3E%3CfeColorMatrix in='g' type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -5 0 0 0 3.45' result='x'/%3E%3CfeComposite in='r' in2='x' operator='in'/%3E%3C/filter%3E%3Cg fill='none' stroke-linecap='round' stroke-linejoin='round' filter='url(%23c)'%3E%3Cpath d='M5.0 25.0L9.8 19.2Q12.3 16.2 14.7 19.3L21.5 28.1Q23.3 30.5 25.8 28.9L38.1 21.1Q41.6 18.9 44.9 21.3L53.4 27.3Q55.6 28.8 58.0 27.7L74.2 19.9Q77.4 18.4 79.7 21.0L86.9 29.4Q89.1 32.1 92.0 30.1L107.8 19.3Q110.3 17.6 112.5 19.6L122.6 28.7Q125.2 31.1 128.2 29.2L140.4 21.5Q143.3 19.7 145.8 21.9L154.3 29.1Q156.8 31.3 159.6 29.4L173.3 20.2Q176.4 18.1 179.2 20.7L187.1 27.8Q189.0 29.6 191.4 28.6L209.3 21.5Q212.3 20.4 214.8 22.4L223.5 29.4Q226.5 31.8 229.7 29.7L242.6 21.0Q245.0 19.5 247.1 21.3L255.8 28.6Q258.8 31.2 262.5 29.6L280.2 21.9Q282.9 20.7 285.4 22.2L294.0 27.3Q297.1 29.2 300.5 27.8L318.9 20.1Q321.6 18.9 323.9 20.6L336.1 29.6Q338.7 31.6 341.6 29.9L355.2 22.3Q358.0 20.7 360.8 22.5L370.9 29.3Q373.2 30.8 375.4 29.2L386.3 21.6Q389.4 19.4 392.6 21.1L404.4 27.3Q407.3 28.9 410.5 27.6L425.5 21.4Q428.9 20.0 432.1 21.8L442.7 27.7Q445.7 29.4 448.8 27.8L465.3 19.6Q468.4 18.0 471.2 20.0L480.9 26.9Q483.7 28.9 486.9 27.5L504.1 20.5Q507.0 19.3 509.9 18.2L516.0 15.8' stroke='%23d3261c' stroke-width='8'/%3E%3Cpath d='M5.0 25.0L10.2 19.3Q12.9 16.5 15.2 19.6L21.4 28.1Q23.2 30.5 25.7 28.9L38.0 20.9Q41.5 18.7 44.8 21.2L52.8 27.3Q55.0 29.0 57.5 27.8L74.6 19.8Q77.7 18.3 80.0 21.0L87.1 29.5Q89.3 32.2 92.1 30.2L107.6 19.5Q110.1 17.8 112.3 19.7L122.8 28.7Q125.5 30.9 128.5 29.1L140.7 21.5Q143.6 19.7 146.1 22.0L153.9 28.9Q156.4 31.1 159.1 29.2L172.9 20.0Q176.0 17.9 178.7 20.4L186.8 27.9Q188.7 29.6 191.1 28.7L209.1 21.4Q212.1 20.2 214.6 22.2L223.6 29.3Q226.6 31.7 229.9 29.6L242.9 21.2Q245.3 19.7 247.5 21.5L256.4 28.8Q259.5 31.3 263.1 29.6L280.9 21.6Q283.6 20.4 286.0 22.0L294.5 27.4Q297.6 29.4 301.0 27.9L319.6 20.1Q322.2 19.0 324.5 20.8L335.9 29.9Q338.5 31.9 341.4 30.2L354.6 22.3Q357.4 20.7 360.2 22.4L371.5 29.2Q373.9 30.6 376.0 29.0L385.9 21.7Q388.9 19.4 392.2 21.2L404.3 27.6Q407.2 29.2 410.4 27.9L426.0 21.6Q429.5 20.2 432.7 22.1L442.6 27.8Q445.6 29.5 448.7 27.9L464.9 19.5Q468.0 17.9 470.9 19.9L481.0 26.9Q483.8 28.9 487.0 27.6L504.3 20.4Q507.2 19.2 510.0 18.1L516.0 15.7' stroke='%23b81d14' stroke-width='3.2' opacity='.45' transform='translate(1.2 1.6)'/%3E%3C/g%3E%3C/svg%3E") no-repeat left bottom / 100% .62em;
+}
+.hero-wait .hero h1 .bad { background-size: 0 .62em; }
+.hero-rise .hero h1 .bad { animation: scrawl .8s 1s cubic-bezier(.45, 0, .35, 1) both; }
+@keyframes scrawl { from { background-size: 0 .62em; } to { background-size: 100% .62em; } }
 .hero-copy .lede { color: #3f454d; max-width: 30em; text-shadow: 0 1px 10px rgba(251,251,253,.8); }
 .hero-copy .meta { color: #4b525b; text-shadow: 0 1px 8px rgba(251,251,253,.8); }
 .hero .actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
@@ -343,6 +344,8 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   .chapters { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; scrollbar-width: none; padding: 8px 12px 20px; margin: -8px -12px -14px; }
   .chapter { padding: 9px 12px; }
   .chapter .ck, .chapter .progress { display: none; }
+  /* More chapters than fit: fade the edge so the strip reads as scrollable. */
+  .chapters { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); }
   .trio { grid-template-columns: minmax(0, 1fr); }
   .nav-links { display: none; }
 }
@@ -351,9 +354,30 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
 }
 @media (max-width: 600px) {
   .hero h1 br { display: none; } /* wrap naturally instead of three short lines */
-  .hero-copy { background: rgba(251,251,253,.2); -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3); padding: 18px 14px; gap: 16px; }
+  /* Phones: the glass gets a band of its own at the top, and the words sit below it, overlapping
+     only its bottom edge, so the break stays in view instead of hiding behind the panel. */
+  .hero { --film: clamp(360px, 108vw, 500px); padding: calc(var(--film) - 92px) 14px 28px; background: #fbfbfd; }
+  .hero-film { inset: 0 0 auto 0; height: var(--film); }
+  .hero::before {
+    inset: 0 0 auto 0; height: var(--film);
+    background: linear-gradient(180deg, rgba(251,251,253,.2), rgba(251,251,253,0) 20%, rgba(251,251,253,0) 60%, #fbfbfd 100%);
+  }
+  .hero h1 { font-size: clamp(34px, 10vw, 44px); }
+  .hero-copy { background: rgba(251,251,253,.42); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); padding: 20px 16px; gap: 14px; border-radius: 22px; }
+  .hero-copy .lede { font-size: 16px; }
+  .hero-wait .hero-copy { transform: translateY(90px) scale(.94); }
+  @keyframes hero-rise { 0% { opacity: 0; transform: translateY(90px) scale(.94); } 12% { opacity: 1; } 100% { opacity: 1; transform: none; } }
+  .showcase { margin-top: 0; }
   .meta span::before { content: none; }
   .meta { gap: 6px 16px; }
+  /* Tighter rhythm between sections, and demo cards without empty acres. */
+  .features, .walk { padding-block: 56px 24px; }
+  .features { gap: 32px; }
+  .trio { gap: 30px; }
+  .trio .art { aspect-ratio: 16 / 10; }
+  .pricing { padding-block: 48px 24px; gap: 26px; }
+  .faq { padding-block: 52px 24px; }
+  .closing { padding-block: 72px 52px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; animation: none !important; }
@@ -393,15 +417,6 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
 </nav>
 
 <main class="wrap" id="top">
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-    <filter id="crayon" x="-4%" y="-60%" width="108%" height="220%">
-      <feTurbulence type="fractalNoise" baseFrequency="0.22 0.3" numOctaves="2" seed="7" result="wobble"/>
-      <feDisplacementMap in="SourceGraphic" in2="wobble" scale="3" xChannelSelector="R" yChannelSelector="G" result="rough"/>
-      <feTurbulence type="fractalNoise" baseFrequency="1.1 0.45" numOctaves="3" seed="3" result="grain"/>
-      <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -5 0 0 0 3.45" result="wax"/>
-      <feComposite in="rough" in2="wax" operator="in"/>
-    </filter>
-  </svg>
   <script>if (!matchMedia("(prefers-reduced-motion: reduce)").matches) document.documentElement.classList.add("hero-wait");</script>
   <section class="hero" id="hero">
     <video class="hero-film" id="hero-film" muted playsinline preload="auto" poster="media/break-start.jpg" aria-hidden="true">
@@ -409,7 +424,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       <source src="media/break.mp4" type="video/mp4">
     </video>
     <div class="hero-copy">
-    <h1>Break free from the <br><span class="bad">pile of windows<svg class="scrawl" viewBox="0 0 520 44" aria-hidden="true" focusable="false"><path pathLength="1" d="M7.0 16.8 L9.6 20.9 12.2 25.4 14.8 28.7 17.4 30.8 20.0 31.0 22.6 28.8 25.2 25.6 27.8 21.5 30.4 17.3 33.0 14.7 35.6 13.1 38.2 13.7 40.8 15.3 43.4 19.0 46.0 23.1 48.6 27.2 51.2 30.0 53.8 31.0 56.4 30.3 59.0 27.7 61.6 24.3 64.2 20.5 66.8 17.1 69.4 14.4 72.0 13.2 74.6 13.9 77.2 15.6 79.8 18.8 82.4 22.6 85.0 26.2 87.6 29.1 90.2 30.4 92.8 30.4 95.4 28.4 98.0 25.4 100.6 21.8 103.2 18.0 105.8 14.9 108.4 13.2 111.0 13.2 113.6 14.5 116.2 17.0 118.8 20.3 121.4 23.9 124.0 27.0 126.6 29.7 129.2 30.2 131.8 30.1 134.4 27.9 137.0 24.4 139.6 21.1 142.2 17.4 144.8 14.9 147.4 12.9 150.0 13.3 152.6 14.9 155.2 17.1 157.8 20.4 160.4 23.9 163.0 26.8 165.6 29.1 168.2 30.5 170.8 29.6 173.4 27.1 176.0 24.3 178.6 21.0 181.2 17.8 183.8 14.7 186.4 13.8 189.0 13.3 191.6 14.8 194.2 17.4 196.8 20.5 199.4 23.9 202.0 27.1 204.6 28.7 207.2 29.7 209.8 28.8 212.4 26.9 215.0 24.1 217.6 20.5 220.2 17.4 222.8 14.4 225.4 13.8 228.0 13.8 230.6 15.1 233.2 18.1 235.8 21.5 238.4 25.1 241.0 27.5 243.6 29.1 246.2 29.8 248.8 28.1 251.4 25.6 254.0 22.3 256.6 19.0 259.2 15.9 261.8 14.3 264.4 13.6 267.0 15.0 269.6 17.4 272.2 20.6 274.8 24.2 277.4 27.3 280.0 29.5 282.6 29.2 285.2 28.0 287.8 25.9 290.4 22.3 293.0 18.8 295.6 16.0 298.2 13.9 300.8 13.6 303.4 15.9 306.0 18.3 308.6 22.1 311.2 25.7 313.8 28.2 316.4 29.1 319.0 28.5 321.6 27.1 324.2 23.4 326.8 19.8 329.4 16.8 332.0 14.3 334.6 14.2 337.2 15.9 339.8 18.8 342.4 22.4 345.0 25.7 347.6 28.3 350.2 29.5 352.8 28.9 355.4 26.0 358.0 22.4 360.6 18.5 363.2 16.1 365.8 15.0 368.4 15.4 371.0 17.6 373.6 21.2 376.2 24.8 378.8 27.9 381.4 29.5 384.0 28.6 386.6 26.4 389.2 22.9 391.8 18.9 394.4 16.0 397.0 14.6 399.6 15.5 402.2 18.4 404.8 22.0 407.4 25.5 410.0 28.9 412.6 29.7 415.2 28.8 417.8 25.3 420.4 21.6 423.0 18.0 425.6 15.4 428.2 15.5 430.8 16.6 433.4 20.5 436.0 24.3 438.6 27.9 441.2 29.9 443.8 29.4 446.4 26.9 449.0 23.2 451.6 19.1 454.2 16.6 456.8 15.4 459.4 16.4 462.0 19.6 464.6 23.6 467.2 27.4 469.8 29.7 472.4 29.6 475.0 27.6 477.6 24.1 480.2 20.2 482.8 17.1 485.4 16.4 488.0 16.7 490.6 19.3 493.2 23.3 495.8 27.0 498.4 29.2 501.0 30.0 503.6 28.2 506.2 25.0 508.8 21.2 511.4 18.4"/><path class="wax" pathLength="1" d="M7.0 16.8 L9.6 20.9 12.2 25.4 14.8 28.7 17.4 30.8 20.0 31.0 22.6 28.8 25.2 25.6 27.8 21.5 30.4 17.3 33.0 14.7 35.6 13.1 38.2 13.7 40.8 15.3 43.4 19.0 46.0 23.1 48.6 27.2 51.2 30.0 53.8 31.0 56.4 30.3 59.0 27.7 61.6 24.3 64.2 20.5 66.8 17.1 69.4 14.4 72.0 13.2 74.6 13.9 77.2 15.6 79.8 18.8 82.4 22.6 85.0 26.2 87.6 29.1 90.2 30.4 92.8 30.4 95.4 28.4 98.0 25.4 100.6 21.8 103.2 18.0 105.8 14.9 108.4 13.2 111.0 13.2 113.6 14.5 116.2 17.0 118.8 20.3 121.4 23.9 124.0 27.0 126.6 29.7 129.2 30.2 131.8 30.1 134.4 27.9 137.0 24.4 139.6 21.1 142.2 17.4 144.8 14.9 147.4 12.9 150.0 13.3 152.6 14.9 155.2 17.1 157.8 20.4 160.4 23.9 163.0 26.8 165.6 29.1 168.2 30.5 170.8 29.6 173.4 27.1 176.0 24.3 178.6 21.0 181.2 17.8 183.8 14.7 186.4 13.8 189.0 13.3 191.6 14.8 194.2 17.4 196.8 20.5 199.4 23.9 202.0 27.1 204.6 28.7 207.2 29.7 209.8 28.8 212.4 26.9 215.0 24.1 217.6 20.5 220.2 17.4 222.8 14.4 225.4 13.8 228.0 13.8 230.6 15.1 233.2 18.1 235.8 21.5 238.4 25.1 241.0 27.5 243.6 29.1 246.2 29.8 248.8 28.1 251.4 25.6 254.0 22.3 256.6 19.0 259.2 15.9 261.8 14.3 264.4 13.6 267.0 15.0 269.6 17.4 272.2 20.6 274.8 24.2 277.4 27.3 280.0 29.5 282.6 29.2 285.2 28.0 287.8 25.9 290.4 22.3 293.0 18.8 295.6 16.0 298.2 13.9 300.8 13.6 303.4 15.9 306.0 18.3 308.6 22.1 311.2 25.7 313.8 28.2 316.4 29.1 319.0 28.5 321.6 27.1 324.2 23.4 326.8 19.8 329.4 16.8 332.0 14.3 334.6 14.2 337.2 15.9 339.8 18.8 342.4 22.4 345.0 25.7 347.6 28.3 350.2 29.5 352.8 28.9 355.4 26.0 358.0 22.4 360.6 18.5 363.2 16.1 365.8 15.0 368.4 15.4 371.0 17.6 373.6 21.2 376.2 24.8 378.8 27.9 381.4 29.5 384.0 28.6 386.6 26.4 389.2 22.9 391.8 18.9 394.4 16.0 397.0 14.6 399.6 15.5 402.2 18.4 404.8 22.0 407.4 25.5 410.0 28.9 412.6 29.7 415.2 28.8 417.8 25.3 420.4 21.6 423.0 18.0 425.6 15.4 428.2 15.5 430.8 16.6 433.4 20.5 436.0 24.3 438.6 27.9 441.2 29.9 443.8 29.4 446.4 26.9 449.0 23.2 451.6 19.1 454.2 16.6 456.8 15.4 459.4 16.4 462.0 19.6 464.6 23.6 467.2 27.4 469.8 29.7 472.4 29.6 475.0 27.6 477.6 24.1 480.2 20.2 482.8 17.1 485.4 16.4 488.0 16.7 490.6 19.3 493.2 23.3 495.8 27.0 498.4 29.2 501.0 30.0 503.6 28.2 506.2 25.0 508.8 21.2 511.4 18.4"/></svg></span>.</h1>
+    <h1>Break free from the <br><span class="bad">pile of windows</span>.</h1>
     <p class="lede">Tessel is the ultimate window manager for Mac. Left ⌘ and an arrow moves your focus. Add ⇧ and the window comes with you.</p>
     <div class="actions">
       <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Download for Mac<span class="sep"></span><span class="price">$9.99</span></a>
@@ -582,8 +597,8 @@ const CHECKOUT_URL = "";
   // ---------- the hero: glass breaking once, then holding on the shards mid-fall ----------
   const film = document.getElementById("hero-film");
   const root = document.documentElement;
-  // The words punch up through the pile on the frame the glass breaks (0.6 s in).
-  const HIT = 0.57;
+  // The words punch up through the pile on the frame the glass breaks (0.9 s in).
+  const HIT = 0.87;
   const rise = () => { if (!root.classList.contains("hero-wait")) return; root.classList.remove("hero-wait"); root.classList.add("hero-rise"); };
   const watchHit = () => { if (film.currentTime >= HIT) rise(); else requestAnimationFrame(watchHit); };
   if (reduce) {
@@ -592,7 +607,7 @@ const CHECKOUT_URL = "";
     film.addEventListener("playing", () => requestAnimationFrame(watchHit), { once: true });
     film.addEventListener("timeupdate", () => { if (film.currentTime >= HIT) rise(); });
     film.play().catch(() => { film.poster = "media/break-end.jpg"; rise(); });
-    setTimeout(rise, 3000); // if the video never starts, show the words anyway
+    setTimeout(rise, 3300); // if the video never starts, show the words anyway
   }
 
   // ---------- the real recording ----------
@@ -853,6 +868,11 @@ const CHECKOUT_URL = "";
   function show() {
     const c = CHAPTERS[ch], s = c.steps[st];
     apply(walk, s);
+    const on = list.children[ch];
+    if (list.scrollWidth > list.clientWidth + 1) {
+      const left = list.scrollLeft + on.getBoundingClientRect().left - list.getBoundingClientRect().left - (list.clientWidth - on.offsetWidth) / 2;
+      list.scrollTo({ left, behavior: reduce ? "auto" : "smooth" });
+    }
     [...list.children].forEach((b, i) => {
       b.classList.toggle("on", i === ch);
       b.setAttribute("aria-selected", i === ch);
