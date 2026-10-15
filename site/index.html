@@ -104,6 +104,14 @@ p { margin: 0; }
   border: 1px solid rgba(255,255,255,.55);
   box-shadow: 0 24px 60px -40px rgba(20,30,60,.3), inset 0 1px 0 rgba(255,255,255,.7);
 }
+/* The panel is the force: it waits below, punches up through the glass at the hit, then settles in slow motion. */
+.hero-wait .hero-copy { opacity: 0; transform: translateY(150px) scale(.9); }
+.hero-rise .hero-copy { animation: hero-rise 1.6s cubic-bezier(.1, .95, .2, 1) both; }
+@keyframes hero-rise {
+  0% { opacity: 0; transform: translateY(150px) scale(.9); }
+  12% { opacity: 1; }
+  100% { opacity: 1; transform: none; }
+}
 .hero-copy .lede { color: #3f454d; max-width: 30em; text-shadow: 0 1px 10px rgba(251,251,253,.8); }
 .hero-copy .meta { color: #4b525b; text-shadow: 0 1px 8px rgba(251,251,253,.8); }
 .hero .actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
@@ -376,6 +384,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
 </nav>
 
 <main class="wrap" id="top">
+  <script>if (!matchMedia("(prefers-reduced-motion: reduce)").matches) document.documentElement.classList.add("hero-wait");</script>
   <section class="hero" id="hero">
     <video class="hero-film" id="hero-film" muted playsinline preload="auto" poster="media/break-start.jpg" aria-hidden="true">
       <source src="media/break.webm" type="video/webm">
@@ -554,10 +563,17 @@ const CHECKOUT_URL = "";
 
   // ---------- the hero: glass breaking once, then holding on the shards mid-fall ----------
   const film = document.getElementById("hero-film");
+  const root = document.documentElement;
+  // The words punch up through the pile on the frame the glass breaks (0.17 s in).
+  const rise = () => { if (!root.classList.contains("hero-wait")) return; root.classList.remove("hero-wait"); root.classList.add("hero-rise"); };
+  const watchHit = () => { if (film.currentTime >= 0.14) rise(); else requestAnimationFrame(watchHit); };
   if (reduce) {
     film.poster = "media/break-end.jpg";
   } else {
-    film.play().catch(() => { film.poster = "media/break-end.jpg"; });
+    film.addEventListener("playing", () => requestAnimationFrame(watchHit), { once: true });
+    film.addEventListener("timeupdate", () => { if (film.currentTime >= 0.14) rise(); });
+    film.play().catch(() => { film.poster = "media/break-end.jpg"; rise(); });
+    setTimeout(rise, 2500); // if the video never starts, show the words anyway
   }
 
   // ---------- the real recording ----------
