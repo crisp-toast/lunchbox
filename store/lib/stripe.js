@@ -16,21 +16,32 @@ async function stripe(env, path, params = {}) {
 /** A Checkout Session with its line items, or null if the id isn't one. */
 export async function getSession(env, id) {
   if (!/^cs_(test|live)_[A-Za-z0-9]{10,}$/.test(String(id || ""))) return null;
-  return stripe(env, `/checkout/sessions/${id}`, { "expand[]": "line_items" });
+  return stripe(env, `/checkout/sessions/${id}`, { "expand[]": ["line_items", "payment_intent.latest_charge"] });
 }
 
 /** Completed Checkout Sessions paid with this email, newest first. */
 export async function sessionsForEmail(env, email) {
   const list = await stripe(env, "/checkout/sessions", {
-    "customer_details[email]": email, status: "complete", limit: "20", "expand[]": "data.line_items",
+    "customer_details[email]": email, status: "complete", limit: "20",
+    "expand[]": ["data.line_items", "data.payment_intent.latest_charge"],
   });
   return list.data || [];
 }
 
-/** Whether a session bought Tessel and is paid for (not still processing, not someone else's product). */
+/** The Checkout Session a payment belongs to (for refunds and disputes, which name only the payment). */
+export async function sessionIdForPayment(env, paymentIntent) {
+  if (!paymentIntent) return null;
+  const list = await stripe(env, "/checkout/sessions", { payment_intent: paymentIntent, limit: "1" });
+  return list.data?.[0]?.id || null;
+}
+
+/** Whether a session bought Tessel and is paid for: not still processing, not refunded or
+ *  disputed, not someone else's product. */
 export function isPaidTessel(session, env) {
   if (!session || session.status !== "complete") return false;
   if (!["paid", "no_payment_required"].includes(session.payment_status)) return false;
+  const charge = session.payment_intent?.latest_charge;
+  if (charge && (charge.refunded || charge.disputed)) return false;
   const items = session.line_items?.data || [];
   return items.some((item) => item.price?.id === env.STRIPE_PRICE_ID);
 }

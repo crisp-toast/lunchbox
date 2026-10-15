@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { onRequestGet as licenseGet } from "../../functions/api/license.js";
 import { onRequestPost as webhookPost } from "../../functions/api/stripe-webhook.js";
 import { onRequestPost as recoverPost } from "../../functions/api/recover.js";
-import { verifyLicense } from "../lib/license.js";
+import { verifyLicense, revocationHash } from "../lib/license.js";
+import { onRequestGet as revokedGet } from "../../functions/api/revoked.js";
 
 const fixture = JSON.parse(readFileSync(new URL("./fixture.json", import.meta.url), "utf8"));
 const env = {
@@ -16,18 +17,30 @@ const env = {
 const session = (over = {}) => ({
   id: "cs_test_abcdefghij1", status: "complete", payment_status: "paid", created: 1792000000,
   customer_details: { email: "Buyer@Example.com" },
-  line_items: { data: [{ price: { id: "price_tessel" } }] }, ...over,
+  line_items: { data: [{ price: { id: "price_tessel" } }] },
+  payment_intent: { id: "pi_buyer", latest_charge: { refunded: false, disputed: false } }, ...over,
 });
 
 let sessions, emails;
+// A stand-in for the Cloudflare KV namespace that holds revoked orders.
+const kv = () => {
+  const store = new Map();
+  return { store, async put(k, v) { store.set(k, v); },
+    async list({ prefix }) { return { keys: [...store.keys()].filter((k) => k.startsWith(prefix)).map((name) => ({ name })), list_complete: true }; } };
+};
 beforeEach(() => {
   sessions = { cs_test_abcdefghij1: session() };
   emails = [];
+  env.REVOKED = kv();
   globalThis.fetch = async (input, init = {}) => {
     const url = new URL(String(input instanceof Request ? input.url : input));
     if (url.hostname === "api.resend.com") {
       emails.push({ body: JSON.parse(init.body), key: init.headers["Idempotency-Key"] });
       return new Response(JSON.stringify({ id: "email_1" }));
+    }
+    if (url.pathname === "/v1/checkout/sessions" && url.searchParams.get("payment_intent")) {
+      const pi = url.searchParams.get("payment_intent");
+      return new Response(JSON.stringify({ data: Object.values(sessions).filter((s) => s.payment_intent?.id === pi) }));
     }
     if (url.pathname === "/v1/checkout/sessions") {
       const email = url.searchParams.get("customer_details[email]");
@@ -47,6 +60,27 @@ test("thank-you page gets the license for a paid Tessel purchase, the same on ev
   assert.equal(first.status, "paid");
   assert.equal(first.license, again.license);
   assert.deepEqual(await verifyLicense(first.license, fixture.publicKey), { email: "buyer@example.com", order: "cs_test_abcdefghij1", issued: 1792000000 });
+});
+
+test("no license for a refunded or charged-back purchase", async () => {
+  sessions.cs_test_abcdefghij1 = session({ payment_intent: { id: "pi_buyer", latest_charge: { refunded: true } } });
+  assert.equal((await get("cs_test_abcdefghij1")).status, 404);
+  sessions.cs_test_abcdefghij1 = session({ payment_intent: { id: "pi_buyer", latest_charge: { disputed: true } } });
+  assert.equal((await get("cs_test_abcdefghij1")).status, 404);
+  await recover("buyer@example.com");
+  assert.equal(emails.length, 0);
+});
+
+test("full refunds and chargebacks go on the revoked list; partial refunds don't", async () => {
+  const hash = await revocationHash("cs_test_abcdefghij1");
+  assert.equal(await (await hook({ type: "charge.refunded", created: 1, data: { object: { payment_intent: "pi_buyer", refunded: false } } })).text(), "partial refund: license kept");
+  assert.equal(env.REVOKED.store.size, 0);
+  assert.equal(await (await hook({ type: "charge.refunded", created: 2, data: { object: { payment_intent: "pi_buyer", refunded: true } } })).text(), "revoked (refunded)");
+  assert.equal(JSON.parse(env.REVOKED.store.get(`r:${hash}`)).order, "cs_test_abcdefghij1");
+  env.REVOKED = kv();
+  assert.equal(await (await hook({ type: "charge.dispute.created", created: 3, data: { object: { payment_intent: "pi_buyer" } } })).text(), "revoked (disputed)");
+  const list = await (await revokedGet({ request: new Request("https://tessel.example/api/revoked"), env })).json();
+  assert.deepEqual(list, { revoked: [hash] });
 });
 
 test("no license for an unpaid, foreign or made-up session", async () => {

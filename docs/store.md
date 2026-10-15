@@ -23,7 +23,13 @@ the steps below need your accounts, so they're yours to do.
 4. **Activate:** the link, or Tessel's menu → Enter License… → paste. Checked offline against the
    public key in `Sources/Tessel/Licensing.swift`: no account, no server, works on all their Macs.
 5. **Lost it:** `recover.html` emails every license for that address, to that address.
-6. **Refunds:** 30 days, no questions, from the Stripe Dashboard. For support, gifts or press,
+6. **Refunds:** 14 days, no questions. Refund from the Stripe Dashboard and the rest is automatic:
+   - the webhook puts the order on the revoked list (`/api/revoked`, as one-way hashes);
+   - licensed copies check that list about once a week and switch the license off;
+   - chargebacks go on the list too, and partial refunds don't;
+   - the thank-you page and lost-license emails stop handing that license out.
+
+   For support, gifts or press,
    `node scripts/license.mjs issue someone@example.com`.
 
 The signing key is at `~/.config/sentient-donut/tessel-license-signing.jwk` (internal disk, 600).
@@ -56,10 +62,13 @@ leak it and anyone can.
    - Turn on email receipts.
    - Create a **restricted key** (Checkout Sessions: write).
    - Add a webhook endpoint `https://<domain>/api/stripe-webhook` for
-     `checkout.session.completed` and `checkout.session.async_payment_succeeded`.
+     `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded`
+     and `charge.dispute.created`.
 4. **Email:** create a Resend account, verify `sentientdonut.com` (DNS records), and make an API key.
 5. **Cloudflare Pages:**
    - Create the project: `npx wrangler pages project create tessel`.
+   - Create the KV namespace for revoked licenses: `npx wrangler kv namespace create REVOKED`,
+     then paste its id into `wrangler.toml`.
    - Set the four secrets listed in `wrangler.toml`.
    - Deploy: `npx wrangler pages deploy`.
    - Add the custom domain.

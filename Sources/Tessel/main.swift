@@ -41,6 +41,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.onEnterLicense = { [weak self] in self?.licenseWindow.show() }
         menu.onBuy = { NSWorkspace.shared.open(Licensing.buyURL) }
         licensing.onChange = { [weak self] in self?.licenseChanged() }
+        licensing.onRevoked = { [weak self] license in
+            self?.licenseWindow.show(error: "The license for \(license.email) was refunded, so it no longer unlocks Tessel. If that's a mistake, write to support@sentientdonut.com.")
+            self?.checkTrial()
+        }
         shortcuts.onChange = { KeymapStore.save($0) }
         help.onCustomize = { [weak self] in self?.shortcuts.show() }
         onboarding.onCustomize = { [weak self] in self?.shortcuts.show() }
@@ -95,10 +99,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tiler.start()
         menu.refresh()
         checkTrial()
-        // Look again now and then, and after sleep: a trial can end while Tessel runs.
-        trialTimer = Timer.scheduledTimer(withTimeInterval: 1800, repeats: true) { [weak self] _ in self?.checkTrial() }
+        licensing.checkRevocationIfDue()
+        // Look again now and then, and after sleep: a trial can end while Tessel runs, and a
+        // licensed copy checks for refunds about once a week.
+        trialTimer = Timer.scheduledTimer(withTimeInterval: 1800, repeats: true) { [weak self] _ in
+            self?.checkTrial()
+            self?.licensing.checkRevocationIfDue()
+        }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             self?.checkTrial()
+            self?.licensing.checkRevocationIfDue()
         }
         // Start at login by default, once; the menu can turn it off and that sticks.
         if !UserDefaults.standard.bool(forKey: "loginItemConfigured") {

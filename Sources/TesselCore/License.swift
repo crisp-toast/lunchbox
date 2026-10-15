@@ -45,6 +45,12 @@ public struct License: Equatable, Sendable {
         return parse(text, publicKey: publicKey)
     }
 
+    /// How this license's order appears on the store's list of refunded and charged-back
+    /// licenses: a one-way hash, the same as store/lib/license.js makes.
+    public var revocationHash: String {
+        SHA256.hash(data: Data("tessel-revoked:\(order)".utf8)).prefix(8).map { String(format: "%02x", $0) }.joined()
+    }
+
     static func extractKey(from text: String) -> String {
         var s = text
         if let components = URLComponents(string: s.trimmingCharacters(in: .whitespacesAndNewlines)),

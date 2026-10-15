@@ -2,10 +2,11 @@
 // Issue or check Tessel licenses by hand (support, press, gifts), with the real signing key.
 //   node scripts/license.mjs issue <email> [order]   order defaults to manual-<date>
 //   node scripts/license.mjs check <key>
+//   node scripts/license.mjs revoke <order>         prints the command that switches a license off
 // The key lives at ~/.config/sentient-donut/tessel-license-signing.jwk (or $TESSEL_LICENSE_KEY).
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { issueLicense, verifyLicense } from "../store/lib/license.js";
+import { issueLicense, verifyLicense, revocationHash } from "../store/lib/license.js";
 
 const PUBLIC_KEY = "qLQZTRdDyv019zqGNELstTUJa3rmQXnLNk5eoYgM1nU=";
 const [command, arg, order] = process.argv.slice(2);
@@ -18,7 +19,11 @@ if (command === "issue" && arg) {
   const fields = await verifyLicense(arg, PUBLIC_KEY);
   console.log(fields ? JSON.stringify(fields) : "NOT VALID");
   process.exit(fields ? 0 : 1);
+} else if (command === "revoke" && arg) {
+  // For a key shared in public, say. Refunds and chargebacks are revoked automatically.
+  const hash = await revocationHash(arg);
+  console.log(`npx wrangler kv key put --binding REVOKED "r:${hash}" '{"order":"${arg}","reason":"manual"}' --remote`);
 } else {
-  console.error("usage: license.mjs issue <email> [order] | check <key>");
+  console.error("usage: license.mjs issue <email> [order] | check <key> | revoke <order>");
   process.exit(64);
 }

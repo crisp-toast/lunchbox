@@ -32,6 +32,11 @@ import Testing
         #expect(License.parse("not a key", publicKeyBase64: publicKey) == nil)
     }
 
+    @Test func revocationHashMatchesTheStore() throws {
+        // store/lib/license.js revocationHash("cs_test_a1B2c3")
+        #expect(try #require(License.parse(key, publicKeyBase64: publicKey)).revocationHash == "b5ca581a55f414f2")
+    }
+
     @Test func anotherStoresKeyIsRejected() {
         // The real store's public key: a key signed with the test pair must not pass.
         #expect(License.parse(key, publicKeyBase64: "qLQZTRdDyv019zqGNELstTUJa3rmQXnLNk5eoYgM1nU=") == nil)

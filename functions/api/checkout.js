@@ -4,7 +4,7 @@
 
 const REQUIREMENTS =
   "Tessel runs on Macs with Apple silicon (M1 or later) and macOS 14 Sonoma or later. " +
-  "This is a one-time purchase in US dollars: no subscription. Not sure it fits? You have 30 days to ask for a refund.";
+  "This is a one-time purchase in US dollars: no subscription. Not sure it fits? You have 14 days to ask for a refund.";
 
 export async function onRequestPost({ request, env }) {
   let attempt = "";
@@ -27,7 +27,7 @@ export async function onRequestPost({ request, env }) {
     "consent_collection[terms_of_service]": "required",
     "custom_text[terms_of_service_acceptance][message]":
       `I agree to the [Terms of Sale and License](${site}/terms.html). I want Tessel delivered right away, ` +
-      `and I understand that this ends the EU/UK right to cancel; the [30-day refund](${site}/refunds.html) still applies.`,
+      `and I understand that this ends the EU/UK right to cancel; the [14-day refund](${site}/refunds.html) still applies.`,
     "custom_text[submit][message]": REQUIREMENTS,
     "payment_intent_data[description]": "Tessel license",
     "payment_intent_data[statement_descriptor_suffix]": "TESSEL",

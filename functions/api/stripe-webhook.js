@@ -1,7 +1,10 @@
-// POST /api/stripe-webhook : Stripe tells us a purchase is paid; we email the license.
-// Listen for checkout.session.completed and checkout.session.async_payment_succeeded.
-import { getSession, isPaidTessel, verifyWebhook } from "../../store/lib/stripe.js";
+// POST /api/stripe-webhook : Stripe tells us what happened to a purchase.
+// Listen for checkout.session.completed and checkout.session.async_payment_succeeded (paid:
+// email the license), and charge.refunded and charge.dispute.created (refunded or charged
+// back: the license goes on the revoked list, and Tessel switches it off within a week).
+import { getSession, isPaidTessel, sessionIdForPayment, verifyWebhook } from "../../store/lib/stripe.js";
 import { licenseFor, sendLicenses } from "../../store/lib/fulfill.js";
+import { revocationHash } from "../../store/lib/license.js";
 
 export async function onRequestPost({ request, env }) {
   const raw = await request.text();
@@ -9,11 +12,24 @@ export async function onRequestPost({ request, env }) {
     return new Response("bad signature", { status: 400 });
   }
   const event = JSON.parse(raw);
+  const object = event.data?.object || {};
+
+  if (event.type === "charge.refunded" || event.type === "charge.dispute.created") {
+    // A partial refund (a goodwill discount, say) leaves the license alone.
+    if (event.type === "charge.refunded" && !object.refunded) return new Response("partial refund: license kept");
+    const order = await sessionIdForPayment(env, object.payment_intent);
+    if (!order) return new Response("not a checkout payment");
+    if (!env.REVOKED) return new Response("no REVOKED store bound", { status: 500 });
+    const reason = event.type === "charge.refunded" ? "refunded" : "disputed";
+    await env.REVOKED.put(`r:${await revocationHash(order)}`, JSON.stringify({ order, reason, at: event.created }));
+    return new Response(`revoked (${reason})`);
+  }
+
   if (!["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(event.type)) {
     return new Response("ignored");
   }
   // Re-read the session from Stripe (with line items) rather than trusting the payload alone.
-  const session = await getSession(env, event.data?.object?.id);
+  const session = await getSession(env, object.id);
   if (!isPaidTessel(session, env)) return new Response("not a paid Tessel purchase");
   const license = await licenseFor(session, env);
   await sendLicenses(env, { to: session.customer_details.email, licenses: [license], idempotencyKey: `tessel-license-${session.id}` });

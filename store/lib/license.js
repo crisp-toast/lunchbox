@@ -34,6 +34,13 @@ export async function issueLicense({ email, order, issued }, privateJwk) {
   return `${PREFIX}.${toBase64URL(payload)}.${toBase64URL(signature)}`;
 }
 
+/** How a refunded or charged-back order appears on the public revoked list: a one-way hash,
+ *  so the list says nothing about who bought what. The app computes the same for its own key. */
+export async function revocationHash(order) {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(`tessel-revoked:${order}`));
+  return [...new Uint8Array(digest)].slice(0, 8).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /** Checks a key against the public key (raw 32 bytes, base64). Returns its fields, or null. */
 export async function verifyLicense(text, publicKeyBase64) {
   const parts = String(text).replace(/\s+/g, "").split(".");
