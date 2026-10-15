@@ -565,6 +565,22 @@ final class Tiler {
         }
     }
 
+    /// Some apps keep a closed window around instead of destroying it (Chess
+    /// does), so it never says it's gone and would hold its tile forever. Any
+    /// tiled window here that's no longer on screen gets its app asked again,
+    /// which drops it.
+    private func checkForGhosts() {
+        guard enabled else { return }
+        let onScreen = onScreenWindowIDs()
+        let now = CACurrentMediaTime()
+        var stale: [pid_t: AppHandle] = [:]
+        for id in visibleFrames().keys where !onScreen.contains(id) {
+            guard let w = windows[id], !w.hidden, now > settlingUntil[id] ?? 0 else { continue }
+            stale[w.pid] = w.handle.app
+        }
+        for app in stale.values { scheduleScan(app) }
+    }
+
     private func refreshFocus() {
         guard let front = NSWorkspace.shared.frontmostApplication else { return }
         appActivated(front)
@@ -572,6 +588,7 @@ final class Tiler {
 
     private func focusChanged(to id: CGWindowID, app: AppHandle) {
         guard enabled else { return }
+        checkForGhosts()
         guard let (space, _) = place(of: id) else {
             focusedID = id
             if windows[id] == nil { scheduleScan(app) }
@@ -692,6 +709,8 @@ final class Tiler {
     }
 
     private func mouseUp() {
+        // A click may have been a window's close button.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.checkForGhosts() }
         let down = mouseDown
         mouseDown = nil
         let dragged = draggedByUser
@@ -928,6 +947,7 @@ final class Tiler {
 
     func perform(_ action: KeyAction) {
         guard enabled else { return }
+        checkForGhosts()
         // Tessel's idea of the focused window can go stale (a click it never heard
         // about, an app that didn't come forward). Acting on the wrong window is what
         // made "down" look like "up", so ask the front app which window really has
@@ -1136,6 +1156,7 @@ final class Tiler {
             front.queue.async {
                 if let window = front.element.element(kAXFocusedWindowAttribute) { Self.pressClose(window) }
             }
+            scheduleScan(front, after: [0.3, 1.0])
             return
         }
         // The window Tessel has focused here. Also used when the front app isn't one
@@ -1143,6 +1164,7 @@ final class Tiler {
         guard let known else { return }
         let element = known.handle.element
         known.handle.app.queue.async { Self.pressClose(element) }
+        scheduleScan(known.handle.app, after: [0.3, 1.0])
     }
 
     /// Closes one specific window, whatever has focus. Used by the `close-<id>` script command.
@@ -1150,6 +1172,7 @@ final class Tiler {
         guard let w = windows[id] else { return }
         let element = w.handle.element
         w.handle.app.queue.async { Self.pressClose(element) }
+        scheduleScan(w.handle.app, after: [0.3, 1.0])
     }
 
     private static func pressClose(_ window: AXUIElement) {
@@ -1414,7 +1437,10 @@ final class Tiler {
     /// A move finished: remember where the window really is, and slide the ring
     /// there if it was outlining a spot the window didn't reach.
     private func settled(_ id: CGWindowID, at actual: CGRect?) {
-        guard let actual, let w = windows[id], !w.hidden else { return }
+        guard let w = windows[id] else { return }
+        // Couldn't even read the window: it may be gone. Asking its app again settles it.
+        guard let actual else { scheduleScan(w.handle.app); return }
+        guard !w.hidden else { return }
         w.frame = actual
         if ringWindow == id, ring.isShowing, let target = w.target, !actual.isClose(to: target, tolerance: 2) {
             ring.flash(actual, on: displays)
@@ -1445,6 +1471,7 @@ final class Tiler {
     /// nudged out of place snaps back too.
     func normalize() {
         guard enabled else { return }
+        scanAll() // drops any window that's gone without saying so
         for uuid in spaces[currentSpace].keys { spaces[currentSpace][uuid]?.balance() }
         for id in spaces[currentSpace].values.flatMap(\.windows) {
             if let w = windows[id], !w.hidden { w.target = nil }
