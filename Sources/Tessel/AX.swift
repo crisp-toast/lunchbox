@@ -102,6 +102,25 @@ func onScreenWindowIDs() -> Set<CGWindowID> {
     return ids
 }
 
+/// Whether a dialog is showing. Alerts draw in a slightly larger companion window
+/// centered on theirs (room for the glass edge), and the window Accessibility names
+/// never counts as on screen, so a showing window of the same app wrapped around it
+/// counts too.
+func isDialogShowing(_ id: CGWindowID, pid: pid_t, frame: CGRect) -> Bool {
+    guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
+        return false
+    }
+    for info in list where (info[kCGWindowOwnerPID as String] as? pid_t) == pid {
+        if (info[kCGWindowNumber as String] as? CGWindowID) == id { return true }
+        guard let dict = info[kCGWindowBounds as String] as? NSDictionary,
+              let bounds = CGRect(dictionaryRepresentation: dict) else { continue }
+        let margin = CGSize(width: bounds.width - frame.width, height: bounds.height - frame.height)
+        if abs(bounds.midX - frame.midX) < 2, abs(bounds.midY - frame.midY) < 2,
+           (0...200).contains(margin.width), (0...200).contains(margin.height) { return true }
+    }
+    return false
+}
+
 /// Every window that exists, on screen or not (minimized, hidden, on another desktop).
 func allWindowIDs() -> Set<CGWindowID> {
     let list = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] ?? []

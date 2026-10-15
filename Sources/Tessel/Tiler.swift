@@ -37,6 +37,8 @@ private struct WindowInfo {
     /// A full window in all but name: resizable, with close, minimize and zoom
     /// buttons, but not marked standard (Little Arc says it's a system dialog).
     let windowLike: Bool
+    /// An alert, prompt, or Open or Save panel: it floats, centered, never tiled.
+    let dialog: Bool
 }
 
 private func axCallback(_ observer: AXObserver, _ element: AXUIElement, _ notification: CFString, _ refcon: UnsafeMutableRawPointer?) {
@@ -327,14 +329,18 @@ final class Tiler {
             guard let id = element.windowID, let frame = element.frame else { return nil }
             let standard = element.role == kAXWindowRole && element.subrole == kAXStandardWindowSubrole
             let minimized = element.isMinimized
-            let usable = !minimized && !element.isFullScreen && element.isResizable
+            let dialog = Dialogs.isDialog(subrole: element.subrole, identifier: element.string(kAXIdentifierAttribute),
+                                          hasDefaultButton: element.element(kAXDefaultButtonAttribute) != nil,
+                                          hasCancelButton: element.element(kAXCancelButtonAttribute) != nil,
+                                          modal: element.bool(kAXModalAttribute))
+            let usable = !minimized && !element.isFullScreen && element.isResizable && !dialog
             let tileable = standard && usable
             let windowLike = tileable || (usable && element.role == kAXWindowRole
                 && element.element(kAXCloseButtonAttribute) != nil
                 && element.element(kAXMinimizeButtonAttribute) != nil
                 && element.element(kAXZoomButtonAttribute) != nil)
             return WindowInfo(id: id, element: element, frame: frame, tileable: tileable, minimized: minimized,
-                              standard: standard, windowLike: windowLike)
+                              standard: standard, windowLike: windowLike, dialog: dialog)
         }
     }
 
@@ -429,6 +435,19 @@ final class Tiler {
     private func consider(_ info: WindowInfo, app: AppHandle, onScreen: Set<CGWindowID>) -> Bool {
         let isNew = windows[info.id] == nil
         let window = windows[info.id] ?? register(info, app: app)
+        // A dialog floats, centered on the screen it opened on, instead of slicing the
+        // tiled windows apart: once, the first time it's on screen (apps often make the
+        // window a moment before showing it). Ones open before Tessel started stay put.
+        if info.dialog, !centeredDialogs.contains(info.id) {
+            if !initialScanDone {
+                centeredDialogs.insert(info.id)
+            } else if onScreen.contains(info.id) || isDialogShowing(info.id, pid: app.pid, frame: info.frame) {
+                centeredDialogs.insert(info.id)
+                center(info, app: app)
+            } else {
+                centerOnceShown(info, app: app)
+            }
+        }
         if !window.hidden { window.frame = info.frame }
         window.minimized = info.minimized
         window.standard = info.standard
@@ -516,6 +535,8 @@ final class Tiler {
         if focusedID == id { focusedID = nil }
         adopted.remove(id)
         offDisplay.remove(id)
+        centeredDialogs.remove(id)
+        dialogsAwaitingScreen.remove(id)
         settlingUntil[id] = nil
         lastReassert[id] = nil
     }
@@ -819,6 +840,41 @@ final class Tiler {
         } else if let display = activeDisplays.first(where: { spaces[currentSpace][$0.uuid] != nil }) ?? activeDisplays.first {
             focusNearest(to: display.visible)
         }
+    }
+
+    private var centeredDialogs: Set<CGWindowID> = []
+
+    private var dialogsAwaitingScreen: Set<CGWindowID> = []
+
+    private func center(_ info: WindowInfo, app: AppHandle) {
+        center(info.element, frame: info.frame, app: app)
+    }
+
+    private func center(_ element: AXUIElement, frame: CGRect, app: AppHandle) {
+        let middle = CGPoint(x: frame.midX, y: frame.midY)
+        guard let display = displays.first(where: { $0.frame.contains(middle) }) ?? displays.first(where: \.isMain) else { return }
+        let origin = Dialogs.centeredOrigin(for: frame.size, in: display.visible)
+        app.queue.async { element.setPosition(origin) }
+    }
+
+    /// A dialog can tell Tessel it exists a moment before the window server shows it,
+    /// and nothing more happens after that. Look again until it's up.
+    private func centerOnceShown(_ info: WindowInfo, app: AppHandle) {
+        guard dialogsAwaitingScreen.insert(info.id).inserted else { return }
+        let element = info.element
+        for delay in [0.1, 0.25, 0.5, 1.0, 2.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, self.windows[info.id] != nil, !self.centeredDialogs.contains(info.id),
+                      isDialogShowing(info.id, pid: app.pid, frame: info.frame) else { return }
+                self.centeredDialogs.insert(info.id)
+                self.dialogsAwaitingScreen.remove(info.id)
+                app.queue.async {
+                    guard let frame = element.frame else { return }
+                    DispatchQueue.main.async { self.center(element, frame: frame, app: app) }
+                }
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.1) { [weak self] in self?.dialogsAwaitingScreen.remove(info.id) }
     }
 
     /// Some apps reposition a window they just opened, after Tessel has placed it

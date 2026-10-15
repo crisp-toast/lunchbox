@@ -6,6 +6,8 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 - Everything is driven by the **left** ⌘ key, so right ⌘ + arrows still move the text cursor.
 - Windows slide into place. Apps that can't keep up just snap, so Tessel never adds lag.
 - Three Workspaces, switched instantly from the keyboard.
+- Dialogs (Open, Save, alerts, password prompts) float, centered on their screen, instead of
+  splitting the tiled windows apart.
 
 ## Shortcuts
 
