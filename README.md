@@ -173,3 +173,7 @@ feature with an animated mini Mac. Preview it with `python3 -m http.server 4173 
 
 The Buy buttons go nowhere yet: set `CHECKOUT_URL` at the top of the page's script once a checkout
 (Lemon Squeezy, Paddle, Stripe, …) exists. Until then they scroll to pricing and say checkout opens soon.
+
+## Selling it
+
+Buying, licensing, the free trial and the release are described in [docs/store.md](docs/store.md).
