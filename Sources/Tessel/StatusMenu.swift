@@ -65,7 +65,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
         if let licensing, licensing.license == nil {
             switch licensing.trial {
-            case .active(let days): menu.addItem(disabled: "Free trial: \(days) day\(days == 1 ? "" : "s") left")
+            case .active(let day, let of): menu.addItem(disabled: "Free trial: day \(day) of \(of)")
             case .ended: menu.addItem(disabled: "Free trial ended")
             }
             menu.addItem(action("Buy Tessel – $9.99…") { [weak self] in self?.onBuy?() })

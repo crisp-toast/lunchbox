@@ -51,7 +51,9 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
             detail.stringValue = "Buy Tessel to keep your windows tiled. It's a one-time $9.99, with every future version included. Your windows stay right where they are."
         } else {
             heading.stringValue = "Enter your license"
-            detail.stringValue = "Paste the license key from your email, or click the activation link in it."
+            let day: String
+            if case .active(let d, let of) = licensing.trial { day = " You're on day \(d) of your \(of)-day free trial." } else { day = "" }
+            detail.stringValue = "Paste the license key from your email, or click the activation link in it." + day
         }
         message.stringValue = error ?? activated.map { "Activated. Thanks for buying Tessel, \($0.email)!" } ?? ""
         message.textColor = activated == nil ? .systemRed : .systemGreen

@@ -39,15 +39,17 @@ import Testing
 }
 
 @Suite struct FreeTrial {
-    let start = Date(timeIntervalSince1970: 1_800_000_000)
-
-    @Test func countsDownFromFirstLaunch() {
-        #expect(Trial.state(firstLaunch: start, now: start) == .active(daysLeft: 14))
-        #expect(Trial.state(firstLaunch: start, now: start + 86_400 * 13.5) == .active(daysLeft: 1))
-        #expect(Trial.state(firstLaunch: start, now: start + 86_400 * 14) == .ended)
+    @Test func sevenDaysOfUse() {
+        #expect(Trial.state(daysUsed: 0) == .active(day: 1, of: 7))
+        #expect(Trial.state(daysUsed: 1) == .active(day: 1, of: 7))
+        #expect(Trial.state(daysUsed: 7) == .active(day: 7, of: 7))
+        #expect(Trial.state(daysUsed: 8) == .ended)
     }
 
-    @Test func settingTheClockBackDoesNotAddDays() {
-        #expect(Trial.state(firstLaunch: start, now: start - 86_400 * 30) == .active(daysLeft: 14))
+    @Test func daysAreCalendarDaysWhereYouAre() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Chicago")!
+        let lateNight = Date(timeIntervalSince1970: 1_799_974_800) // 2027-01-15 01:00 UTC, still the 14th in Chicago
+        #expect(Trial.dayStamp(lateNight, calendar: calendar) == "2027-01-14")
     }
 }

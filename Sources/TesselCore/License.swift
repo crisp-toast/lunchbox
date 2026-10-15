@@ -56,19 +56,24 @@ public struct License: Equatable, Sendable {
     }
 }
 
-/// The free trial: every feature for a set number of days from the first launch.
+/// The free trial: every feature for a number of days *of use*. Days Tessel sits idle
+/// (a weekend, a vacation) don't count, so the trial can't run out before it's tried.
 public enum Trial: Equatable, Sendable {
-    case active(daysLeft: Int)
+    /// `day` is which day of use this is, from 1 to `of`.
+    case active(day: Int, of: Int)
     case ended
 
-    public static let days = 14
+    public static let days = 7
 
-    /// Where the trial stands. A clock set back before the first launch doesn't
-    /// extend it past the full length.
-    public static func state(firstLaunch: Date, now: Date, days: Int = Trial.days) -> Trial {
-        let elapsed = max(0, now.timeIntervalSince(firstLaunch))
-        let left = Double(days) - elapsed / 86_400
-        return left > 0 ? .active(daysLeft: Int(left.rounded(.up))) : .ended
+    /// `daysUsed` counts distinct days Tessel did something, today included.
+    public static func state(daysUsed: Int, days: Int = Trial.days) -> Trial {
+        daysUsed <= days ? .active(day: max(1, daysUsed), of: days) : .ended
+    }
+
+    /// The calendar day a moment falls on, as Tessel records days of use.
+    public static func dayStamp(_ date: Date, calendar: Calendar = .current) -> String {
+        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 }
 
