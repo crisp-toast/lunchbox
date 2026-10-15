@@ -302,7 +302,25 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         case .file(let url):
             NSWorkspace.shared.open(url)
         case .web(let text):
-            if let url = Self.webURL(for: text) { NSWorkspace.shared.open(url) }
+            if let url = Self.webURL(for: text) { openWeb(url) }
+        }
+    }
+
+    /// Opens a search or address in the default browser's own window: a new tab in
+    /// its window in this Workspace, or a new window here when it has none, so it
+    /// never pops up somewhere Tessel then has to tidy (like Little Arc).
+    private func openWeb(_ url: URL) {
+        guard let bundleID = Self.defaultBrowser.flatMap({ Bundle(path: $0.path)?.bundleIdentifier }),
+              Browsers.canScript(bundleID),
+              !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
+        else {
+            // Not running yet (it opens a window for the page as it starts) or not scriptable.
+            NSWorkspace.shared.open(url)
+            return
+        }
+        let asTab = tiler.focusWindowHere(ofApp: bundleID)
+        Browsers.open(url, in: bundleID, asTab: asTab) { ok in
+            if !ok { NSWorkspace.shared.open(url) }
         }
     }
 

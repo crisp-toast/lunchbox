@@ -1134,6 +1134,20 @@ final class Tiler {
         return ids
     }
 
+    /// Focuses one of the app's windows in the Workspace being viewed (the focused
+    /// one, else the one used last, else the left-most), so a web search can open
+    /// as a tab right where you are. Returns false when the app has none here.
+    func focusWindowHere(ofApp bundleID: String) -> Bool {
+        let visible = visibleFrames()
+        let mine = visible.keys.filter { windows[$0]?.handle.app.bundleID == bundleID }
+        guard !mine.isEmpty else { return false }
+        let pick = [focusedID, lastFocused[currentSpace]].compactMap { $0 }.first(where: mine.contains)
+            ?? mine.min { a, b in (visible[a]!.minX, visible[a]!.minY) < (visible[b]!.minX, visible[b]!.minY) }!
+        activate(pick)
+        showRing(on: pick)
+        return true
+    }
+
     /// Focuses the app's most recently used window, switching spaces or
     /// restoring it from the Dock if needed. Returns false when the app has no
     /// window you could get to.

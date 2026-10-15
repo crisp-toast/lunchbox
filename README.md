@@ -65,7 +65,7 @@ Apps you open often rise to the top.
   tiled and focused in the current space.
 - When no app matches, it searches Spotlight's index for files and folders, most
   recently used first.
-- ↑ ↓ to choose, Return to open, ⇧↩ for a new window, Esc or ⇧ Space to close. When nothing matches, it offers to search the web with your Mac's search engine in your default browser (or opens a typed address).
+- ↑ ↓ to choose, Return to open, ⇧↩ for a new window, Esc or ⇧ Space to close. When nothing matches, it offers to search the web with your Mac's search engine in your default browser (or opens a typed address). The page opens as a new tab in the browser's window in this Workspace, or in a new window here when it has none, never a pop-up like Little Arc. This works with Arc, Safari, Chrome, Edge, Brave and Vivaldi; the first time, macOS asks whether Tessel may control the browser. Other browsers, or a browser you said no to, get the link the usual way, and Tessel still tiles whatever window it lands in.
 
 With the mouse: drag a tiled window onto another to swap them, onto the other screen to move it
 there, or drag its edge to resize. A centered window (alone, or in Focus) keeps any shape you
