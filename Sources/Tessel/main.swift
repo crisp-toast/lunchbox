@@ -6,7 +6,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let tiler = Tiler()
     private lazy var tap: HotkeyTap = HotkeyTap { [weak self] action in
         guard let self else { return }
-        self.licensing.noteUse()
         self.onboarding.noted(action)
         // Practicing in onboarding: shortcuts drive the pretend screen, including
         // its pretend Summon and Cheat Sheet.
@@ -32,10 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var signalSource: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        tiler.onChange = { [weak self] in
-            self?.menu.refresh()
-            self?.licensing.noteUse()
-        }
+        tiler.onChange = { [weak self] in self?.menu.refresh() }
         _ = launcher // build the app list now, so the first ⇧Space already finds apps
         menu.onToggle = { [weak self] in self?.toggleTiling() }
         menu.onTeachKeys = { [weak self] in self?.onboarding.show(at: .keys) }
@@ -153,7 +149,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func licenseChanged() {
         menu.refresh()
-        checkTrial() // a new day of use can be the one past the trial
         // Just licensed after the trial ended: pick up where things left off.
         if licensing.canTile, !tiler.enabled, menu.trusted { setTiling(true) }
     }

@@ -52,7 +52,7 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
         } else {
             heading.stringValue = "Enter your license"
             let day: String
-            if case .active(let d, let of) = licensing.trial { day = " You're on day \(d) of your \(of)-day free trial." } else { day = "" }
+            if case .active(let left) = licensing.trial { day = " Your free trial has \(left) day\(left == 1 ? "" : "s") left." } else { day = "" }
             detail.stringValue = "Paste the license key from your email, or click the activation link in it." + day
         }
         message.stringValue = error ?? activated.map { "Activated. Thanks for buying Tessel, \($0.email)!" } ?? ""

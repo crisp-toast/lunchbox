@@ -13,7 +13,7 @@ final class Licensing {
     static let recoverURL = URL(string: site + "/recover.html")!
 
     private static let licenseKey = "license"
-    private static let daysKey = "trialDaysUsed"
+    private static let trialKey = "trialStarted"
 
     private(set) var license: License?
     var onChange: (() -> Void)?
@@ -21,26 +21,24 @@ final class Licensing {
 
     init() {
         license = defaults.string(forKey: Self.licenseKey).flatMap { License.parse($0, publicKeyBase64: Self.publicKey) }
-        daysUsed = Set(defaults.stringArray(forKey: Self.daysKey) ?? [])
-            .union((Keychain.read(Self.daysKey) ?? "").split(separator: ",").map(String.init))
+        if trialStart == nil { startTrial() }
     }
 
-    /// The days Tessel has done something for you (tiled a window, ran a shortcut), kept in
-    /// both its settings and the Keychain, so clearing the settings doesn't restart the trial.
-    private var daysUsed: Set<String>
-
-    /// Tessel just did something for you: count today as a day of use, once.
-    func noteUse(at date: Date = Date()) {
-        guard license == nil else { return }
-        let today = Trial.dayStamp(date)
-        guard daysUsed.insert(today).inserted else { return }
-        let all = daysUsed.sorted()
-        defaults.set(all, forKey: Self.daysKey)
-        Keychain.write(all.joined(separator: ","), Self.daysKey)
-        onChange?()
+    /// When the trial began: the earlier of what's in Tessel's settings and the Keychain,
+    /// so clearing the settings doesn't hand out a fresh trial.
+    var trialStart: Date? {
+        let stored = [defaults.object(forKey: Self.trialKey) as? Date,
+                      Keychain.read(Self.trialKey).flatMap(Double.init).map(Date.init(timeIntervalSince1970:))]
+        return stored.compactMap { $0 }.min()
     }
 
-    var trial: Trial { Trial.state(daysUsed: daysUsed.count) }
+    private func startTrial() {
+        let now = Date()
+        defaults.set(now, forKey: Self.trialKey)
+        Keychain.write(String(now.timeIntervalSince1970), Self.trialKey)
+    }
+
+    var trial: Trial { Trial.state(firstLaunch: trialStart ?? Date(), now: Date()) }
 
     /// Licensed, or still in the trial.
     var canTile: Bool { license != nil || trial != .ended }

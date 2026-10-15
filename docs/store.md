@@ -5,8 +5,8 @@ the steps below need your accounts, so they're yours to do.
 
 ## How it works
 
-1. **Try:** anyone downloads `download/Tessel.dmg`. Every feature works for **7 days of use**
-   (a day counts only when Tessel tiles a window or runs a shortcut). Then tiling pauses, windows
+1. **Try:** anyone downloads `download/Tessel.dmg`. Every feature works for **7 days** from the
+   first launch (`Trial.days` in `Sources/TesselCore/License.swift`). Then tiling pauses, windows
    stay put, and Tessel offers Buy and Enter License.
 2. **Buy:** the pricing card's **Buy Tessel · $9.99** posts to `/api/checkout`, which opens
    Stripe's hosted checkout:
