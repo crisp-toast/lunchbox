@@ -283,13 +283,14 @@ final class Onboarding: NSObject, NSWindowDelegate {
             return Array(mods) + all.compactMap(\.last).map { short[$0] ?? $0 }
         }()
         let items: [(String, [String], String)] = [
+            // Summon first: it's how every window gets opened in the first place.
+            ("summon", caps(.summon), "Open an app with Summon (type, then ↩)"),
             ("focus", anyDirection([.focusLeft, .focusRight, .focusUp, .focusDown]), "Move focus in any direction"),
             ("move", anyDirection([.moveLeft, .moveRight, .moveUp, .moveDown]), "Move a window any way (press again to pass)"),
             ("size", caps(.grow), "Give a window more space"),
             ("focusMode", caps(.focusMode), "Focus on one window, then again to undo"),
             ("tidy", caps(.tidy), "Tidy everything back to even"),
             ("space", betweenWorkspaces, "Go between Workspaces"),
-            ("summon", caps(.summon), "Summon an app (Esc closes it)"),
             ("help", caps(.cheatSheet), "Open the Cheat Sheet (Esc closes it)"),
         ]
         let rows = items.map { id, keys, label -> PracticeRow in
