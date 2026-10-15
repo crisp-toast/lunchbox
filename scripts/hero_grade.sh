@@ -7,7 +7,7 @@
 set -euo pipefail
 SRC="$1"; OUT="$2"
 HIT_IN=18      # the hit frame in the render
-HOLD=27        # frames of intact panes in the output (0.9 s at 30 fps)
+HOLD=23        # frames of intact panes in the output (about 0.77 s at 30 fps)
 FADE=10        # frames after the hit for the boost to ease out
 BOOST=1.6      # saturation at full strength
 GREEN=0.4      # how much of the boost the green pane gives back (it would glare)
