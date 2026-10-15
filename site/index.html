@@ -349,9 +349,6 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   .trio { grid-template-columns: minmax(0, 1fr); }
   .nav-links { display: none; }
 }
-@media (max-width: 400px) {
-  .nav .btn.small .sep, .nav .btn.small .price { display: none; }
-}
 @media (max-width: 600px) {
   .hero h1 br { display: none; } /* wrap naturally instead of three short lines */
   /* Phones: the glass gets a band of its own at the top, and the words sit below it, overlapping
@@ -412,7 +409,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   <div class="nav-inner">
     <a class="brand" href="#top"><svg><use href="#logo"/></svg>Tessel</a>
     <div class="nav-links"><a href="#features">Features</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></div>
-    <a class="btn dark small" href="#pricing"><svg><use href="#apple"/></svg>Download for Mac<span class="sep"></span><span class="price">$9.99</span></a>
+    <a class="btn dark small" href="#pricing"><svg><use href="#apple"/></svg>Download for Mac</a>
   </div>
 </nav>
 
@@ -540,7 +537,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   <footer>
     <a class="brand" href="#top" style="font-size:15px"><svg style="width:22px;height:22px"><use href="#logo"/></svg>Tessel</a>
     <span>It’s time to stop losing things in a pile of windows.</span>
-    <span>© 2026 Tessel</span>
+    <span>© 2026 Sentient Donut</span>
   </footer>
 </main>
 
@@ -789,11 +786,21 @@ const CHECKOUT_URL = "";
     { t: "Browser", s: "Go to its window", sub: "New Browser window" },
     { t: "Brochure.pdf", s: "Documents", ic: "background:linear-gradient(135deg,#e9ecf1,#b9c0cc)" },
   ];
+  const notesRows = [
+    { t: "Notes", s: "Open", ic: "background:linear-gradient(135deg,#ffe58a,#f5c542)" },
+    { t: "Notebook.md", s: "Documents", ic: "background:linear-gradient(135deg,#e9ecf1,#b9c0cc)" },
+  ];
   const webRows = [
     { t: "Search the web for “best desk lamp”", s: "Google, in your browser", ic: "background:linear-gradient(135deg,#7aa6ff,#2f6bff)" },
   ];
 
   const CHAPTERS = [
+    { title: "Open with Summon", hint: "⇧ then Space", steps: [
+      { win: {}, keys: [], cap: "Every window starts the same way: with Summon." },
+      { win: {}, keys: ["⇧", "then", "Space"], launcher: { q: "", rows: [] }, cap: "Tap ⇧, then Space, and Summon is there instantly." },
+      { win: {}, keys: ["N", "O", "T"], launcher: { q: "not", rows: notesRows, sel: 0 }, cap: "Type a few letters. Apps come first, then files, then the web." },
+      { win: { A: R.single }, focus: "A", keys: ["↩"], cap: "↩ opens it, already tiled and focused." },
+    ]},
     { title: "It tiles itself", hint: "just open windows", steps: [
       { win: { A: R.single }, focus: "A", keys: [], cap: "One window sits centered at a calm 16:10. Never stretched edge to edge." },
       { win: { A: R.halfL, B: R.halfR }, focus: "B", keys: [], cap: "Open a second and they share the screen." },
@@ -832,10 +839,8 @@ const CHECKOUT_URL = "";
       { win: { A: away(R.c1), B: away(R.c2), D: away(R.c3b), E: R.halfL, C: R.halfR }, focus: "C", space: 2, keys: ["⇧", "⌘", "Page Down"], cap: "Add ⇧ and the window comes with you." },
       { win: { A: away(R.c1), B: away(R.c2), D: away(R.c3b), E: R.single }, focus: "E", space: 2, keys: ["⇧", "Left ⌘", "H"], cap: "Hide (⇧⌘H) tucks a window away in Workspace 3." },
     ]},
-    { title: "Summon", hint: "⇧ then Space", steps: [
-      { win: four, focus: "B", keys: [], cap: "Faster than Spotlight for the apps you use every day." },
-      { win: four, focus: "B", keys: ["⇧", "then", "Space"], launcher: { q: "", rows: [] }, cap: "Tap ⇧, then Space, and Summon is there instantly." },
-      { win: four, focus: "B", keys: ["B", "R", "O"], launcher: { q: "bro", rows: browserRows, sel: 0 }, cap: "Apps first, then files, then the web. An open app offers two choices." },
+    { title: "Summon tricks", hint: "⇧ then Space", steps: [
+      { win: four, focus: "B", keys: ["B", "R", "O"], launcher: { q: "bro", rows: browserRows, sel: 0 }, cap: "An app that's already open offers two choices." },
       { win: { A: R.c1t, F: R.c1b, B: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: ["⇧", "↩"], cap: "↩ goes to its window. ⇧↩ opens a new one, tiled and focused." },
       { win: { A: R.c1t, F: R.c1b, B: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: [], launcher: { q: "best desk lamp", rows: webRows, sel: 0 }, cap: "No match? It searches the web, in a tab right here. Never a pop-up." },
     ]},
