@@ -6,6 +6,34 @@ import ApplicationServices
 @_silgen_name("_AXUIElementGetWindow")
 private func _AXUIElementGetWindow(_ element: AXUIElement, _ id: UnsafeMutablePointer<CGWindowID>) -> AXError
 
+/// Private, long-stable window-server calls for Spaces (the macOS desktops, and the
+/// Space a full screen app gets from the green button). Amethyst and yabai rely on them.
+@_silgen_name("CGSMainConnectionID")
+private func CGSMainConnectionID() -> Int32
+@_silgen_name("CGSCopyManagedDisplaySpaces")
+private func CGSCopyManagedDisplaySpaces(_ connection: Int32) -> Unmanaged<CFArray>?
+@_silgen_name("CGSCopySpacesForWindows")
+private func CGSCopySpacesForWindows(_ connection: Int32, _ mask: Int32, _ windows: CFArray) -> Unmanaged<CFArray>?
+
+/// The Spaces the displays are showing right now.
+func shownSpaces() -> Set<Int> {
+    let displays = CGSCopyManagedDisplaySpaces(CGSMainConnectionID())?.takeRetainedValue() as? [[String: Any]] ?? []
+    return Set(displays.compactMap { ($0["Current Space"] as? [String: Any])?["ManagedSpaceID"] as? Int })
+}
+
+/// The Spaces a window is on. None once it's gone.
+func windowSpaces(of id: CGWindowID) -> [Int] {
+    CGSCopySpacesForWindows(CGSMainConnectionID(), 0x7, [NSNumber(value: id)] as CFArray)?.takeRetainedValue() as? [Int] ?? []
+}
+
+/// Whether a window is on a Space out of view: its display is showing a full screen
+/// app (or another desktop). Accessibility only lists windows on the Spaces in view,
+/// so these go missing from their app's list without having closed.
+func isOutOfView(_ id: CGWindowID, shown: Set<Int>) -> Bool {
+    let on = windowSpaces(of: id)
+    return !on.isEmpty && !on.contains(where: shown.contains)
+}
+
 extension AXUIElement {
     static func application(_ pid: pid_t) -> AXUIElement { AXUIElementCreateApplication(pid) }
 

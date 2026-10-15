@@ -8,6 +8,8 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 - Three Workspaces, switched instantly from the keyboard.
 - Dialogs (Open, Save, alerts, password prompts) float, centered on their screen, instead of
   splitting the tiled windows apart.
+- The green button's full screen just works: the rest of the Workspace stays put, and the window
+  goes back to the same spot when it leaves full screen (into Focus again, if it was in Focus).
 
 ## Shortcuts
 

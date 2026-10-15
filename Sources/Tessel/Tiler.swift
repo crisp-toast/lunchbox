@@ -39,6 +39,8 @@ private struct WindowInfo {
     let windowLike: Bool
     /// An alert, prompt, or Open or Save panel: it floats, centered, never tiled.
     let dialog: Bool
+    /// In a Space of its own from the green button.
+    let fullScreen: Bool
 }
 
 private func axCallback(_ observer: AXObserver, _ element: AXUIElement, _ notification: CFString, _ refcon: UnsafeMutableRawPointer?) {
@@ -162,7 +164,7 @@ final class Tiler {
         }
         on(NSWorkspace.didHideApplicationNotification) { [weak self] n in self?.rescan(n) }
         on(NSWorkspace.didUnhideApplicationNotification) { [weak self] n in self?.rescan(n) }
-        on(NSWorkspace.activeSpaceDidChangeNotification) { [weak self] _ in self?.scanAll() }
+        on(NSWorkspace.activeSpaceDidChangeNotification) { [weak self] _ in self?.scanAll(after: [0.03, 0.8, 1.6]) }
         on(NSApplication.didChangeScreenParametersNotification, .default) { [weak self] _ in self?.displaysChanged() }
         // Showing or hiding the Dock changes the usable area of the screen.
         on(Notification.Name("com.apple.dock.prefchanged"), DistributedNotificationCenter.default()) { [weak self] _ in
@@ -306,9 +308,9 @@ final class Tiler {
         scheduleScan(app)
     }
 
-    func scanAll() {
+    func scanAll(after delays: [Double] = [0.03]) {
         guard enabled else { return }
-        for app in apps.values { scheduleScan(app) }
+        for app in apps.values { scheduleScan(app, after: delays) }
     }
 
     private func scheduleScan(_ app: AppHandle, after delays: [Double] = [0.03]) {
@@ -333,14 +335,15 @@ final class Tiler {
                                           hasDefaultButton: element.element(kAXDefaultButtonAttribute) != nil,
                                           hasCancelButton: element.element(kAXCancelButtonAttribute) != nil,
                                           modal: element.bool(kAXModalAttribute))
-            let usable = !minimized && !element.isFullScreen && element.isResizable && !dialog
+            let fullScreen = element.isFullScreen
+            let usable = !minimized && !fullScreen && element.isResizable && !dialog
             let tileable = standard && usable
             let windowLike = tileable || (usable && element.role == kAXWindowRole
                 && element.element(kAXCloseButtonAttribute) != nil
                 && element.element(kAXMinimizeButtonAttribute) != nil
                 && element.element(kAXZoomButtonAttribute) != nil)
             return WindowInfo(id: id, element: element, frame: frame, tileable: tileable, minimized: minimized,
-                              standard: standard, windowLike: windowLike, dialog: dialog)
+                              standard: standard, windowLike: windowLike, dialog: dialog, fullScreen: fullScreen)
         }
     }
 
@@ -361,10 +364,11 @@ final class Tiler {
         group.notify(queue: .main) { [weak self] in
             guard let self, self.enabled else { return }
             let onScreen = onScreenWindowIDs()
+            let shown = shownSpaces()
             var all: [(AppHandle, WindowInfo)] = []
             for (app, infos) in results { infos.forEach { all.append((app, $0)) } }
             all.sort { ($0.1.frame.minX, $0.1.frame.minY) < ($1.1.frame.minX, $1.1.frame.minY) }
-            for (app, info) in all { self.consider(info, app: app, onScreen: onScreen) }
+            for (app, info) in all { self.consider(info, app: app, onScreen: onScreen, shown: shown) }
             // Windows closed while Tessel wasn't running don't come back, and their
             // numbers get reused by new windows: forget their spots.
             let alive = allWindowIDs()
@@ -379,11 +383,27 @@ final class Tiler {
     private func apply(_ infos: [WindowInfo], for app: AppHandle) {
         guard enabled, apps[app.pid] === app else { return }
         let onScreen = onScreenWindowIDs()
+        let shown = shownSpaces()
         let seen = Set(infos.map(\.id))
         let visibleBefore = visibleFrames().filter { windows[$0.key]?.pid == app.pid }
         let focusedBefore = focusedID
         var changed = false
+        let now = CACurrentMediaTime()
+        for id in seen { unlistedSince[id] = nil }
         for w in windows.values where w.pid == app.pid && !seen.contains(w.id) {
+            if isOutOfView(w.id, shown: shown) { continue } // behind a full screen app: it keeps its tile
+            // Going in or out of full screen, a window isn't on any Space for a moment.
+            // A closed window says so and is forgotten right then; a tiled one that only
+            // went missing gets a moment to show up again (one in full screen, longer).
+            if place(of: w.id) != nil || fullScreenSpots[w.id] != nil {
+                let since = unlistedSince[w.id] ?? now
+                unlistedSince[w.id] = since
+                let wait = fullScreenSpots[w.id] != nil ? 6.0 : 1.5
+                if now - since < wait {
+                    scheduleScan(app, after: [wait + 0.1 - (now - since)])
+                    continue
+                }
+            }
             forget(w.id)
             changed = true
         }
@@ -399,7 +419,7 @@ final class Tiler {
                 arrived = fresh.id
             }
         }
-        for info in infos where consider(info, app: app, onScreen: onScreen) { changed = true }
+        for info in infos where consider(info, app: app, onScreen: onScreen, shown: shown) { changed = true }
         if changed {
             relayout(animated: true)
             persist()
@@ -409,9 +429,10 @@ final class Tiler {
             showRing(on: arrived)
         }
         // A window you were using left without saying so (Chess after ⌘W): keep
-        // the keyboard on a window you can see.
+        // the keyboard on a window you can see. Not one that went full screen: that
+        // would take you straight back out of it.
         let after = visibleFrames()
-        if arrived == nil, let (_, frame) = visibleBefore.first(where: { after[$0.key] == nil }),
+        if arrived == nil, let (_, frame) = visibleBefore.first(where: { after[$0.key] == nil && fullScreenSpots[$0.key] == nil }),
            visibleBefore.keys.contains(where: { $0 == focusedBefore }) || NSWorkspace.shared.frontmostApplication?.processIdentifier == app.pid {
             focusNearest(to: frame)
         }
@@ -432,9 +453,10 @@ final class Tiler {
     /// Registers a window and adds it to or removes it from the layout as needed.
     /// Returns true when the layout changed.
     @discardableResult
-    private func consider(_ info: WindowInfo, app: AppHandle, onScreen: Set<CGWindowID>) -> Bool {
+    private func consider(_ info: WindowInfo, app: AppHandle, onScreen: Set<CGWindowID>, shown: Set<Int>) -> Bool {
         let isNew = windows[info.id] == nil
         let window = windows[info.id] ?? register(info, app: app)
+        let spot = place(of: info.id)
         // A dialog floats, centered on the screen it opened on, instead of slicing the
         // tiled windows apart: once, the first time it's on screen (apps often make the
         // window a moment before showing it). Ones open before Tessel started stay put.
@@ -458,14 +480,24 @@ final class Tiler {
             && !appHidden
             && !userFloating.contains(info.id)
             && !Self.floatingApps.contains(app.bundleID ?? "")
-            && (onScreen.contains(info.id) || window.hidden)
-        let placed = place(of: info.id) != nil
+            // While a display shows a full screen app, its desktop's windows are out of
+            // sight, not gone: they keep their tiles.
+            && (onScreen.contains(info.id) || window.hidden
+                || (spot != nil && isOutOfView(info.id, shown: shown)))
+        let placed = spot != nil
         if wantsTile && !placed {
             insert(window)
             if initialScanDone { confirmPlacement(of: info.id) }
             return true
         }
         if !wantsTile && placed {
+            // The green button: the window leaves for a Space of its own (first vanishing
+            // for a moment on the way). Remember exactly where it was, and whether it was
+            // in Focus, so it comes back to the same spot.
+            if let spot, info.fullScreen || (!onScreen.contains(info.id) && !window.hidden && !info.minimized && !appHidden),
+               fullScreenSpots[info.id] == nil, let layout = spaces[spot.space][spot.display] {
+                fullScreenSpots[info.id] = (spot.space, spot.display, layout, layout.spotlight == info.id)
+            }
             removeFromLayouts(info.id)
             window.target = nil
             return true
@@ -499,6 +531,7 @@ final class Tiler {
     private var initialScanDone = false
 
     private func insert(_ window: ManagedWindow) {
+        if returnFromFullScreen(window) { return }
         let saved = savedPlacement.removeValue(forKey: window.id)
         if saved == nil, initialScanDone, takePlaceholder(for: window) { return }
         let opensInSpotlight = initialScanDone && saved == nil
@@ -527,7 +560,36 @@ final class Tiler {
         log.notice("tiling window \(window.id) (\(window.handle.app.bundleID ?? "?")) in space \(space + 1)")
     }
 
+    /// Where each window in full screen was tiled: its Workspace, display, the layout
+    /// then, and whether it was in Focus.
+    private var fullScreenSpots: [CGWindowID: (space: Int, display: String, layout: Layout, focus: Bool)] = [:]
+
+    /// Puts a window that left full screen back where it was, in Focus again if it
+    /// was. One that left from another Workspace than the one in view joins this one.
+    private func returnFromFullScreen(_ window: ManagedWindow) -> Bool {
+        guard let spot = fullScreenSpots.removeValue(forKey: window.id), spot.space == currentSpace,
+              let display = activeDisplays.first(where: { $0.uuid == spot.display }) else { return false }
+        var layout = spaces[spot.space][spot.display] ?? Layout()
+        if !layout.restore(window.id, from: spot.layout) {
+            layout.insert(window.id, near: layout.windows.last, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
+        }
+        if spot.focus, layout.windowCount > 1 {
+            layout.spotlight = window.id
+            Snapshotter.capture(layout.shelved) { [weak self] images in
+                for (wid, image) in images { self?.shelf.setSnapshot(image, for: wid) }
+            }
+        }
+        spaces[spot.space][spot.display] = layout
+        log.notice("window \(window.id) back from full screen in space \(spot.space + 1)")
+        return true
+    }
+
+    /// When a window still around first went missing from its app's list.
+    private var unlistedSince: [CGWindowID: CFTimeInterval] = [:]
+
     private func forget(_ id: CGWindowID) {
+        fullScreenSpots[id] = nil
+        unlistedSince[id] = nil
         removeFromLayouts(id)
         if let w = windows.removeValue(forKey: id) {
             w.handle.app.windowIDs.removeValue(forKey: w.handle.element)
@@ -729,8 +791,11 @@ final class Tiler {
         let onScreen = onScreenWindowIDs()
         let now = CACurrentMediaTime()
         var stale: [pid_t: AppHandle] = [:]
+        var shown: Set<Int>?
         for id in visibleFrames().keys where !onScreen.contains(id) {
             guard let w = windows[id], !w.hidden, now > settlingUntil[id] ?? 0 else { continue }
+            if shown == nil { shown = shownSpaces() }
+            if let shown, isOutOfView(id, shown: shown) { continue }
             stale[w.pid] = w.handle.app
         }
         for app in stale.values { scheduleScan(app) }
@@ -904,6 +969,10 @@ final class Tiler {
 
     /// A tiled window moved or resized without us asking.
     private func windowChangedOnItsOwn(_ id: CGWindowID) {
+        if fullScreenSpots[id] != nil, let w = windows[id] {
+            scheduleScan(w.handle.app, after: [0.15, 0.7])
+            return
+        }
         if offDisplay.contains(id), let w = windows[id] {
             let element = w.handle.element
             w.handle.app.queue.async {
@@ -932,7 +1001,9 @@ final class Tiler {
             let element = w.handle.element
             w.handle.app.queue.async {
                 let actual = element.frame
+                let fullScreen = element.isFullScreen
                 DispatchQueue.main.async {
+                    if fullScreen, let w = self.windows[id] { self.scheduleScan(w.handle.app); return }
                     // Late notifications from our own moves land here too; only act on a real difference.
                     guard let actual, let w = self.windows[id], let target = w.target, !w.hidden,
                           !actual.isClose(to: target, tolerance: 2) else { return }
