@@ -280,6 +280,9 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         switch result {
         case .app(let app, _, let reachable, let canNew) where (newWindow && canNew) || !reachable:
             tiler.prepareForOpening(with: app.bundleID)
+            // A window is surely on its way (the app's first, or a new one): hold its
+            // spot right now, so even a slow launch shows something happening.
+            if let id = app.bundleID { tiler.expectWindow(from: id, another: newWindow && canNew) }
         case .file(let url):
             tiler.prepareForOpening(with: NSWorkspace.shared.urlForApplication(toOpen: url).flatMap { Bundle(url: $0)?.bundleIdentifier })
         case .web:
@@ -371,8 +374,10 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     private func launch(_ app: App) {
         let config = NSWorkspace.OpenConfiguration()
         config.activates = true
-        NSWorkspace.shared.openApplication(at: app.url, configuration: config) { _, error in
-            if let error { log.error("launch \(app.name, privacy: .public): \(error.localizedDescription, privacy: .public)") }
+        NSWorkspace.shared.openApplication(at: app.url, configuration: config) { [weak self] _, error in
+            guard let error else { return }
+            log.error("launch \(app.name, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            DispatchQueue.main.async { self?.tiler.stopExpecting(app.bundleID, why: "it couldn't open") }
         }
     }
 

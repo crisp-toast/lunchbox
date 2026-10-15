@@ -65,6 +65,15 @@ Apps you open often rise to the top.
   tiled and focused in the current space.
 - When no app matches, it searches Spotlight's index for files and folders, most
   recently used first.
+- Opening an app that isn't running yet (or is running with no windows), or a **New … window**,
+  makes room right away, so a slow launch never looks like nothing happened: the windows here glide
+  aside and a frosted **placeholder** with the app's icon, gently pulsing, holds the exact spot and
+  size the window will get (alone, or in Focus, it's centered at the size that app's windows usually
+  open at). The app's first new window lands right in it and nothing else moves; any more windows
+  it opens tile as usual. If no window comes within about 8 seconds (a little longer while a big app
+  is still starting up), the app quits, or its window opens while you're in another Workspace, the
+  placeholder fades and the gap closes. A placeholder belongs to its Workspace like a window does.
+  You can't click or focus it.
 - ↑ ↓ to choose, Return to open, ⇧↩ for a new window, Esc or ⇧ Space to close. When nothing matches, it offers to search the web with your Mac's search engine in your default browser (or opens a typed address). The page opens as a new tab in the browser's window in this Workspace, or in a new window here when it has none, never a pop-up like Little Arc. This works with Arc, Safari, Chrome, Edge, Brave and Vivaldi; the first time, macOS asks whether Tessel may control the browser. Other browsers, or a browser you said no to, get the link the usual way, and Tessel still tiles whatever window it lands in.
 
 With the mouse: drag a tiled window onto another to swap them, onto the other screen to move it
@@ -73,7 +82,9 @@ drag it to and glides back to the center; Tidy (⌘⇧0) returns it to its app's
 
 The Dock works the same way: clicking a running app's icon goes to that app, using its window in
 the current Workspace if it has one, else switching to the Workspace its window is in. An app that
-isn't running, or has no windows, opens a new window here. **New Window** from the icon's
+isn't running, or has no windows, opens a new window here, with a placeholder holding its spot
+just as Summon does. Only these opens get one: apps opened from Finder or Spotlight, login items
+and background launches tile when their windows appear, as always. **New Window** from the icon's
 right-click menu opens here too, and picking one of the app's windows from that menu goes to it.
 Summon is the one that brings things to you: whatever it opens lands in the current Workspace.
 
@@ -95,6 +106,10 @@ while a window something moves onto another display (an agent testing on a dummy
   - `Animator` moves windows off the main thread, with one serial queue per app. It measures each
     app's response time and picks full animation, slide-only, or snap.
   - `Overlays` draws the focus ring and the space badge with Core Animation in click-through panels.
+  - `Placeholders` draws a placeholder tile: a click-through frosted panel just above the desktop, under
+    every app's windows, so the arriving window glides in over it. In a layout a placeholder is just a
+    window ID from a reserved range (`Placeholder` in TesselCore), so it gets exactly the new window's
+    slot, and `Layout.fill` swaps the real window in. Placeholders are never saved.
 - Windows in other spaces are parked just off the bottom-right corner of the right-most screen.
   Quitting Tessel (menu, `kill`, or reinstall) brings them back first.
 - Tessel saves each Workspace's layout as it changes: which windows share a stack, the column
@@ -122,7 +137,8 @@ osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificati
 ```
 
 Commands: `welcome`, `welcome-<step 0…4>`, `welcomeclose`, `find:<text>` (opens the launcher with that text), `help`, `help:<text>`, `launcher`, `launcher-open|up|down`, `focus-left|right|up|down`, `move-…`, `grow`, `shrink`, `close` (the focused window) or `close-<windowID>`, `hide`, `spotlight`, `space-1…3`, `send-1…3`,
-`balance`, `retile`, `displays-all`, `displays-main`, `pause`, `resume`, `leave-app:<bundle id>` and
+`balance`, `retile`, `displays-all`, `displays-main`, `pause`, `resume`, `expect:<bundle id>` (holds a
+placeholder for a window of that app, without opening anything, to try placeholders), `leave-app:<bundle id>` and
 `manage-app:<bundle id>` (stop and resume tiling one app's windows, for agents testing it on a
 dummy-plug display), and `dump`, which writes the current state to
 `~/Library/Application Support/Tessel/state.json`.

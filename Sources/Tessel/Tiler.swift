@@ -18,6 +18,8 @@ final class ManagedWindow {
     /// The size its app opened it at, when that's the app's own choice. A lone
     /// or Focus window shows at this size.
     var natural: CGSize?
+    /// When Tessel first saw it.
+    let seenAt = CACurrentMediaTime()
 
     init(handle: WindowHandle, frame: CGRect) {
         self.handle = handle
@@ -148,7 +150,10 @@ final class Tiler {
             // When an app quits, even a helper with no windows, macOS activates whichever app
             // was before it, maybe one in another space. That isn't a request to go there.
             self?.quietFocus(for: 0.8)
-            if let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication { self?.untrack(app.processIdentifier) }
+            if let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
+                self?.untrack(app.processIdentifier)
+                self?.stopExpecting(app.bundleIdentifier, pid: app.processIdentifier, why: "it quit")
+            }
         }
         on(NSWorkspace.didActivateApplicationNotification) { [weak self] n in
             if let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication { self?.appActivated(app) }
@@ -202,6 +207,10 @@ final class Tiler {
         }
         notificationTokens = []
         mouseMonitors.forEach { NSEvent.removeMonitor($0) }
+        expected.forEach { $0.tile.dismiss(animated: false) }
+        expected = []
+        placeholderCheck?.cancel()
+        placeholderCheck = nil
         ghostTimer?.invalidate()
         ghostTimer = nil
         mouseMonitors = []
@@ -239,6 +248,8 @@ final class Tiler {
         guard enabled, running.activationPolicy == .regular, pid != getpid(), apps[pid] == nil else { return }
         let app = AppHandle(pid: pid, bundleID: running.bundleIdentifier)
         apps[pid] = app
+        // An app Tessel is holding a tile for has started: from now on it's this process.
+        for e in expected where e.pid == nil && e.bundleID == running.bundleIdentifier { e.pid = pid }
         attachObserver(app)
         if scan { scheduleScan(app, after: [0.1, 0.5, 1.5]) }
     }
@@ -416,6 +427,7 @@ final class Tiler {
     /// Returns true when the layout changed.
     @discardableResult
     private func consider(_ info: WindowInfo, app: AppHandle, onScreen: Set<CGWindowID>) -> Bool {
+        let isNew = windows[info.id] == nil
         let window = windows[info.id] ?? register(info, app: app)
         if !window.hidden { window.frame = info.frame }
         window.minimized = info.minimized
@@ -438,6 +450,13 @@ final class Tiler {
             removeFromLayouts(info.id)
             window.target = nil
             return true
+        }
+        if !wantsTile, isNew, initialScanDone, info.windowLike, onScreen.contains(info.id) {
+            // The app Tessel is holding a tile for answered with a window that doesn't
+            // tile (a fixed-size window, say). Its real one may be right behind; if
+            // not, close the gap soon instead of waiting it out.
+            let soon = CACurrentMediaTime() + Self.placeholderAfterOtherWindow
+            for e in expected where e.matches(window) { e.deadline = min(e.deadline, soon) }
         }
         return false
     }
@@ -469,6 +488,7 @@ final class Tiler {
 
     private func insert(_ window: ManagedWindow) {
         let saved = savedPlacement.removeValue(forKey: window.id)
+        if saved == nil, initialScanDone, takePlaceholder(for: window) { return }
         let opensInSpotlight = initialScanDone && saved == nil
             && Self.opensInSpotlight.contains(window.handle.app.bundleID ?? "")
         let display = saved.flatMap { s in activeDisplays.first { $0.uuid == s.display } }
@@ -883,8 +903,14 @@ final class Tiler {
         mouseDown = nil
         let dragged = draggedByUser
         draggedByUser.removeAll()
-        guard enabled, let down, !dragged.isEmpty else { return }
         let up = NSScreen.topLeftPoint(fromCocoa: NSEvent.mouseLocation)
+        // A plain click on a Dock icon (not a drag, a long press for its menu, or ⌘/⌥-click).
+        if enabled, let down, let click = lastClick, hypot(up.x - down.x, up.y - down.y) < 6,
+           CACurrentMediaTime() - click.at < 0.6, NSEvent.modifierFlags.isDisjoint(with: [.command, .option, .control]),
+           isDockClick(up) {
+            dockClicked(at: up, since: click.at)
+        }
+        guard enabled, let down, !dragged.isEmpty else { return }
         for id in dragged {
             guard let w = windows[id], let target = w.target, target.insetBy(dx: -12, dy: -12).contains(down) else { continue }
             let element = w.handle.element
@@ -1012,6 +1038,10 @@ final class Tiler {
                     // Spotlight: the shelved windows wait off screen; the shelf shows cards for them.
                     let shelved = Set(layout.shelved)
                     for (id, frame) in layout.frames(in: d.visible, gap: Self.gap, natural: naturals) {
+                        if let tile = tile(for: id) {
+                            if shelved.contains(id) { tile.conceal() } else { tile.show(at: frame, animated: animated) }
+                            continue
+                        }
                         guard let w = windows[id] else { continue }
                         if shelved.contains(id) {
                             if !w.hidden, let t = w.target { shelfOrigins[id] = t }
@@ -1028,7 +1058,9 @@ final class Tiler {
                         moves.append((w.handle, from, frame, kind))
                     }
                 } else {
-                    for id in layout.windows { if let w = windows[id] { park(w) } }
+                    for id in layout.windows {
+                        if let w = windows[id] { park(w) } else { tile(for: id)?.conceal() }
+                    }
                 }
             }
         }
@@ -1037,18 +1069,24 @@ final class Tiler {
         onChange?()
     }
 
+    /// Where each real window in view sits (placeholders aren't windows: nothing can focus them).
     private func visibleFrames() -> [CGWindowID: CGRect] {
         var result: [CGWindowID: CGRect] = [:]
         for d in activeDisplays {
             guard let layout = spaces[currentSpace][d.uuid] else { continue }
             result.merge(layout.frames(in: d.visible, gap: Self.gap, natural: naturals)) { a, _ in a }
         }
-        return result
+        return result.filter { !Placeholder.isPlaceholder($0.key) }
     }
 
     // MARK: Each app's own window size
 
-    private var naturals: [CGWindowID: CGSize] { windows.compactMapValues(\.natural) }
+    /// Each window's own size, and for each placeholder the size its app's windows usually open at.
+    private var naturals: [CGWindowID: CGSize] {
+        var sizes = windows.compactMapValues(\.natural)
+        for e in expected { sizes[e.id] = e.natural }
+        return sizes
+    }
 
     /// Sizes Tessel recently gave each app's windows. Apps reopen windows at the
     /// size they last had, which is usually a tile, not the app's own choice.
@@ -1102,7 +1140,9 @@ final class Tiler {
         var placement: [String: String] = [:]
         var saved: [String: Layout] = [:]
         for (s, layouts) in spaces.enumerated() {
-            for (uuid, layout) in layouts {
+            for (uuid, waiting) in layouts {
+                let layout = waiting.withoutPlaceholders() // they only last while Tessel waits
+                guard !layout.isEmpty else { continue }
                 for id in layout.windows { placement[String(id)] = "\(s)|\(uuid)" }
                 saved["\(s)|\(uuid)"] = layout
             }
@@ -1517,6 +1557,185 @@ final class Tiler {
         return nil
     }
 
+    // MARK: Placeholders
+
+    /// A window Tessel knows is on its way, and the tile it holds for it.
+    private final class Expected {
+        let id: CGWindowID
+        let bundleID: String
+        /// The app's process, once it's running.
+        var pid: pid_t?
+        /// Windows the app already had: only a new one takes the tile.
+        let existing: Set<CGWindowID>
+        let started: CFTimeInterval
+        var deadline: CFTimeInterval
+        /// The size the app's windows usually open at, so a lone tile already has their shape.
+        let natural: CGSize?
+        let tile: PlaceholderTile
+
+        init(id: CGWindowID, bundleID: String, pid: pid_t?, existing: Set<CGWindowID>, deadline: CFTimeInterval,
+             natural: CGSize?, tile: PlaceholderTile) {
+            self.id = id
+            self.bundleID = bundleID
+            self.pid = pid
+            self.existing = existing
+            self.started = CACurrentMediaTime()
+            self.deadline = deadline
+            self.natural = natural
+            self.tile = tile
+        }
+
+        func matches(_ window: ManagedWindow) -> Bool {
+            window.handle.app.bundleID == bundleID && (pid == nil || pid == window.pid) && !existing.contains(window.id)
+        }
+    }
+
+    /// How long a tile waits for its window...
+    static let placeholderWait: CFTimeInterval = 8
+    /// ...or, while the app is visibly still starting up (a big app's first launch), up to this long.
+    static let placeholderLongestWait: CFTimeInterval = 20
+    /// How long it waits once the app showed some other window instead (one that doesn't tile).
+    static let placeholderAfterOtherWindow: CFTimeInterval = 1.5
+
+    /// Tiles held for windows on their way, oldest first.
+    private var expected: [Expected] = []
+    private var placeholderCount = 0
+    private var placeholderCheck: DispatchWorkItem?
+
+    private func tile(for id: CGWindowID) -> PlaceholderTile? {
+        guard Placeholder.isPlaceholder(id) else { return nil }
+        return expected.first { $0.id == id }?.tile
+    }
+
+    /// Summon or a Dock click is about to open a window of this app: make room
+    /// now, so a slow launch never looks like nothing happened. The windows here
+    /// glide aside and a placeholder holds the exact spot and size the window
+    /// will get; the app's first new window takes it (`takePlaceholder`). Only
+    /// for opens Tessel is sure of, never just any app starting up.
+    /// - another: hold one more even if the app already has one waiting (⇧↩ twice).
+    /// - since: when the click was, so a window that beat Tessel here counts.
+    /// - point: where you are, which picks the display (the mouse, by default).
+    func expectWindow(from bundleID: String, another: Bool = false, since: CFTimeInterval? = nil, near point: CGPoint? = nil) {
+        guard enabled, initialScanDone, !Self.floatingApps.contains(bundleID), !leftAloneApps.contains(bundleID),
+              another || !expected.contains(where: { $0.bundleID == bundleID }) else { return }
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first { !$0.isTerminated }
+        // A hidden app brings back the windows it has; nothing new is coming.
+        guard running?.isHidden != true else { return }
+        let mine = windows.values.filter { $0.handle.app.bundleID == bundleID }
+        if let since, mine.contains(where: { $0.seenAt >= since }) { return }
+        let point = point ?? NSScreen.topLeftPoint(fromCocoa: NSEvent.mouseLocation)
+        guard let display = activeDisplays.first(where: { $0.frame.contains(point) })
+            ?? activeDisplays.first(where: \.isMain) ?? activeDisplays.first else { return }
+
+        let id = Placeholder.id(placeholderCount)
+        placeholderCount += 1
+        var layout = spaces[currentSpace][display.uuid] ?? Layout()
+        let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
+        layout.insert(id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
+        if Self.opensInSpotlight.contains(bundleID), layout.windowCount > 1 {
+            // Its window opens in Focus, so the tile does too.
+            layout.spotlight = id
+            Snapshotter.capture(layout.shelved) { [weak self] images in
+                for (wid, image) in images { self?.shelf.setSnapshot(image, for: wid) }
+            }
+        }
+        spaces[currentSpace][display.uuid] = layout
+
+        let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+        var name = running?.localizedName ?? url.map { FileManager.default.displayName(atPath: $0.path) } ?? ""
+        if name.hasSuffix(".app") { name.removeLast(4) }
+        let icon = running?.icon ?? url.map { NSWorkspace.shared.icon(forFile: $0.path) } ?? NSWorkspace.shared.icon(for: .application)
+        expected.append(Expected(id: id, bundleID: bundleID, pid: running?.processIdentifier, existing: Set(mine.map(\.id)),
+                                 deadline: CACurrentMediaTime() + Self.placeholderWait, natural: learnedSize(for: bundleID),
+                                 tile: PlaceholderTile(icon: icon, name: name)))
+        relayout(animated: true)
+        schedulePlaceholderCheck()
+        log.notice("holding a tile for \(bundleID, privacy: .public) in space \(self.currentSpace + 1)")
+    }
+
+    /// A new window from an app Tessel is holding a tile for takes that tile,
+    /// share and all, so it's the only thing that moves. False when no tile is
+    /// waiting for it here: one left in another Workspace (you moved on while the
+    /// app started) is let go, and the window joins the Workspace in view.
+    private func takePlaceholder(for window: ManagedWindow) -> Bool {
+        guard let e = expected.first(where: { $0.matches(window) }) else { return false }
+        guard let (space, uuid) = place(of: e.id), space == currentSpace,
+              spaces[space][uuid]?.fill(e.id, with: window.id) == true else {
+            giveUp([e], why: "its window opened in another Workspace")
+            return false
+        }
+        expected.removeAll { $0 === e }
+        e.tile.dismiss(animated: animationsAllowed)
+        let waited = CACurrentMediaTime() - e.started
+        log.notice("window \(window.id) (\(e.bundleID, privacy: .public)) took its tile after \(waited, format: .fixed(precision: 2)) s")
+        return true
+    }
+
+    /// Summon couldn't open the app, or it quit before showing a window.
+    func stopExpecting(_ bundleID: String?, pid: pid_t? = nil, why: String) {
+        let gone = expected.filter { $0.bundleID == bundleID && (pid == nil || $0.pid == nil || $0.pid == pid) }
+        guard !gone.isEmpty else { return }
+        giveUp(gone, why: why)
+        relayout(animated: true)
+    }
+
+    /// Stops holding tiles: each fades away as the windows around it close the
+    /// gap (the caller lays out again).
+    private func giveUp(_ gone: [Expected], why: String) {
+        for e in gone {
+            expected.removeAll { $0 === e }
+            removeFromLayouts(e.id)
+            e.tile.dismiss(animated: animationsAllowed)
+            log.notice("let go of the tile for \(e.bundleID, privacy: .public): \(why, privacy: .public)")
+        }
+    }
+
+    private func schedulePlaceholderCheck() {
+        guard placeholderCheck == nil, !expected.isEmpty else { return }
+        let work = DispatchWorkItem { [weak self] in
+            self?.placeholderCheck = nil
+            self?.checkPlaceholders()
+        }
+        placeholderCheck = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
+
+    /// Lets go of tiles whose window didn't come in time.
+    private func checkPlaceholders() {
+        guard enabled else { return }
+        let now = CACurrentMediaTime()
+        let late = expected.filter { e in
+            guard now >= e.deadline else { return false }
+            let app = e.pid.flatMap { NSRunningApplication(processIdentifier: $0) }
+                ?? NSRunningApplication.runningApplications(withBundleIdentifier: e.bundleID).first { !$0.isTerminated }
+            let starting = app.map { !$0.isFinishedLaunching && !$0.isTerminated } ?? false
+            return !starting || now - e.started >= Self.placeholderLongestWait
+        }
+        if !late.isEmpty {
+            giveUp(late, why: "no window came")
+            relayout(animated: true)
+        }
+        schedulePlaceholderCheck()
+    }
+
+    /// A plain click on a Dock icon. An app that isn't running, or is running
+    /// with no windows, is about to open one: hold its spot. Which icon it was
+    /// comes from the Dock itself, asked off the main thread.
+    private func dockClicked(at point: CGPoint, since: CFTimeInterval) {
+        DispatchQueue.global(qos: .userInteractive).async { [weak self] in
+            guard let url = Dock.app(at: point) else { return }
+            DispatchQueue.main.async {
+                guard let self, self.enabled, let bundleID = Bundle(url: url)?.bundleIdentifier else { return }
+                if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first(where: { !$0.isTerminated }),
+                   self.hasReachableWindow(ofApp: running.processIdentifier) {
+                    return // the click goes to that window
+                }
+                log.notice("Dock click on \(bundleID, privacy: .public), which has no windows")
+                self.expectWindow(from: bundleID, since: since, near: point)
+            }
+        }
+    }
+
     // MARK: Spotlight
 
     /// ⌘⇧F: the focused window alone in the center, the rest of its space
@@ -1690,8 +1909,16 @@ final class Tiler {
                 "latencyMs": (w.handle.app.latency * 1000).rounded(),
             ]
         }
+        let now = CACurrentMediaTime()
+        let placeholders = expected.map { e -> [String: Any] in
+            let spot = place(of: e.id)
+            let display = spot.flatMap { s in activeDisplays.first { $0.uuid == s.display } }
+            let frame = spot.flatMap { s in display.flatMap { spaces[s.space][s.display]?.frames(in: $0.visible, gap: Self.gap, natural: naturals)[e.id] } }
+            return ["id": e.id, "app": e.bundleID, "pid": e.pid ?? 0, "space": spot.map { $0.space + 1 } ?? 0,
+                    "waitingSeconds": (now - e.started).rounded(), "frame": frame.map { NSStringFromRect($0) } ?? "none"]
+        }
         return [
-            "enabled": enabled, "currentSpace": currentSpace + 1, "focused": focusedID ?? 0,
+            "enabled": enabled, "currentSpace": currentSpace + 1, "focused": focusedID ?? 0, "placeholders": placeholders,
             "useAllDisplays": useAllDisplays, "windowServerFocus": WindowFocus.isAvailable,
             "newWindowSupport": newWindowSupport,
             "displays": displays.map { "\($0.name) \(NSStringFromRect($0.visible))" },

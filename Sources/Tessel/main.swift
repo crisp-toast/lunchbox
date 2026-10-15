@@ -179,6 +179,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             for (key, f) in mods.reversed() { flags.subtract(f); post(key, false) }
             return
         }
+        // expect:<bundle id> holds a tile for a window of that app as if Summon had just
+        // opened it (without opening anything), to try placeholders.
+        if command.hasPrefix("expect:") {
+            tiler.expectWindow(from: String(command.dropFirst(7)), another: true)
+            return
+        }
         if command.hasPrefix("help:") {
             help.show(query: String(command.dropFirst(5)))
             return
