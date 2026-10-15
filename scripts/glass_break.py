@@ -21,7 +21,10 @@ SAVE = argv[5] if len(argv) > 5 else None
 
 random.seed(7)
 FPS = 30
-LAST = 74  # 75 frames, 2.5 seconds; the page then holds the last one
+# Timing (v03): the intact panes for 0.6 s, two full-speed frames as the force lands,
+# a long glide down into slow motion, then the same 100-frame drift as v02.
+HOLD, SNAP, GLIDE, DRIFT = 18, 2, 90, 100
+LAST = HOLD + SNAP + GLIDE + DRIFT - 1  # 210 frames, 7 seconds; the page then holds the last one
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
@@ -295,19 +298,41 @@ for idx, (cx, cz, w, h, tilt, depth, color) in enumerate(PANES):
     wholes.append(whole)
 
 # ---------- Time: still, a full-speed hit, then an ease into extreme slow motion ----------
-HIT = 5  # the frame the force arrives
+HIT = HOLD  # the frame the force arrives
+DRIFT_RATE = 0.035  # 3.5% speed for the long drift at the end
+
+
+def v02_rate(f):
+    """v02's timing: still, five full-speed frames, an exponential brake, the drift."""
+    if f < 5:
+        return 0.0
+    if f < 10:
+        return 1.0 / FPS
+    k = (f - 10) / 40.0
+    return ((DRIFT_RATE + 0.965 * math.exp(-13.216 * k)) if k < 1 else DRIFT_RATE) / FPS
+
+
+# The glide ends on the moment v02's drift began (its frame 50), so the drift frames
+# match v02's frames 50-149 exactly. Two decays: a quick drop after the hit, then a
+# slow one from about 10% speed, scaled to land on that moment.
+V02_DRIFT_START = sum(v02_rate(f) for f in range(50))
+TAU_FAST, TAU_SLOW = 2.0, GLIDE / 3.6
+_fast = sum(math.exp(-j / TAU_FAST) for j in range(GLIDE))
+_slow = sum(math.exp(-j / TAU_SLOW) for j in range(GLIDE))
+SLOW_PART = (V02_DRIFT_START * FPS - SNAP - DRIFT_RATE * GLIDE - (1 - DRIFT_RATE) * _fast) / (_slow - _fast)
 
 
 def rate(f):
     """Seconds of simulated time that pass during output frame f."""
     if f < HIT:
         return 0.0
-    if f < HIT + 5:
+    if f < HIT + SNAP:
         return 1.0 / FPS
-    k = (f - HIT - 5) / 32.0
-    if k < 1:
-        return (0.025 + 0.975 * math.exp(-5.0 * k)) / FPS
-    return 0.025 / FPS
+    j = f - HIT - SNAP
+    if j < GLIDE:
+        fast = (1 - DRIFT_RATE - SLOW_PART) * math.exp(-j / TAU_FAST)
+        return (DRIFT_RATE + fast + SLOW_PART * math.exp(-j / TAU_SLOW)) / FPS
+    return DRIFT_RATE / FPS
 
 
 sim = []
