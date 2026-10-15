@@ -245,8 +245,8 @@ public struct Keymap: Equatable, Sendable {
         var caps: [String] = []
         if binding.control { caps.append("⌃") }
         if binding.option { caps.append("⌥") }
-        if binding.command { caps.append(binding.leftCommandOnly ? "Left ⌘" : "⌘") }
         if binding.shift { caps.append("⇧") }
+        if binding.command { caps.append(binding.leftCommandOnly ? "Left ⌘" : "⌘") }
         if binding.shiftTap { caps.append("then") }
         switch binding.key {
         case .code(let c): caps.append(KeyNames.name(c))

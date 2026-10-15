@@ -7,8 +7,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var tap: HotkeyTap = HotkeyTap { [weak self] action in
         guard let self else { return }
         self.onboarding.noted(action)
-        // Practicing in onboarding: window shortcuts move the pretend windows.
-        if self.onboarding.capturesWindowActions, action != .launcher, action != .help {
+        // Practicing in onboarding: shortcuts drive the pretend screen, including
+        // its pretend Summon and Cheat Sheet.
+        if self.onboarding.capturesWindowActions {
             self.onboarding.playgroundPerform(action)
             return
         }
@@ -189,6 +190,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             help.show(query: String(command.dropFirst(5)))
             return
         }
+        // practice:<command> drives onboarding's practice screen without real key
+        // presses or keyboard focus (focus-left, grow, spotlight, space-2, launcher,
+        // help, type:<text>, key:return|escape|up|down|shift-return), for testing.
+        if command.hasPrefix("practice:") {
+            let rest = String(command.dropFirst(9))
+            if rest.hasPrefix("type:") { onboarding.playgroundType(String(rest.dropFirst(5))); return }
+            if rest.hasPrefix("key:") { onboarding.playgroundKey(String(rest.dropFirst(4))); return }
+            guard let action = Self.keyAction(rest) else { log.error("unknown practice command \(rest, privacy: .public)"); return }
+            onboarding.noted(action)
+            onboarding.playgroundPerform(action)
+            return
+        }
         let parts = command.split(separator: "-").map(String.init)
         switch (parts.first, parts.count > 1 ? parts[1] : nil) {
         case ("focus", let d?): if let dir = Direction(rawValue: d) { tiler.perform(.focus(dir)) }
@@ -206,7 +219,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("launcher", _): launcher.toggle()
         case ("help", _): help.toggle()
         case ("shortcuts", _): shortcuts.show()
-        case ("welcome", let n?): if let i = Int(n), let step = Onboarding.Step(rawValue: i) { onboarding.show(at: step) }
+        case ("welcome", let n?):
+            // welcome-<step>, or welcome-<step>@<display id> to open it on that display
+            // without taking keyboard focus (agents test on a display Tyler can't see).
+            let bits = n.split(separator: "@").map(String.init)
+            guard let i = Int(bits[0]), let step = Onboarding.Step(rawValue: i) else { break }
+            if bits.count > 1, let display = UInt32(bits[1]) {
+                onboarding.show(at: step, onDisplay: display)
+            } else {
+                onboarding.show(at: step)
+            }
         case ("welcome", _): onboarding.show()
         case ("welcomeclose", _): onboarding.close()
         case ("space", let n?): if let i = Int(n) { tiler.perform(.switchSpace(i - 1)) }
@@ -219,6 +241,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("resume", _): setTiling(true)
         case ("dump", _): dumpState()
         default: log.error("unknown command \(command, privacy: .public)")
+        }
+    }
+
+    /// The shortcut a debug command names, like "focus-left" or "space-2".
+    static func keyAction(_ command: String) -> KeyAction? {
+        let parts = command.split(separator: "-").map(String.init)
+        switch (parts.first, parts.count > 1 ? parts[1] : nil) {
+        case ("focus", let d?): return Direction(rawValue: d).map { .focus($0) }
+        case ("move", let d?): return Direction(rawValue: d).map { .move($0) }
+        case ("grow", _): return .grow
+        case ("shrink", _): return .shrink
+        case ("close", _): return .close
+        case ("hide", _): return .hide
+        case ("spotlight", _): return .spotlight
+        case ("balance", _), ("normalize", _): return .normalize
+        case ("space", let n?): return Int(n).map { .switchSpace($0 - 1) }
+        case ("send", let n?): return Int(n).map { .sendToSpace($0 - 1) }
+        case ("launcher", _): return .launcher
+        case ("help", _): return .help
+        default: return nil
         }
     }
 

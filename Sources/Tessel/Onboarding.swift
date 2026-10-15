@@ -34,7 +34,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
     private var playground: Playground?
 
     private static let normalSize = NSSize(width: 760, height: 560)
-    private static let practiceSize = NSSize(width: 1260, height: 820)
+    private static let practiceSize = NSSize(width: 1300, height: 760)
 
     // Finish step
     private let previewStatus = NSTextField(labelWithString: "")
@@ -56,6 +56,20 @@ final class Onboarding: NSObject, NSWindowDelegate {
         go(to: start, animated: false)
     }
 
+    /// Opens a step centered on one display without activating Tessel, so an
+    /// agent can look at it on a display Tyler can't see while he keeps typing.
+    func show(at start: Step, onDisplay id: CGDirectDisplayID) {
+        let window = self.window ?? makeWindow()
+        go(to: start, animated: false)
+        if let screen = NSScreen.screens.first(where: {
+            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id
+        }) {
+            let area = screen.visibleFrame, size = window.frame.size
+            window.setFrameOrigin(NSPoint(x: area.midX - size.width / 2, y: area.midY - size.height / 2))
+        }
+        window.orderFrontRegardless()
+    }
+
     /// While the practice step is in front, window shortcuts drive the
     /// playground instead of real windows. Switch to another app and they work
     /// on the real desktop again, so onboarding never takes over the Mac.
@@ -64,6 +78,8 @@ final class Onboarding: NSObject, NSWindowDelegate {
     }
 
     func playgroundPerform(_ action: KeyAction) { playground?.perform(action) }
+    func playgroundType(_ text: String) { playground?.type(text) }
+    func playgroundKey(_ name: String) { playground?.press(name) }
 
     /// Practice: tick off a shortcut the user just used.
     func noted(_ action: KeyAction) {
@@ -272,15 +288,20 @@ final class Onboarding: NSObject, NSWindowDelegate {
         list.alignment = .leading
         list.spacing = 12
 
-        let playground = self.playground ?? Playground(frame: NSRect(x: 0, y: 0, width: 760, height: 475))
+        let playground = self.playground ?? Playground(frame: NSRect(x: 0, y: 0, width: 816, height: 510))
         self.playground = playground
+        playground.cheatEntries = { [weak self] in
+            guard let tap = self?.tap else { return [] }
+            return CheatSheetContent.entries(keymap: tap.keymap, workspaceKeys: tap.spaceKeys)
+        }
         playground.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            playground.widthAnchor.constraint(equalToConstant: 760),
-            playground.heightAnchor.constraint(equalToConstant: 475),
+            playground.widthAnchor.constraint(equalToConstant: 816),
+            playground.heightAnchor.constraint(equalToConstant: 510),
         ])
         let reset = NSButton(title: "Reset the Practice Space", target: self, action: #selector(resetPlayground))
-        reset.bezelStyle = .inline
+        reset.bezelStyle = .rounded
+        reset.controlSize = .small
         let left = NSStackView(views: [playground, reset])
         left.orientation = .vertical
         left.spacing = 10
@@ -549,12 +570,22 @@ private final class PracticeRow: NSStackView {
             k == "then" ? NSTextField(labelWithString: "then") as NSView : Keycap(text: k)
         })
         caps.spacing = 4
-        caps.setContentHuggingPriority(.required, for: .horizontal)
-        caps.setContentCompressionResistancePriority(.required, for: .horizontal)
+        // Every row's keys sit in the same width, so the descriptions line up.
+        caps.translatesAutoresizingMaskIntoConstraints = false
+        let capsBox = NSView()
+        capsBox.translatesAutoresizingMaskIntoConstraints = false
+        capsBox.addSubview(caps)
+        NSLayoutConstraint.activate([
+            capsBox.widthAnchor.constraint(equalToConstant: 150),
+            capsBox.heightAnchor.constraint(equalTo: caps.heightAnchor),
+            caps.leadingAnchor.constraint(equalTo: capsBox.leadingAnchor),
+            caps.centerYAnchor.constraint(equalTo: capsBox.centerYAnchor),
+        ])
         let label = NSTextField(wrappingLabelWithString: text)
         label.font = .systemFont(ofSize: 13)
+        label.alignment = .left
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        setViews([check, caps, label], in: .leading)
+        setViews([check, capsBox, label], in: .leading)
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }

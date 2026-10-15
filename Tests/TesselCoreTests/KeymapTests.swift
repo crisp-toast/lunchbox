@@ -48,7 +48,7 @@ let workspaceKeys: [Int64] = [116, 121, 119]
     }
 
     @Test func keycapLabels() {
-        #expect(Keymap.keycaps(for: map.binding(for: .moveLeft), workspaceKeys: workspaceKeys) == ["Left ⌘", "⇧", "←"])
+        #expect(Keymap.keycaps(for: map.binding(for: .moveLeft), workspaceKeys: workspaceKeys) == ["⇧", "Left ⌘", "←"])
         #expect(Keymap.keycaps(for: map.binding(for: .summon), workspaceKeys: workspaceKeys) == ["⇧", "then", "Space"])
         #expect(Keymap.keycaps(for: map.binding(for: .workspace2), workspaceKeys: workspaceKeys) == ["⌘", "Page Down"])
         #expect(Keymap.keycaps(for: map.binding(for: .workspace2), workspaceKeys: []) == ["⌘", "Workspace key 2"])
