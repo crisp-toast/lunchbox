@@ -71,10 +71,17 @@ With the mouse: drag a tiled window onto another to swap them, onto the other sc
 there, or drag its edge to resize. A centered window (alone, or in Focus) keeps any shape you
 drag it to and glides back to the center; Tidy (⌘⇧0) returns it to its app's own size (or 16:10) without leaving Focus. Tessel tells an app's own size from a tile it remembers: a size Tessel gave that app before, or one as tall as the screen, doesn't count. ⌘-Tab to a window in another space switches to that space.
 
+The Dock works the same way: clicking a running app's icon goes to that app, using its window in
+the current Workspace if it has one, else switching to the Workspace its window is in. An app that
+isn't running, or has no windows, opens a new window here. **New Window** from the icon's
+right-click menu opens here too, and picking one of the app's windows from that menu goes to it.
+Summon is the one that brings things to you: whatever it opens lands in the current Workspace.
+
 The menu bar shows the current space. Its menu can pause tiling, float or tile the focused window,
 normalize, re-tile everything, and open **Keyboard Shortcuts…** (the same searchable list as Left ⌘⇧Space). **Settings** holds Launch at Login, Set Up Space Keys, and
 **Use All Displays** (on by default). Turn that off to tile only on the main display, for example
-when the second display is a dummy plug: windows on other displays move to the main one.
+when the second display is a dummy plug: windows that open on other displays move to the main one,
+while a window something moves onto another display (an agent testing on a dummy plug) is left there.
 
 ## How it works
 
@@ -115,7 +122,9 @@ osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificati
 ```
 
 Commands: `welcome`, `welcome-<step 0…4>`, `welcomeclose`, `find:<text>` (opens the launcher with that text), `help`, `help:<text>`, `launcher`, `launcher-open|up|down`, `focus-left|right|up|down`, `move-…`, `grow`, `shrink`, `close` (the focused window) or `close-<windowID>`, `hide`, `spotlight`, `space-1…3`, `send-1…3`,
-`balance`, `retile`, `displays-all`, `displays-main`, `pause`, `resume`, and `dump`, which writes the current state to
+`balance`, `retile`, `displays-all`, `displays-main`, `pause`, `resume`, `leave-app:<bundle id>` and
+`manage-app:<bundle id>` (stop and resume tiling one app's windows, for agents testing it on a
+dummy-plug display), and `dump`, which writes the current state to
 `~/Library/Application Support/Tessel/state.json`.
 
 `pause` and `resume` do what the menu's **Tiling** item does. Pausing brings back windows parked in

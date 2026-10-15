@@ -163,11 +163,18 @@ final class Tiler {
         }
 
         mouseMonitors = [
-            NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
+            NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+                guard let self else { return }
                 let point = NSScreen.topLeftPoint(fromCocoa: NSEvent.mouseLocation)
-                self?.mouseDown = point
-                self?.lastClick = (CACurrentMediaTime(), point)
-                self?.draggedByUser.removeAll()
+                self.mouseDown = point
+                self.lastClick = (CACurrentMediaTime(), point)
+                self.draggedByUser.removeAll()
+                if event.modifierFlags.contains(.control), self.isDockClick(point) { self.dockMenuOpenedAt = CACurrentMediaTime() }
+            },
+            NSEvent.addGlobalMonitorForEvents(matching: .rightMouseDown) { [weak self] _ in
+                guard let self else { return }
+                let point = NSScreen.topLeftPoint(fromCocoa: NSEvent.mouseLocation)
+                if self.isDockClick(point) { self.dockMenuOpenedAt = CACurrentMediaTime() }
             },
             NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { [weak self] _ in self?.mouseUp() },
         ].compactMap { $0 }
@@ -415,6 +422,8 @@ final class Tiler {
         window.standard = info.standard
         let appHidden = NSRunningApplication(processIdentifier: app.pid)?.isHidden ?? false
         let wantsTile = (info.tileable || (adopted.contains(info.id) && info.windowLike))
+            && !offDisplay.contains(info.id)
+            && !leftAloneApps.contains(app.bundleID ?? "")
             && !appHidden
             && !userFloating.contains(info.id)
             && !Self.floatingApps.contains(app.bundleID ?? "")
@@ -493,6 +502,7 @@ final class Tiler {
         }
         if focusedID == id { focusedID = nil }
         adopted.remove(id)
+        offDisplay.remove(id)
         settlingUntil[id] = nil
         lastReassert[id] = nil
     }
@@ -562,7 +572,16 @@ final class Tiler {
     /// Where and when the last click happened, to tell a Dock click from ⌘-Tab.
     private var lastClick: (at: CFTimeInterval, point: CGPoint)?
     /// An app just activated from the Dock: its window comes to this space.
-    private var dockActivation: (pid: pid_t, until: CFTimeInterval)?
+    /// Summon opened something in this app: its window joins the Workspace being viewed.
+    private var summonActivation: (pid: pid_t, until: CFTimeInterval)?
+    /// A click on this app's Dock icon brought it forward: go to its window, wherever it is.
+    private var dockClick: (pid: pid_t, until: CFTimeInterval)?
+    /// When the Dock's menu for an icon was opened (right-click, ⌃-click).
+    private var dockMenuOpenedAt: CFTimeInterval?
+    /// The app brought forward from the Dock's menu, and the windows it had then.
+    private var dockMenuActivation: (pid: pid_t, existing: Set<CGWindowID>, until: CFTimeInterval)?
+    /// A window to go to shortly, unless the app opens a new window here first.
+    private var followLater: CGWindowID?
 
     /// Whether a click was on the Dock (wherever it sits, shown or auto-hidden).
     private func isDockClick(_ point: CGPoint) -> Bool {
@@ -595,15 +614,71 @@ final class Tiler {
     private var summonedArrival: (bundleID: String, existing: Set<CGWindowID>, until: CFTimeInterval)?
     /// Windows tiled because they answered a Summon open, though their app doesn't call them standard.
     private var adopted: Set<CGWindowID> = []
+    /// Windows something moved onto a display Tessel doesn't manage (Use All Displays
+    /// off): agents test there, on a display Tyler can't see. Left alone while there.
+    private var offDisplay: Set<CGWindowID> = []
+    /// Apps an agent is testing on the spoof display: Tessel doesn't tile their windows
+    /// at all, so opening one never shuffles Tyler's layout. Set with leave-app:<bundle id>.
+    private var leftAloneApps: Set<String> = []
+
+    func setLeftAlone(_ bundleID: String, _ leave: Bool) {
+        guard !bundleID.isEmpty else { return }
+        log.notice("\(leave ? "leaving" : "tiling", privacy: .public) \(bundleID, privacy: .public)")
+        if leave {
+            leftAloneApps.insert(bundleID)
+            scanAll()
+            return
+        }
+        // Windows it still has on the unmanaged display stay there, not on Tyler's screen.
+        // Tessel never tracked where they went, so ask where they are now.
+        let mine = windows.values.filter { $0.handle.app.bundleID == bundleID }
+        guard let app = mine.first?.handle.app else {
+            leftAloneApps.remove(bundleID)
+            return
+        }
+        let elements = mine.map { ($0.id, $0.handle.element) }
+        app.queue.async {
+            let frames = elements.compactMap { id, element in element.frame.map { (id, $0) } }
+            DispatchQueue.main.async {
+                for (id, frame) in frames where self.isOnUnmanagedDisplay(frame) { self.offDisplay.insert(id) }
+                self.leftAloneApps.remove(bundleID)
+                self.scheduleScan(app)
+            }
+        }
+    }
+
+    private func isOnUnmanagedDisplay(_ frame: CGRect) -> Bool {
+        guard !useAllDisplays else { return false }
+        let center = frame.center
+        return displays.contains { !$0.isMain && $0.frame.contains(center) }
+    }
+
+    /// Stops tiling a window something moved onto an unmanaged display, and closes its gap.
+    private func leaveAlone(_ id: CGWindowID) {
+        guard let w = windows[id], place(of: id) != nil else { return }
+        offDisplay.insert(id)
+        removeFromLayouts(id)
+        w.target = nil
+        relayout(animated: true)
+        persist()
+        log.notice("window \(id) moved to an unmanaged display; leaving it there")
+    }
 
     private func appActivated(_ running: NSRunningApplication) {
         guard let app = apps[running.processIdentifier] else { return }
-        if let click = lastClick, CACurrentMediaTime() - click.at < 1.2, isDockClick(click.point) {
-            dockActivation = (app.pid, CACurrentMediaTime() + 1.5)
+        let now = CACurrentMediaTime()
+        if let opened = dockMenuOpenedAt {
+            // The next app to come forward after the Dock's menu opened came from that menu.
+            dockMenuOpenedAt = nil
+            if now - opened < 20 {
+                dockMenuActivation = (app.pid, Set(windows.values.filter { $0.pid == app.pid }.map(\.id)), now + 1.5)
+            }
+        } else if let click = lastClick, now - click.at < 1.2, isDockClick(click.point) {
+            dockClick = (app.pid, now + 1.5)
         }
-        if let arrival = expectedArrival, arrival.bundleID == running.bundleIdentifier, CACurrentMediaTime() < arrival.until {
+        if let arrival = expectedArrival, arrival.bundleID == running.bundleIdentifier, now < arrival.until {
             expectedArrival = nil
-            dockActivation = (app.pid, CACurrentMediaTime() + 2)
+            summonActivation = (app.pid, now + 2)
         }
         app.queue.async { [weak self] in
             let id = app.element.element(kAXFocusedWindowAttribute)?.windowID
@@ -640,28 +715,59 @@ final class Tiler {
             if windows[id] == nil { scheduleScan(app) }
             return
         }
-        if space != currentSpace, let dock = dockActivation, dock.pid == app.pid, CACurrentMediaTime() < dock.until {
-            // Opened from the Dock or Summon: bring the window here instead of going to it.
-            dockActivation = nil
-            bringToCurrentSpace(id)
-            return
-        }
+        let now = CACurrentMediaTime()
         if space != currentSpace {
-            // Right after we switch spaces or a window closes, macOS often hands focus
-            // to some other window of the app, which may be parked in another space.
-            // That isn't a request to go there; only a later ⌘-Tab or click is.
-            guard CACurrentMediaTime() > quietFocusUntil else {
+            let summoned = summonActivation.map { $0.pid == app.pid && now < $0.until } ?? false
+            let menu = dockMenuActivation.flatMap { $0.pid == app.pid && now < $0.until ? $0 : nil }
+            let clicked = dockClick.map { $0.pid == app.pid && now < $0.until } ?? false
+            if summoned { summonActivation = nil }
+            if menu != nil { dockMenuActivation = nil }
+            if clicked { dockClick = nil }
+            switch ForeignFocus.decide(summoned: summoned, fromDockMenu: menu != nil, fromDockClick: clicked,
+                                       windowHere: clicked ? windowHere(ofApp: app.pid) : nil,
+                                       settling: now <= quietFocusUntil) {
+            case .bringHere:
+                bringToCurrentSpace(id)
+            case .waitForNewWindow:
+                let existing = menu?.existing ?? []
+                followLater = id
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                    guard let self, self.followLater == id else { return }
+                    self.followLater = nil
+                    let opened = self.windows.values.contains { $0.pid == app.pid && !existing.contains($0.id) }
+                    guard !opened, let (space, _) = self.place(of: id), space != self.currentSpace else { return }
+                    self.go(to: id, in: space)
+                }
+            case .focusHere(let here):
+                activate(here)
+                showRing(on: here)
+            case .goThere:
+                go(to: id, in: space)
+            case .stay:
+                // Right after we switch spaces or a window closes, macOS often hands focus
+                // to some other window of the app, which may be parked in another space.
+                // That isn't a request to go there; only a later ⌘-Tab or click is.
                 reclaimFocus()
-                return
             }
-            focusedID = id
-            lastFocused[space] = id
-            switchSpace(to: space, focusing: id)
             return
         }
+        followLater = nil // a window here got focus, like the Dock menu's New Window
         focusedID = id
         lastFocused[space] = id
         endSpotlight(unlessShowing: id)
+    }
+
+    /// Switches to the Workspace a window is in and focuses it there.
+    private func go(to id: CGWindowID, in space: Int) {
+        focusedID = id
+        lastFocused[space] = id
+        switchSpace(to: space, focusing: id)
+    }
+
+    /// One of the app's windows in the Workspace being viewed: the one used last, else any.
+    private func windowHere(ofApp pid: pid_t) -> CGWindowID? {
+        let mine = visibleFrames().keys.filter { windows[$0]?.pid == pid }
+        return [lastFocused[currentSpace], focusedID].compactMap { $0 }.first(where: mine.contains) ?? mine.first
     }
 
     /// Moves a window from another space into the one being viewed, next to
@@ -716,6 +822,8 @@ final class Tiler {
                         guard let actual, let w = self.windows[id], let target = w.target, !w.hidden,
                               !self.draggedByUser.contains(id), NSEvent.pressedMouseButtons & 1 == 0,
                               !actual.isClose(to: target, tolerance: 2) else { return }
+                        // Placed, then moved to the display agents test on: leave it there.
+                        if self.isOnUnmanagedDisplay(actual), !self.isOnUnmanagedDisplay(target) { self.leaveAlone(id); return }
                         w.frame = actual
                         w.target = nil
                         self.relayout(animated: true)
@@ -727,6 +835,19 @@ final class Tiler {
 
     /// A tiled window moved or resized without us asking.
     private func windowChangedOnItsOwn(_ id: CGWindowID) {
+        if offDisplay.contains(id), let w = windows[id] {
+            let element = w.handle.element
+            w.handle.app.queue.async {
+                let actual = element.frame
+                DispatchQueue.main.async {
+                    guard let actual, !self.isOnUnmanagedDisplay(actual), let w = self.windows[id] else { return }
+                    self.offDisplay.remove(id)
+                    w.frame = actual
+                    self.scheduleScan(w.handle.app)
+                }
+            }
+            return
+        }
         let now = CACurrentMediaTime()
         guard now > settlingUntil[id] ?? 0, let w = windows[id], !w.hidden, w.target != nil else { return }
         if NSEvent.pressedMouseButtons & 1 != 0 {
@@ -746,6 +867,7 @@ final class Tiler {
                     // Late notifications from our own moves land here too; only act on a real difference.
                     guard let actual, let w = self.windows[id], let target = w.target, !w.hidden,
                           !actual.isClose(to: target, tolerance: 2) else { return }
+                    if self.isOnUnmanagedDisplay(actual) { self.leaveAlone(id); return }
                     w.frame = actual
                     w.target = nil
                     self.relayout(animated: true)
@@ -850,6 +972,7 @@ final class Tiler {
     func setUseAllDisplays(_ on: Bool) {
         guard on != useAllDisplays else { return }
         useAllDisplays = on
+        if on { offDisplay.removeAll() } // every display is managed now
         UserDefaults.standard.set(on, forKey: "useAllDisplays")
         log.notice("use all displays: \(on)")
         guard enabled else { return }

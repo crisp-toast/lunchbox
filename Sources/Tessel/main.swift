@@ -149,6 +149,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             launcher.show(query: String(command.dropFirst(5)))
             return
         }
+        // leave-app:<bundle id> / manage-app:<bundle id>: an agent testing that app on the
+        // spoof display asks Tessel to stop tiling its windows, then to resume.
+        if command.hasPrefix("leave-app:") || command.hasPrefix("manage-app:") {
+            let leave = command.hasPrefix("leave-app:")
+            tiler.setLeftAlone(String(command.drop(while: { $0 != ":" }).dropFirst()), leave)
+            return
+        }
         if command.hasPrefix("press:") {
             // press:<keycode>[:cmd][:shift][:opt] presses modifiers down, taps the
             // key, and lets go, through the whole system like a real keyboard
