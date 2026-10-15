@@ -81,8 +81,19 @@ p { margin: 0; }
 .btn.small { height: 38px; padding: 0 14px; font-size: 14px; border-radius: 11px; }
 .buy-note { font-size: 13px; color: var(--accent-deep); min-height: 1.4em; }
 
-/* Hero */
-.hero { text-align: center; padding-block: 72px 28px; display: grid; gap: 22px; justify-items: center; }
+/* Hero: colored glass breaking behind the headline, then holding mid-fall */
+.hero {
+  position: relative; isolation: isolate; overflow: hidden; text-align: center;
+  margin-inline: calc(50% - 50vw); margin-top: -76px; padding: 170px 16px 150px;
+  display: grid; gap: 22px; justify-items: center; background: #dfe1e5;
+}
+.hero-film { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; }
+/* A soft veil keeps the headline crisp over the glass; the bottom fades into the page. */
+.hero::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background: radial-gradient(48% 44% at 50% 52%, rgba(251,251,253,.9), rgba(251,251,253,.6) 55%, rgba(251,251,253,0) 100%),
+              linear-gradient(180deg, rgba(251,251,253,.55), rgba(251,251,253,0) 24%, rgba(251,251,253,0) 70%, #fbfbfd 100%);
+}
 .hero .actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
 .meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; font-size: 13px; color: var(--muted); }
 .meta span::before { content: "·"; margin-right: 18px; color: #b9bec6; }
@@ -173,7 +184,7 @@ p { margin: 0; }
 .help-group { font: 600 .72em var(--text); letter-spacing: .08em; color: #8b929c; padding: .8em .3em .2em; }
 
 /* The real recording, in a display */
-.showcase { padding-block: 8px 40px; display: grid; gap: 18px; }
+.showcase { padding-block: 0 40px; display: grid; gap: 18px; margin-top: -70px; position: relative; z-index: 1; }
 .display {
   position: relative; max-width: 100%; border-radius: clamp(14px, 2vw, 24px);
   padding: clamp(6px, 1.1vw, 14px); background: linear-gradient(180deg, #2b2e34, #15171b);
@@ -347,8 +358,12 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
 </nav>
 
 <main class="wrap" id="top">
-  <section class="hero">
-    <h1>Put your windows<br>on the arrow keys.</h1>
+  <section class="hero" id="hero">
+    <video class="hero-film" id="hero-film" muted playsinline preload="auto" poster="media/break-start.jpg" aria-hidden="true">
+      <source src="media/break.webm" type="video/webm">
+      <source src="media/break.mp4" type="video/mp4">
+    </video>
+    <h1>Break free from the<br>pile of windows.</h1>
     <p class="lede">Tessel is the ultimate window manager for Mac. Left ⌘ and an arrow moves your focus. Add ⇧ and the window comes with you.</p>
     <div class="actions">
       <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Download for Mac<span class="sep"></span><span class="price">$9.99</span></a>
@@ -516,6 +531,14 @@ const CHECKOUT_URL = "";
   }
   if (!reduce) setInterval(() => { if (tilesVisible) { move = (move + 1) % MOVES.length; placeTiles(); } }, 1500);
   new IntersectionObserver(([e]) => { tilesVisible = e.isIntersecting; }).observe(tiles);
+
+  // ---------- the hero: glass breaking once, then holding on the shards mid-fall ----------
+  const film = document.getElementById("hero-film");
+  if (reduce) {
+    film.poster = "media/break-end.jpg";
+  } else {
+    film.play().catch(() => { film.poster = "media/break-end.jpg"; });
+  }
 
   // ---------- the real recording ----------
   // Times are seconds into hero.webm: what's happening, and when each key went down.
