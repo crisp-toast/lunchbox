@@ -37,12 +37,17 @@ public struct Column: Equatable, Sendable {
 /// size instead of filling the screen.
 public struct Layout: Equatable, Sendable {
     public var columns: [Column]
-    /// Width of a lone window as a fraction of the usable screen width.
+    /// Width of a lone window as a fraction of the usable screen width, once
+    /// the user has grown, shrunk or dragged it (see `singleOwner`).
     public var singleScale: Double
     /// Height of a lone or spotlighted window as a fraction of the usable
     /// height, once the user has dragged it to a shape of their own. nil means
     /// the default 16:10.
     public var singleHeight: Double?
+    /// The window `singleScale` and `singleHeight` were set for. Any other
+    /// window centered here shows at the size its app opened it at, when
+    /// that's known, or the default.
+    public var singleOwner: WindowID?
     /// While set, this window sits alone in the center and the rest wait as
     /// small windows down the left edge (⌘⇧F). Any change to the layout ends it.
     public var spotlight: WindowID?
@@ -132,6 +137,7 @@ public struct Layout: Equatable, Sendable {
         columns[c].removeWindow(at: r)
         if columns[c].windows.isEmpty { columns.remove(at: c) }
         spotlight = nil
+        if singleOwner == id { resetSingle() }
         return true
     }
 
@@ -140,6 +146,7 @@ public struct Layout: Equatable, Sendable {
     public mutating func replace(_ old: WindowID, with new: WindowID) -> Bool {
         guard let (c, r) = position(of: old), !contains(new) else { return false }
         columns[c].windows[r] = new
+        if singleOwner == old { singleOwner = new }
         return true
     }
 
@@ -203,6 +210,12 @@ public struct Layout: Equatable, Sendable {
     public mutating func resize(_ id: WindowID, by delta: Double) -> Bool {
         guard let (c, r) = position(of: id) else { return false }
         if windowCount == 1 || spotlight == id {
+            // Another window's shape doesn't carry over: start from the default.
+            // (Tessel first adopts a window's own size when it has one.)
+            if singleOwner != id {
+                resetSingle()
+                singleOwner = id
+            }
             var next = min(Self.singleScaleRange.upperBound, max(Self.singleScaleRange.lowerBound, singleScale + delta))
             if let h = singleHeight {
                 // A shape the user chose grows and shrinks in proportion, stopping
@@ -243,9 +256,10 @@ public struct Layout: Equatable, Sendable {
                                                                    Double(size.width / max(1, usable.width))))
             let height = min(Self.singleHeightRange.upperBound, max(Self.singleHeightRange.lowerBound,
                                                                      Double(size.height / max(1, usable.height))))
-            let changed = abs(width - singleScale) > 0.005 || abs(height - (singleHeight ?? -1)) > 0.005
+            let changed = singleOwner != id || abs(width - singleScale) > 0.005 || abs(height - (singleHeight ?? -1)) > 0.005
             singleScale = width
             singleHeight = height
+            singleOwner = id
             return changed
         }
         var changed = false
@@ -268,14 +282,20 @@ public struct Layout: Equatable, Sendable {
     }
 
     /// Resets every window to an even share, and a lone or spotlighted window to
-    /// the default size and shape. Spotlight stays on.
+    /// the size its app opened it at (or the default size and shape). Spotlight
+    /// stays on.
     public mutating func balance() {
-        singleHeight = nil
         for i in columns.indices {
             columns[i].weight = 1
             columns[i].weights = Array(repeating: 1, count: columns[i].windows.count)
         }
+        resetSingle()
+    }
+
+    private mutating func resetSingle() {
         singleScale = Self.defaultSingleScale
+        singleHeight = nil
+        singleOwner = nil
     }
 
     /// Changes one share by `delta` (as a fraction of the whole) and rescales the
@@ -299,18 +319,20 @@ public struct Layout: Equatable, Sendable {
     // MARK: Geometry
 
     /// Target frames for every window, in top-left-origin screen coordinates.
-    public func frames(in rect: CGRect, gap: CGFloat) -> [WindowID: CGRect] {
+    /// `natural` holds the size each window's app opened it at, where known: a
+    /// lone or spotlighted window uses it until the user picks a shape.
+    public func frames(in rect: CGRect, gap: CGFloat, natural: [WindowID: CGSize] = [:]) -> [WindowID: CGRect] {
         let usable = CGRect(
             x: (rect.minX + gap).rounded(), y: (rect.minY + gap).rounded(),
             width: (rect.width - 2 * gap).rounded(), height: (rect.height - 2 * gap).rounded()
         )
         var result: [WindowID: CGRect] = [:]
         if windowCount == 1, let id = windows.first {
-            result[id] = Self.singleFrame(in: usable, scale: singleScale, height: singleHeight)
+            result[id] = centeredFrame(id, in: usable, natural: natural[id])
             return result
         }
         if let spot = spotlight, contains(spot) {
-            let center = Self.singleFrame(in: usable, scale: singleScale, height: singleHeight)
+            let center = centeredFrame(spot, in: usable, natural: natural[spot])
             result[spot] = center
             let others = windows.filter { $0 != spot }
             for (id, frame) in zip(others, Self.shelfFrames(count: others.count, beside: center, in: usable, gap: gap)) {
@@ -339,6 +361,23 @@ public struct Layout: Equatable, Sendable {
             x += width + gap
         }
         return result
+    }
+
+    /// Where a lone or spotlighted window sits: the shape the user gave it, else
+    /// the size its app opened it at, else the default.
+    func centeredFrame(_ id: WindowID, in usable: CGRect, natural: CGSize?) -> CGRect {
+        if singleOwner == id { return Self.singleFrame(in: usable, scale: singleScale, height: singleHeight) }
+        if let natural { return Self.naturalFrame(natural, in: usable) }
+        return Self.singleFrame(in: usable, scale: Self.defaultSingleScale)
+    }
+
+    /// An app's own window size, centered, scaled down (keeping its shape) if
+    /// it doesn't fit.
+    static func naturalFrame(_ size: CGSize, in usable: CGRect) -> CGRect {
+        let k = min(1, usable.width / max(1, size.width), usable.height / max(1, size.height))
+        let width = (size.width * k).rounded(), height = (size.height * k).rounded()
+        return CGRect(x: (usable.midX - width / 2).rounded(), y: (usable.midY - height / 2).rounded(),
+                      width: width, height: height)
     }
 
     /// A lone (or spotlighted) window, centered. By default 16:10 at `scale` of

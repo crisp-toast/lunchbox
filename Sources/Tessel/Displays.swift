@@ -52,6 +52,12 @@ extension CGRect {
     }
 }
 
+extension CGSize {
+    func isClose(to other: CGSize, tolerance: CGFloat = 2) -> Bool {
+        abs(width - other.width) <= tolerance && abs(height - other.height) <= tolerance
+    }
+}
+
 extension NSScreen {
     /// Converts a top-left-origin point to AppKit's bottom-left-origin space.
     static func cocoaPoint(fromTopLeft p: CGPoint) -> CGPoint {

@@ -2,7 +2,7 @@
 
 A small, fast tiling window manager for macOS that lives in the menu bar.
 
-- One window on a screen sits centered at a comfortable 16:10 size. Two or more tile side by side.
+- One window on a screen sits centered at the size its app opened it at, or a comfortable 16:10 when the app has no size of its own. Two or more tile side by side.
 - Everything is driven by the **left** ⌘ key, so right ⌘ + arrows still move the text cursor.
 - Windows slide into place. Apps that can't keep up just snap, so Tessel never adds lag.
 - Three Workspaces, switched instantly from the keyboard.
@@ -69,7 +69,7 @@ Apps you open often rise to the top.
 
 With the mouse: drag a tiled window onto another to swap them, onto the other screen to move it
 there, or drag its edge to resize. A centered window (alone, or in Focus) keeps any shape you
-drag it to and glides back to the center; Tidy (⌘⇧0) returns it to the default size without leaving Focus. ⌘-Tab to a window in another space switches to that space.
+drag it to and glides back to the center; Tidy (⌘⇧0) returns it to its app's own size (or 16:10) without leaving Focus. Tessel tells an app's own size from a tile it remembers: a size Tessel gave that app before, or one as tall as the screen, doesn't count. ⌘-Tab to a window in another space switches to that space.
 
 The menu bar shows the current space. Its menu can pause tiling, float or tile the focused window,
 normalize, re-tile everything, and open **Keyboard Shortcuts…** (the same searchable list as Left ⌘⇧Space). **Settings** holds Launch at Login, Set Up Space Keys, and

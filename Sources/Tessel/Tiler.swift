@@ -15,6 +15,9 @@ final class ManagedWindow {
     var minimized = false
     /// A normal document window (not a panel, sheet or helper window).
     var standard = false
+    /// The size its app opened it at, when that's the app's own choice. A lone
+    /// or Focus window shows at this size.
+    var natural: CGSize?
 
     init(handle: WindowHandle, frame: CGRect) {
         self.handle = handle
@@ -187,7 +190,7 @@ final class Tiler {
             for (uuid, layout) in layouts {
                 let display = displays.first { $0.uuid == uuid } ?? displays.first
                 guard let d = display else { continue }
-                for (id, frame) in layout.frames(in: d.visible, gap: Self.gap) {
+                for (id, frame) in layout.frames(in: d.visible, gap: Self.gap, natural: naturals) {
                     guard let w = windows[id], w.hidden else { continue }
                     let size = w.target?.size ?? w.frame.size
                     let origin = CGPoint(x: frame.midX - size.width / 2, y: frame.midY - size.height / 2)
@@ -392,6 +395,13 @@ final class Tiler {
 
     private func register(_ info: WindowInfo, app: AppHandle) -> ManagedWindow {
         let window = ManagedWindow(handle: WindowHandle(id: info.id, element: info.element, app: app), frame: info.frame)
+        // A window Tessel tiled before a relaunch has a tile's size, not its app's choice.
+        if savedPlacement[info.id] == nil {
+            window.natural = naturalSize(of: info.frame, bundleID: app.bundleID)
+        } else {
+            noteTileSize(info.frame.size, for: app.bundleID)
+            window.natural = learnedSize(for: app.bundleID)
+        }
         windows[info.id] = window
         app.windowIDs[info.element] = info.id
         if let observer = app.observer {
@@ -813,7 +823,7 @@ final class Tiler {
                 if s == currentSpace, let d = activeDisplays.first(where: { $0.uuid == uuid }) {
                     // Spotlight: the shelved windows wait off screen; the shelf shows cards for them.
                     let shelved = Set(layout.shelved)
-                    for (id, frame) in layout.frames(in: d.visible, gap: Self.gap) {
+                    for (id, frame) in layout.frames(in: d.visible, gap: Self.gap, natural: naturals) {
                         guard let w = windows[id] else { continue }
                         if shelved.contains(id) {
                             if !w.hidden, let t = w.target { shelfOrigins[id] = t }
@@ -826,6 +836,7 @@ final class Tiler {
                         w.target = frame
                         w.hidden = false
                         settlingUntil[id] = now + Animator.duration + 0.3
+                        noteTileSize(frame.size, for: w.handle.app.bundleID)
                         moves.append((w.handle, from, frame, kind))
                     }
                 } else {
@@ -842,9 +853,59 @@ final class Tiler {
         var result: [CGWindowID: CGRect] = [:]
         for d in activeDisplays {
             guard let layout = spaces[currentSpace][d.uuid] else { continue }
-            result.merge(layout.frames(in: d.visible, gap: Self.gap)) { a, _ in a }
+            result.merge(layout.frames(in: d.visible, gap: Self.gap, natural: naturals)) { a, _ in a }
         }
         return result
+    }
+
+    // MARK: Each app's own window size
+
+    private var naturals: [CGWindowID: CGSize] { windows.compactMapValues(\.natural) }
+
+    /// Sizes Tessel recently gave each app's windows. Apps reopen windows at the
+    /// size they last had, which is usually a tile, not the app's own choice.
+    private var tileSizes: [String: [CGSize]] = {
+        let saved = UserDefaults.standard.dictionary(forKey: "tileSizes") as? [String: [[Double]]] ?? [:]
+        return saved.mapValues { $0.compactMap { $0.count == 2 ? CGSize(width: $0[0], height: $0[1]) : nil } }
+    }()
+    /// The last size each app chose for a new window itself.
+    private var appSizes: [String: CGSize] = {
+        let saved = UserDefaults.standard.dictionary(forKey: "appSizes") as? [String: [Double]] ?? [:]
+        return saved.compactMapValues { $0.count == 2 ? CGSize(width: $0[0], height: $0[1]) : nil }
+    }()
+
+    private func noteTileSize(_ size: CGSize, for bundleID: String?) {
+        guard let bundleID else { return }
+        var list = tileSizes[bundleID] ?? []
+        guard !list.contains(where: { $0.isClose(to: size, tolerance: 3) }) else { return }
+        list.append(size)
+        tileSizes[bundleID] = Array(list.suffix(24))
+    }
+
+    /// The size a new window's app chose for it, if it's a real choice: not a
+    /// tiny helper, and not a size that looks like Tessel's. A size Tessel gave
+    /// the app's windows before, or one as tall as the screen (a column, or a
+    /// window filling the screen), isn't; then the app's last real choice
+    /// stands in.
+    private func naturalSize(of frame: CGRect, bundleID: String?) -> CGSize? {
+        let size = frame.size
+        let display = displays.first { $0.frame.contains(CGPoint(x: frame.midX, y: frame.midY)) } ?? displays.first
+        let usable = display.map { $0.visible.insetBy(dx: Self.gap, dy: Self.gap).size } ?? .zero
+        guard size.width >= 320, size.height >= 200 else { return nil }
+        let tallAsScreen = size.height >= usable.height * 0.96
+        let tessels = bundleID.flatMap { tileSizes[$0] }?.contains { $0.isClose(to: size, tolerance: 3) } ?? false
+        if tallAsScreen || tessels { return learnedSize(for: bundleID) }
+        guard let bundleID else { return size }
+        appSizes[bundleID] = size
+        return size
+    }
+
+    /// The app's last real choice of window size, if any (a screen-tall size
+    /// learned before Tessel knew better doesn't count).
+    private func learnedSize(for bundleID: String?) -> CGSize? {
+        guard let size = bundleID.flatMap({ appSizes[$0] }) else { return nil }
+        let usable = (displays.first(where: \.isMain) ?? displays.first)?.visible.insetBy(dx: Self.gap, dy: Self.gap).size ?? .zero
+        return size.height < usable.height * 0.96 ? size : nil
     }
 
     private func persist() {
@@ -858,6 +919,8 @@ final class Tiler {
         for (id, p) in savedPlacement where placement[String(id)] == nil { placement[String(id)] = "\(p.space)|\(p.display)" }
         UserDefaults.standard.set(placement, forKey: "placement")
         UserDefaults.standard.set(currentSpace, forKey: "currentSpace")
+        UserDefaults.standard.set(tileSizes.mapValues { $0.map { [Double($0.width), Double($0.height)] } }, forKey: "tileSizes")
+        UserDefaults.standard.set(appSizes.mapValues { [Double($0.width), Double($0.height)] }, forKey: "appSizes")
         UserDefaults.standard.set(adopted.filter { windows[$0] != nil || savedPlacement[$0] != nil }.map(Int.init), forKey: "adopted")
     }
 
@@ -964,6 +1027,11 @@ final class Tiler {
     private func resize(by delta: Double) {
         guard let id = focusedID, let (space, uuid) = place(of: id), space == currentSpace,
               var layout = spaces[space][uuid] else { return }
+        if layout.windowCount == 1 || layout.spotlight == id, layout.singleOwner != id,
+           let d = displays.first(where: { $0.uuid == uuid }),
+           let current = layout.frames(in: d.visible, gap: Self.gap, natural: naturals)[id] {
+            layout.adopt(id, size: current.size, in: d.visible, gap: Self.gap)
+        }
         if layout.resize(id, by: delta) {
             spaces[space][uuid] = layout
             relayout(animated: true)
