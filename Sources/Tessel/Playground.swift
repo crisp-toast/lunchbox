@@ -177,6 +177,17 @@ final class Playground: NSView {
             closeOverlays()
         }
         var layout = workspaces[current]
+        // As on the real desktop: in Focus, ⌘ or ⇧⌘ with any arrow ends it.
+        switch action {
+        case .focus, .move:
+            if layout.spotlight != nil {
+                layout.spotlight = nil
+                workspaces[current] = layout
+                apply(animated: true)
+                return
+            }
+        default: break
+        }
         switch action {
         case .focus(let direction):
             let frames = visibleFrames()
@@ -185,8 +196,6 @@ final class Playground: NSView {
             others[id] = nil
             if let next = nearest(from: from, direction: direction, in: others) {
                 focused = next
-                // As on the real desktop: focusing a shelved window ends Focus.
-                if layout.spotlight != nil, layout.spotlight != next { layout.spotlight = nil }
             }
         case .move(let direction):
             if let id = focused { _ = layout.move(id, direction) }

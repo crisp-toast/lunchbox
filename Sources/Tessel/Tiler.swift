@@ -1255,8 +1255,8 @@ final class Tiler {
         guard enabled else { return }
         let t0 = CACurrentMediaTime()
         switch action {
-        case .focus(let direction): focus(direction)
-        case .move(let direction): move(direction)
+        case .focus(let direction): if !leaveFocusMode() { focus(direction) }
+        case .move(let direction): if !leaveFocusMode() { move(direction) }
         case .grow: resize(by: Self.resizeStep)
         case .shrink: resize(by: -Self.resizeStep)
         case .switchSpace(let i): switchSpace(to: i, focusing: nil)
@@ -1812,6 +1812,14 @@ final class Tiler {
         relayout(animated: true)
         if layout.spotlight != nil { activate(id) }
         showRing(on: id)
+    }
+
+    /// In Focus, ⌘ or ⇧⌘ with any arrow just ends it, whichever way it points: back to
+    /// the tiles, with the keyboard still on the same window.
+    private func leaveFocusMode() -> Bool {
+        guard activeDisplays.contains(where: { spaces[currentSpace][$0.uuid]?.spotlight != nil }) else { return false }
+        exitSpotlight()
+        return true
     }
 
     private func endSpotlight(unlessShowing id: CGWindowID) {

@@ -21,7 +21,7 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + ← → | Move the window one step sideways: first it stacks with its neighbor, a second press moves it past |
 | Left ⌘ ⇧ + ↑ ↓ | Swap with the window above or below in a stack |
 | Left ⌘ ⇧ + plus / minus | Give the window more or less space (a lone window, or one in Focus, grows or shrinks around the center) |
-| Left ⌘ ⇧ + F | **Focus**: the window alone in the center, the rest of the Workspace on the Shelf. Again, a click on a Shelf card, or ⌘-arrowing to one ends it. New Finder windows open in Focus |
+| Left ⌘ ⇧ + F | **Focus**: the window alone in the center, the rest of the Workspace on the Shelf. Again, a click on a Shelf card, or ⌘ (or ⌘ ⇧) with any arrow ends it. New Finder windows open in Focus |
 | Left ⌘ ⇧ + H | **Hide** the window: it always moves to Workspace 3 |
 | Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
 | ⌘ + Workspace key 1 / 2 / 3 | Go to that Workspace |
