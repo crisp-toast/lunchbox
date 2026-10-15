@@ -2,7 +2,7 @@
 
 A small, fast tiling window manager for macOS that lives in the menu bar.
 
-- One window on a screen sits centered at the size its app opened it at, or a comfortable 16:10 when the app has no size of its own. Two or more tile side by side.
+- One window on a screen sits centered at a comfortable 16:10 size. Two or more tile side by side.
 - Everything is driven by the **left** ⌘ key, so right ⌘ + arrows still move the text cursor.
 - Windows slide into place. Apps that can't keep up just snap, so Tessel never adds lag.
 - Three Workspaces, switched instantly from the keyboard.
@@ -68,8 +68,7 @@ Apps you open often rise to the top.
 - Opening an app that isn't running yet (or is running with no windows), or a **New … window**,
   makes room right away, so a slow launch never looks like nothing happened: the windows here glide
   aside and a frosted **placeholder** with the app's icon, gently pulsing, holds the exact spot and
-  size the window will get (alone, or in Focus, it's centered at the size that app's windows usually
-  open at). The app's first new window lands right in it and nothing else moves; any more windows
+  size the window will get (alone, or in Focus, it's centered at 16:10). The app's first new window lands right in it and nothing else moves; any more windows
   it opens tile as usual. If no window comes within about 8 seconds (a little longer while a big app
   is still starting up), the app quits, or its window opens while you're in another Workspace, the
   placeholder fades and the gap closes. A placeholder belongs to its Workspace like a window does.
@@ -78,7 +77,7 @@ Apps you open often rise to the top.
 
 With the mouse: drag a tiled window onto another to swap them, onto the other screen to move it
 there, or drag its edge to resize. A centered window (alone, or in Focus) keeps any shape you
-drag it to and glides back to the center; Tidy (⌘⇧0) returns it to its app's own size (or 16:10) without leaving Focus. Tessel tells an app's own size from a tile it remembers: a size Tessel gave that app before, or one as tall as the screen, doesn't count. ⌘-Tab to a window in another space switches to that space.
+drag it to and glides back to the center; Tidy (⌘⇧0) returns it to the default size without leaving Focus. ⌘-Tab to a window in another space switches to that space.
 
 The Dock works the same way: clicking a running app's icon goes to that app, using its window in
 the current Workspace if it has one, else switching to the Workspace its window is in. An app that

@@ -32,6 +32,26 @@ func layout(_ columns: [[WindowID]]) -> Layout {
         do { let r = l.resize(1, by: 0.1); #expect(!r) } // already at max
     }
 
+    @Test func aShapeYouPickStaysUntilTidy() throws {
+        var l = layout([[1]])
+        l.adopt(1, size: CGSize(width: 900, height: 1200), in: screen, gap: gap)
+        let picked = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(abs(picked.width - 900) <= 2 && abs(picked.height - 1200) <= 2)
+        l.balance()
+        let tidy = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(abs(tidy.width / tidy.height - Layout.singleAspect) < 0.01)
+    }
+
+    @Test func anotherWindowsShapeDoesNotCarryOver() throws {
+        var l = layout([[1]])
+        l.adopt(1, size: CGSize(width: 900, height: 1200), in: screen, gap: gap)
+        l.insert(2, near: 1, maxColumns: 3)
+        l.remove(1)
+        let f = try #require(l.frames(in: screen, gap: gap)[2])
+        #expect(abs(f.width / f.height - Layout.singleAspect) < 0.01)
+        #expect(f == layout([[2]]).frames(in: screen, gap: gap)[2])
+    }
+
     @Test func shrinkStopsAtMinimum() {
         var l = layout([[1]])
         for _ in 0..<10 { l.resize(1, by: -0.1) }
@@ -312,50 +332,5 @@ func layout(_ columns: [[WindowID]]) -> Layout {
         let after = try #require(l.frames(in: screen, gap: gap)[1])
         #expect(after.width > before.width)
         #expect(l.spotlight == 1)
-    }
-}
-
-@Suite struct AppChosenSize {
-    let own = CGSize(width: 1100, height: 760)
-
-    @Test func loneWindowUsesItsAppsSize() throws {
-        let f = try #require(layout([[1]]).frames(in: screen, gap: gap, natural: [1: own])[1])
-        #expect(f.size == own)
-        #expect(abs(f.midX - screen.midX) <= 1 && abs(f.midY - screen.midY) <= 1)
-    }
-
-    @Test func tooBigScalesDownKeepingShape() throws {
-        let huge = CGSize(width: 4000, height: 2000)
-        let f = try #require(layout([[1]]).frames(in: screen, gap: gap, natural: [1: huge])[1])
-        #expect(f.width <= screen.width - 2 * gap && f.height <= screen.height - 2 * gap)
-        #expect(abs(f.width / f.height - 2) < 0.01)
-    }
-
-    @Test func focusUsesItToo() throws {
-        var l = layout([[1], [2]])
-        l.toggleSpotlight(2)
-        let f = try #require(l.frames(in: screen, gap: gap, natural: [2: own])[2])
-        #expect(f.size == own)
-    }
-
-    @Test func aShapeYouPickWinsUntilTidy() throws {
-        var l = layout([[1]])
-        l.adopt(1, size: CGSize(width: 900, height: 1200), in: screen, gap: gap)
-        let picked = try #require(l.frames(in: screen, gap: gap, natural: [1: own])[1])
-        #expect(abs(picked.width - 900) <= 2 && abs(picked.height - 1200) <= 2)
-        l.balance()
-        let tidy = try #require(l.frames(in: screen, gap: gap, natural: [1: own])[1])
-        #expect(tidy.size == own)
-    }
-
-    @Test func anotherWindowsShapeDoesNotCarryOver() throws {
-        var l = layout([[1]])
-        l.adopt(1, size: CGSize(width: 900, height: 1200), in: screen, gap: gap)
-        l.insert(2, near: 1, maxColumns: 3)
-        l.remove(1)
-        let f = try #require(l.frames(in: screen, gap: gap, natural: [2: own])[2])
-        #expect(f.size == own)
-        let plain = try #require(l.frames(in: screen, gap: gap)[2])
-        #expect(abs(plain.width / plain.height - 1.6) < 0.01)
     }
 }

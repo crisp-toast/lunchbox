@@ -45,8 +45,7 @@ public struct Layout: Equatable, Sendable {
     /// the default 16:10.
     public var singleHeight: Double?
     /// The window `singleScale` and `singleHeight` were set for. Any other
-    /// window centered here shows at the size its app opened it at, when
-    /// that's known, or the default.
+    /// window centered here shows at the default 16:10.
     public var singleOwner: WindowID?
     /// While set, this window sits alone in the center and the rest wait as
     /// small windows down the left edge (⌘⇧F). Any change to the layout ends it.
@@ -246,7 +245,6 @@ public struct Layout: Equatable, Sendable {
         guard let (c, r) = position(of: id) else { return false }
         if windowCount == 1 || spotlight == id {
             // Another window's shape doesn't carry over: start from the default.
-            // (Tessel first adopts a window's own size when it has one.)
             if singleOwner != id {
                 resetSingle()
                 singleOwner = id
@@ -317,8 +315,7 @@ public struct Layout: Equatable, Sendable {
     }
 
     /// Resets every window to an even share, and a lone or spotlighted window to
-    /// the size its app opened it at (or the default size and shape). Spotlight
-    /// stays on.
+    /// the default size and shape. Spotlight stays on.
     public mutating func balance() {
         for i in columns.indices {
             columns[i].weight = 1
@@ -354,20 +351,18 @@ public struct Layout: Equatable, Sendable {
     // MARK: Geometry
 
     /// Target frames for every window, in top-left-origin screen coordinates.
-    /// `natural` holds the size each window's app opened it at, where known: a
-    /// lone or spotlighted window uses it until the user picks a shape.
-    public func frames(in rect: CGRect, gap: CGFloat, natural: [WindowID: CGSize] = [:]) -> [WindowID: CGRect] {
+    public func frames(in rect: CGRect, gap: CGFloat) -> [WindowID: CGRect] {
         let usable = CGRect(
             x: (rect.minX + gap).rounded(), y: (rect.minY + gap).rounded(),
             width: (rect.width - 2 * gap).rounded(), height: (rect.height - 2 * gap).rounded()
         )
         var result: [WindowID: CGRect] = [:]
         if windowCount == 1, let id = windows.first {
-            result[id] = centeredFrame(id, in: usable, natural: natural[id])
+            result[id] = centeredFrame(id, in: usable)
             return result
         }
         if let spot = spotlight, contains(spot) {
-            let center = centeredFrame(spot, in: usable, natural: natural[spot])
+            let center = centeredFrame(spot, in: usable)
             result[spot] = center
             let others = windows.filter { $0 != spot }
             for (id, frame) in zip(others, Self.shelfFrames(count: others.count, beside: center, in: usable, gap: gap)) {
@@ -399,20 +394,10 @@ public struct Layout: Equatable, Sendable {
     }
 
     /// Where a lone or spotlighted window sits: the shape the user gave it, else
-    /// the size its app opened it at, else the default.
-    func centeredFrame(_ id: WindowID, in usable: CGRect, natural: CGSize?) -> CGRect {
+    /// the default 16:10.
+    func centeredFrame(_ id: WindowID, in usable: CGRect) -> CGRect {
         if singleOwner == id { return Self.singleFrame(in: usable, scale: singleScale, height: singleHeight) }
-        if let natural { return Self.naturalFrame(natural, in: usable) }
         return Self.singleFrame(in: usable, scale: Self.defaultSingleScale)
-    }
-
-    /// An app's own window size, centered, scaled down (keeping its shape) if
-    /// it doesn't fit.
-    static func naturalFrame(_ size: CGSize, in usable: CGRect) -> CGRect {
-        let k = min(1, usable.width / max(1, size.width), usable.height / max(1, size.height))
-        let width = (size.width * k).rounded(), height = (size.height * k).rounded()
-        return CGRect(x: (usable.midX - width / 2).rounded(), y: (usable.midY - height / 2).rounded(),
-                      width: width, height: height)
     }
 
     /// A lone (or spotlighted) window, centered. By default 16:10 at `scale` of

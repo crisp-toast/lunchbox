@@ -57,32 +57,29 @@ let arrivals: [(layout: Layout, focused: WindowID?)] = [
         }
     }
 
-    @Test func aLonePlaceholderSitsAtTheAppsOwnSize() throws {
-        let own = CGSize(width: 1200, height: 800)
+    @Test func aLonePlaceholderSitsCenteredAtSixteenByTen() throws {
         let l = layout([[p1]])
-        let frame = try #require(l.frames(in: screen, gap: gap, natural: [p1: own])[p1])
-        #expect(frame.size == own)
+        let frame = try #require(l.frames(in: screen, gap: gap)[p1])
+        #expect(abs(frame.width / frame.height - Layout.singleAspect) < 0.01)
         #expect(abs(frame.midX - screen.midX) <= 1 && abs(frame.midY - screen.midY) <= 1)
-        // No size of its own yet: the usual 16:10.
-        let plain = try #require(l.frames(in: screen, gap: gap)[p1])
-        #expect(abs(plain.width / plain.height - Layout.singleAspect) < 0.01)
-        // The window opening at that size lands right where the placeholder was.
+        // The window lands right where the placeholder was.
         var filled = l
         filled.fill(p1, with: 9)
-        #expect(filled.frames(in: screen, gap: gap, natural: [9: own])[9] == frame)
+        #expect(filled.frames(in: screen, gap: gap)[9] == frame)
     }
 
     @Test func aPlaceholderInFocusHandsFocusToItsWindow() throws {
         var l = layout([[1], [2]])
         l.insert(p1, near: 2, maxColumns: 3)
         l.spotlight = p1
-        let own = CGSize(width: 1000, height: 700)
-        let waiting = l.frames(in: screen, gap: gap, natural: [p1: own])
+        let waiting = l.frames(in: screen, gap: gap)
         #expect(l.shelved == [1, 2])
+        let center = try #require(waiting[p1])
+        #expect(abs(center.width / center.height - Layout.singleAspect) < 0.01)
         l.fill(p1, with: 9)
         #expect(l.spotlight == 9)
         #expect(l.shelved == [1, 2])
-        let arrived = l.frames(in: screen, gap: gap, natural: [9: own])
+        let arrived = l.frames(in: screen, gap: gap)
         #expect(arrived[9] == waiting[p1])
         #expect(arrived[1] == waiting[1] && arrived[2] == waiting[2])
     }
