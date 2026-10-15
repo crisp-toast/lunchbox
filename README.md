@@ -164,7 +164,7 @@ Logs (`/usr/bin/log`, since zsh has its own `log` builtin):
 ## Website
 
 `site/` is the landing page: `index.html` (self-contained apart from Google Fonts) and the logo as
-`logo.svg`. It sells Tessel at $14.99 USD, one-time, with lifetime updates, and walks through every
+`logo.svg`. It sells Tessel at $9.99 USD, one-time, with lifetime updates, and walks through every
 feature with an animated mini Mac. Preview it with `python3 -m http.server 4173 --directory site`.
 
 The Buy buttons go nowhere yet: set `CHECKOUT_URL` at the top of the page's script once a checkout

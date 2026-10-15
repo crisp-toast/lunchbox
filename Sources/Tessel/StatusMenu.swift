@@ -24,9 +24,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
     func refresh() {
         guard let button = item.button else { return }
-        let symbol = tiler.enabled ? "rectangle.split.3x1" : "rectangle.dashed"
-        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Tessel")
-        button.image?.isTemplate = true
+        button.image = MenuBarGlyph.image(paused: !tiler.enabled)
         button.imagePosition = .imageLeading
         button.title = tiler.enabled ? " \(tiler.currentSpace + 1)" : ""
     }

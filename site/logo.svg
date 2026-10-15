@@ -1,20 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Tessel">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="64 64 896 896" role="img" aria-label="Tessel">
   <defs>
-    <linearGradient id="t-bg" x1="0.15" y1="0" x2="0.85" y2="1">
-      <stop offset="0" stop-color="#4c8dff"/>
-      <stop offset="1" stop-color="#1f45d6"/>
+    <!-- graphite at the top falling to near-black, lit from above -->
+    <linearGradient id="t-body" x1="0.32" y1="0" x2="0.68" y2="1">
+      <stop offset="0" stop-color="#4a4d55"/>
+      <stop offset="0.45" stop-color="#1e2024"/>
+      <stop offset="1" stop-color="#050506"/>
     </linearGradient>
-    <linearGradient id="t-sheen" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
-      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    <radialGradient id="t-glow" cx="0.32" cy="0.02" r="0.95">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.20"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="t-rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.42"/>
+      <stop offset="0.18" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="0.8" stop-color="#ffffff" stop-opacity="0.02"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.10"/>
+    </linearGradient>
+    <linearGradient id="t-tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dcdfe5"/>
+    </linearGradient>
+    <linearGradient id="t-smoke" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.16"/>
+    </linearGradient>
+    <linearGradient id="t-ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f4f5f8"/>
+      <stop offset="0.5" stop-color="#a6abb5"/>
+      <stop offset="1" stop-color="#e3e6eb"/>
     </linearGradient>
   </defs>
-  <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#t-bg)"/>
-  <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#t-sheen)"/>
+  <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#t-body)"/>
+  <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#t-glow)"/>
+  <rect x="67" y="67" width="890" height="890" rx="209" fill="none" stroke="url(#t-rim)" stroke-width="6"/>
   <!-- a tall tile and two stacked: the layout Tessel makes -->
-  <rect x="236" y="236" width="252" height="552" rx="44" fill="#ffffff" fill-opacity="0.96"/>
-  <rect x="536" y="236" width="252" height="252" rx="44" fill="#ffffff" fill-opacity="0.96"/>
-  <rect x="536" y="536" width="252" height="252" rx="44" fill="#ffffff" fill-opacity="0.62"/>
+  <rect x="236" y="236" width="252" height="552" rx="44" fill="url(#t-tile)"/>
+  <rect x="536" y="236" width="252" height="252" rx="44" fill="url(#t-tile)"/>
+  <rect x="536" y="536" width="252" height="252" rx="44" fill="url(#t-smoke)"/>
   <!-- the focus ring -->
-  <rect x="514" y="214" width="296" height="296" rx="62" fill="none" stroke="#bfe0ff" stroke-width="14"/>
+  <rect x="514" y="214" width="296" height="296" rx="62" fill="none" stroke="url(#t-ring)" stroke-width="14"/>
 </svg>

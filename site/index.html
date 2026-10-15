@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tessel</title>
-<meta name="description" content="Tessel puts your Mac's windows on the arrow keys. Every window tiles the moment it opens. $14.99 once, lifetime updates.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='.15' y1='0' x2='.85' y2='1'%3E%3Cstop offset='0' stop-color='%234c8dff'/%3E%3Cstop offset='1' stop-color='%231f45d6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='64' y='64' width='896' height='896' rx='212' fill='url(%23g)'/%3E%3Crect x='236' y='236' width='252' height='552' rx='44' fill='%23fff'/%3E%3Crect x='536' y='236' width='252' height='252' rx='44' fill='%23fff'/%3E%3Crect x='536' y='536' width='252' height='252' rx='44' fill='%23fff' fill-opacity='.62'/%3E%3C/svg%3E">
+<meta name="description" content="Tessel puts your Mac's windows on the arrow keys. Every window tiles the moment it opens. $9.99 once, lifetime updates.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cdefs%3E%3ClinearGradient id='b' x1='.32' y1='0' x2='.68' y2='1'%3E%3Cstop offset='0' stop-color='%234a4d55'/%3E%3Cstop offset='.45' stop-color='%231e2024'/%3E%3Cstop offset='1' stop-color='%23050506'/%3E%3C/linearGradient%3E%3ClinearGradient id='t' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23fff'/%3E%3Cstop offset='1' stop-color='%23dcdfe5'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='64' y='64' width='896' height='896' rx='212' fill='url%28%23b%29'/%3E%3Crect x='236' y='236' width='252' height='552' rx='44' fill='url%28%23t%29'/%3E%3Crect x='536' y='236' width='252' height='252' rx='44' fill='url%28%23t%29'/%3E%3Crect x='536' y='536' width='252' height='252' rx='44' fill='%23fff' fill-opacity='.28'/%3E%3Crect x='514' y='214' width='296' height='296' rx='62' fill='none' stroke='%23c9cdd5' stroke-width='14'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
@@ -233,7 +233,7 @@ p { margin: 0; }
   padding: 12px 14px; border-radius: 12px; border: 1px solid transparent; background: none; font: inherit; color: var(--muted);
 }
 .chapter .ct { font-weight: 600; color: var(--ink); font-size: 15px; }
-.chapter .ck { font: 500 11.5px var(--mono); grid-column: 1 / 3; }
+.chapter .ck { font: 500 13px var(--text); grid-column: 1 / 3; }
 .chapter.on { background: #fff; border-color: var(--line); box-shadow: 0 6px 20px -10px rgba(20,30,60,.25); }
 .chapter.on .ck { color: var(--accent-deep); }
 .chapter .progress { grid-column: 1 / 3; height: 2px; border-radius: 2px; background: var(--line); overflow: hidden; margin-top: 6px; opacity: 0; }
@@ -281,10 +281,8 @@ details[open] summary::after { transform: rotate(45deg); }
 details p { color: var(--muted); padding-top: 10px; max-width: 62ch; }
 
 /* Closing */
-.still { margin: 0; width: 100%; max-width: 100%; aspect-ratio: 16 / 7; border-radius: 24px; overflow: hidden; background: #efe9e0; }
-.still img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .closing { padding-block: 100px 70px; display: grid; gap: 22px; justify-items: center; text-align: center; background: radial-gradient(60% 70% at 50% 40%, #eef3ff 0%, transparent 70%); }
-.closing svg.icon { width: 76px; height: 76px; filter: drop-shadow(0 12px 22px rgba(31,69,214,.3)); }
+.closing svg.icon { width: 76px; height: 76px; filter: drop-shadow(0 14px 24px rgba(10,12,16,.35)); }
 footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 
 @media (max-width: 860px) {
@@ -305,15 +303,20 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
-    <linearGradient id="logo-bg" x1="0.15" y1="0" x2="0.85" y2="1"><stop offset="0" stop-color="#4c8dff"/><stop offset="1" stop-color="#1f45d6"/></linearGradient>
-    <linearGradient id="logo-sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <linearGradient id="logo-body" x1="0.32" y1="0" x2="0.68" y2="1"><stop offset="0" stop-color="#4a4d55"/><stop offset="0.45" stop-color="#1e2024"/><stop offset="1" stop-color="#050506"/></linearGradient>
+    <radialGradient id="logo-glow" cx="0.32" cy="0.02" r="0.95"><stop offset="0" stop-color="#fff" stop-opacity=".2"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="logo-rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".42"/><stop offset=".18" stop-color="#fff" stop-opacity=".06"/><stop offset=".8" stop-color="#fff" stop-opacity=".02"/><stop offset="1" stop-color="#fff" stop-opacity=".1"/></linearGradient>
+    <linearGradient id="logo-tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#dcdfe5"/></linearGradient>
+    <linearGradient id="logo-smoke" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".34"/><stop offset="1" stop-color="#fff" stop-opacity=".16"/></linearGradient>
+    <linearGradient id="logo-ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f8"/><stop offset=".5" stop-color="#a6abb5"/><stop offset="1" stop-color="#e3e6eb"/></linearGradient>
     <symbol id="logo" viewBox="64 64 896 896">
-      <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#logo-bg)"/>
-      <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#logo-sheen)"/>
-      <rect x="236" y="236" width="252" height="552" rx="44" fill="#fff" fill-opacity=".96"/>
-      <rect x="536" y="236" width="252" height="252" rx="44" fill="#fff" fill-opacity=".96"/>
-      <rect x="536" y="536" width="252" height="252" rx="44" fill="#fff" fill-opacity=".62"/>
-      <rect x="514" y="214" width="296" height="296" rx="62" fill="none" stroke="#bfe0ff" stroke-width="14"/>
+      <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#logo-body)"/>
+      <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#logo-glow)"/>
+      <rect x="67" y="67" width="890" height="890" rx="209" fill="none" stroke="url(#logo-rim)" stroke-width="6"/>
+      <rect x="236" y="236" width="252" height="552" rx="44" fill="url(#logo-tile)"/>
+      <rect x="536" y="236" width="252" height="252" rx="44" fill="url(#logo-tile)"/>
+      <rect x="536" y="536" width="252" height="252" rx="44" fill="url(#logo-smoke)"/>
+      <rect x="514" y="214" width="296" height="296" rx="62" fill="none" stroke="url(#logo-ring)" stroke-width="14"/>
     </symbol>
     <symbol id="apple" viewBox="0 0 16 16"><path fill="currentColor" d="M11.2 8.5c0-1.6 1.3-2.4 1.4-2.4-.8-1.1-2-1.3-2.4-1.3-1-.1-2 .6-2.5.6s-1.3-.6-2.2-.6c-1.1 0-2.2.7-2.8 1.7-1.2 2-.3 5.1.9 6.8.6.8 1.2 1.7 2.1 1.7.8 0 1.2-.5 2.2-.5s1.3.5 2.2.5c.9 0 1.5-.8 2-1.7.6-.9.9-1.8.9-1.9 0 0-1.8-.7-1.8-2.9zM9.6 3.6c.5-.6.8-1.3.7-2.1-.7 0-1.5.5-2 1.1-.4.5-.8 1.3-.7 2 .8.1 1.5-.4 2-1z"/></symbol>
   </defs>
@@ -323,7 +326,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   <div class="nav-inner">
     <a class="brand" href="#top"><svg><use href="#logo"/></svg>Tessel</a>
     <div class="nav-links"><a href="#features">Features</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></div>
-    <a class="btn dark small" href="#pricing"><svg><use href="#apple"/></svg>Buy<span class="sep"></span><span class="price">$14.99</span></a>
+    <a class="btn dark small" href="#pricing"><svg><use href="#apple"/></svg>Buy<span class="sep"></span><span class="price">$9.99</span></a>
   </div>
 </nav>
 
@@ -332,7 +335,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     <h1>Put your windows<br>on the arrow keys.</h1>
     <p class="lede">Tessel tiles every window the moment it opens. Left ⌘ and an arrow moves your focus. Add ⇧ and the window comes with you.</p>
     <div class="actions">
-      <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Buy Tessel<span class="sep"></span><span class="price">$14.99</span></a>
+      <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Buy Tessel<span class="sep"></span><span class="price">$9.99</span></a>
       <a class="btn" href="#how">See how it works</a>
     </div>
     <div class="meta"><span>One-time purchase</span><span>Lifetime updates</span><span>macOS 14 or later</span><span>Apple silicon</span></div>
@@ -346,7 +349,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       </video>
       <button class="toggle" id="reel-toggle" type="button" aria-label="Pause the recording"><svg viewBox="0 0 16 16"><path id="reel-icon" d="M5 3v10M11 3v10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
     </div>
-    <div class="live" id="live" aria-live="off"><div class="keys" id="live-keys"></div><p class="cap" id="live-cap">Open a window. It sits centered at 16:10.</p></div>
+    <div class="live" id="live" aria-live="off"><div class="keys" id="live-keys"></div><p class="cap" id="live-cap">Three windows, tiled the moment they opened.</p></div>
     <p class="real">A real, unedited screen recording of Tessel on macOS. The colored windows stand in for your apps.</p>
   </section>
 
@@ -362,9 +365,9 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
         <p>Open a window and it takes a column. A lone window sits centered at a calm 16:10, never stretched edge to edge.</p>
       </article>
       <article>
-        <div class="art"><div class="art-keys"><div class="row-k"><span class="kc big">Left ⌘</span><span class="kc big">⇧</span></div><div class="row-k"><span class="kc">←</span><span class="kc">↑</span><span class="kc">↓</span><span class="kc">→</span></div></div></div>
+        <div class="art"><div class="art-keys"><div class="row-k"><span class="kc big">⇧</span><span class="kc big">Left ⌘</span></div><div class="row-k"><span class="kc">←</span><span class="kc">↑</span><span class="kc">↓</span><span class="kc">→</span></div></div></div>
         <h3>Two ideas, the whole desktop</h3>
-        <p>Left ⌘ goes somewhere. Left ⌘⇧ moves something. Right ⌘ keeps its usual job, and every shortcut can be rebound.</p>
+        <p>Left ⌘ goes somewhere. Add ⇧ and it moves something. Right ⌘ keeps its usual job, and every shortcut can be rebound.</p>
       </article>
       <article>
         <div class="art"><div class="art-speed"><small>Fast app · glides</small><div class="bar2"><b style="width:100%"></b></div><small>Busy app · slides</small><div class="bar2"><b style="width:70%"></b></div><small>Struggling app · snaps</small><div class="bar2"><b style="width:30%"></b></div></div></div>
@@ -400,11 +403,11 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     <div style="display:grid;gap:14px">
       <span class="eyebrow">Pricing</span>
       <h2>One price.<br>Every version after it.</h2>
-      <p class="lede">No subscription and no account. Pay $14.99 once, and every Tessel we ever ship is yours.</p>
+      <p class="lede">No subscription and no account. Pay $9.99 once, and every Tessel we ever ship is yours.</p>
     </div>
     <div class="price-card">
       <div class="price-top"><svg><use href="#logo"/></svg><div><b>Tessel</b><small>For your Mac, for good</small></div></div>
-      <div class="amount"><strong>$14.99</strong><span>USD, one-time</span></div>
+      <div class="amount"><strong>$9.99</strong><span>USD, one-time</span></div>
       <span class="lifetime">Lifetime updates included</span>
       <ul class="checks">
         <li>Automatic tiling, Focus, Tidy and three instant Workspaces</li>
@@ -414,7 +417,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
         <li>Multi-display support, or main display only</li>
         <li>All future updates, free, forever</li>
       </ul>
-      <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Buy Tessel for $14.99</a>
+      <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Buy Tessel for $9.99</a>
       <p class="buy-note" id="buy-note" aria-live="polite"></p>
       <p class="fine">macOS 14 Sonoma or later · Apple silicon</p>
     </div>
@@ -427,25 +430,23 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       <details><summary>Will it take over my keyboard?</summary><p>Only a handful of combinations, and only with the left ⌘ key. Right ⌘ keeps doing what it always did, so ⌘← still jumps to the start of a line.</p></details>
       <details><summary>Can I change the shortcuts?</summary><p>Yes, every one. Open Keyboard Shortcuts from the menu bar, click a command and press the keys you want. Tessel turns down combinations that would get in the way of typing or that another command already uses, and Restore Defaults puts everything back.</p></details>
       <details><summary>How do I set it up?</summary><p>Tessel walks you through it the first time it opens: allow Accessibility, tap the three keys you want for your Workspaces, and try every shortcut on a practice screen that can't touch your real windows. It takes about a minute, and you can run it again from the menu bar.</p></details>
-      <details><summary>How do the three Workspaces work?</summary><p>During setup you tap three keys you never use, ideally out of the way on the right, like Page Up, Page Down and End. ⌘ plus one of them switches Workspaces instantly; add ⇧ to take the focused window with you. Stash (⌘⇧H) sends a window to Workspace 3 without leaving the one you're in.</p></details>
+      <details><summary>How do the three Workspaces work?</summary><p>During setup you tap three keys you never use, ideally out of the way on the right, like Page Up, Page Down and End. ⌘ plus one of them switches Workspaces instantly; add ⇧ to take the focused window with you. Stash (⇧⌘H) sends a window to Workspace 3 without leaving the one you're in.</p></details>
       <details><summary>Does it work with more than one display?</summary><p>Yes. Each display has its own layout and focus crosses between them at the edges. If a second display is a dummy plug or you only want your main screen tiled, turn off Use All Displays in Settings.</p></details>
       <details><summary>What does "lifetime updates" mean?</summary><p>You buy Tessel once and every future version is included. No upgrade fees, no subscription, no catch.</p></details>
     </div>
   </section>
 
-  <figure class="still"><img src="media/glass.jpg" alt="Three frosted glass tiles in coral, amber and mint, resting in a neat row" loading="lazy" width="1600" height="900"></figure>
-
   <section class="closing">
     <svg class="icon"><use href="#logo"/></svg>
     <h2>Go on, open another window.</h2>
     <p class="lede">It already knows where to go.</p>
-    <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Buy Tessel<span class="sep"></span><span class="price">$14.99</span></a>
+    <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Buy Tessel<span class="sep"></span><span class="price">$9.99</span></a>
     <p class="fine">One-time purchase · Lifetime updates</p>
   </section>
 
   <footer>
     <a class="brand" href="#top" style="font-size:15px"><svg style="width:22px;height:22px"><use href="#logo"/></svg>Tessel</a>
-    <span>A tiling window manager for people who live on the keyboard.</span>
+    <span>It’s time to stop losing things in a pile of windows.</span>
     <span>© 2026 Tessel</span>
   </footer>
 </main>
@@ -487,13 +488,13 @@ const CHECKOUT_URL = "";
     { t: 3.0, keys: [], cap: "Open another and they share the screen." },
     { t: 4.8, keys: [], cap: "A third gets its own column." },
     { t: 6.75, keys: ["⌘", "←"], cap: "Move focus with ⌘ and an arrow." },
-    { t: 8.75, keys: ["⌘", "⇧", "→"], cap: "Add ⇧ to carry the window. It stacks, then passes." },
-    { t: 11.4, keys: ["⌘", "⇧", "+"], cap: "Give it more room." },
-    { t: 13.25, keys: ["⌘", "⇧", "0"], cap: "Tidy evens everything out." },
-    { t: 14.65, keys: ["⌘", "⇧", "F"], cap: "Focus. The others wait on the Shelf." },
-    { t: 16.9, keys: ["⌘", "⇧", "F"], cap: "Press it again and they come back." },
-    { t: 18.3, keys: ["⌘", "⇧", "H"], cap: "Stash sends a window to Workspace 3." },
-    { t: 20.2, keys: ["⌘", "⇧", "⌫"], cap: "Close it, and the rest re-tile." },
+    { t: 8.75, keys: ["⇧", "⌘", "→"], cap: "Add ⇧ to carry the window. It stacks, then passes." },
+    { t: 11.4, keys: ["⇧", "⌘", "+"], cap: "Give it more room." },
+    { t: 13.25, keys: ["⇧", "⌘", "0"], cap: "Tidy evens everything out." },
+    { t: 14.65, keys: ["⇧", "⌘", "F"], cap: "Focus. The others wait on the Shelf." },
+    { t: 16.9, keys: ["⇧", "⌘", "F"], cap: "Press it again and they come back." },
+    { t: 18.3, keys: ["⇧", "⌘", "H"], cap: "Stash sends a window to Workspace 3." },
+    { t: 20.2, keys: ["⇧", "⌘", "⌫"], cap: "Close it, and the rest re-tile." },
   ];
   const PRESSES = [6.81, 7.71, 8.79, 10.07, 11.45, 12.23, 13.31, 14.7, 16.98, 18.36, 20.24, 21.53];
 
@@ -554,6 +555,12 @@ const CHECKOUT_URL = "";
   });
   // Animation frames stop in a background tab; the video's own clock keeps captions honest.
   video.addEventListener("timeupdate", syncCaptions);
+  // The first play opens on the eye-catching part, three columns about to become a
+  // stack; after that the loop starts from the empty desktop as usual.
+  const START = 8.4;
+  const startAtHook = () => { try { video.currentTime = START; } catch (e) {} };
+  if (video.readyState >= 1) startAtHook(); else video.addEventListener("loadedmetadata", startAtHook, { once: true });
+  video.addEventListener("seeked", () => { lastT = video.currentTime; syncCaptions(); });
   toggle.addEventListener("click", () => { userPaused = !video.paused; updatePlay(); });
   new IntersectionObserver(([e]) => { reelVisible = e.isIntersecting; updatePlay(); }, { threshold: 0.25 }).observe(display);
   if (reduce) { display.classList.add("paused"); reelIcon.setAttribute("d", "M5 3l8 5-8 5z"); toggle.setAttribute("aria-label", "Play the recording"); }
@@ -633,8 +640,8 @@ const CHECKOUT_URL = "";
     mac.help.hidden = !H;
     if (H) {
       const all = [
-        ["WINDOWS", [["Left ⌘", "←→"], "Focus the next window", "select switch"], [["Left ⌘⇧", "←→"], "Move the window", "arrange swap"], [["Left ⌘⇧", "F"], "Focus", "maximize fullscreen center"], [["Left ⌘⇧", "0"], "Tidy", "reset even balance"]],
-        ["WORKSPACES", [["⌘", "Page Up"], "Go to Workspace 1", "desktop space switch"], [["⌘⇧", "Page Down"], "Move the window to Workspace 2", "send desktop space"], [["Left ⌘⇧", "H"], "Stash in Workspace 3", "hide minimize away"]],
+        ["WINDOWS", [["Left ⌘", "←→"], "Focus the next window", "select switch"], [["⇧ Left ⌘", "←→"], "Move the window", "arrange swap"], [["⇧ Left ⌘", "F"], "Focus", "maximize fullscreen center"], [["⇧ Left ⌘", "0"], "Tidy", "reset even balance"]],
+        ["WORKSPACES", [["⌘", "Page Up"], "Go to Workspace 1", "desktop space switch"], [["⇧⌘", "Page Down"], "Move the window to Workspace 2", "send desktop space"], [["⇧ Left ⌘", "H"], "Stash in Workspace 3", "hide minimize away"]],
         ["SUMMON", [["⇧ then", "Space"], "Summon an app, file or website", "launcher open search spotlight"]],
       ];
       const q = (H.q || "").toLowerCase();
@@ -670,30 +677,30 @@ const CHECKOUT_URL = "";
       { win: four, focus: "D", keys: ["Left ⌘", "↓"], cap: "Down into the stack." },
       { win: four, focus: "B", keys: ["Left ⌘", "←"], cap: "Right ⌘ is left alone, so it still moves your text cursor." },
     ]},
-    { title: "Move windows", hint: "left ⌘⇧ + arrows", steps: [
+    { title: "Move windows", hint: "⇧ + left ⌘ + arrows", steps: [
       { win: four, focus: "D", keys: [], cap: "Add ⇧ to carry the focused window with you." },
-      { win: { A: R.c1, B: R.c2t, D: R.c2b, C: R.c3 }, focus: "D", keys: ["Left ⌘", "⇧", "←"], cap: "First press: it stacks with its neighbor." },
-      { win: { A: R.f1, D: R.f2, B: R.f3, C: R.f4 }, focus: "D", keys: ["Left ⌘", "⇧", "←"], cap: "Press again: it moves past it." },
-      { win: { A: R.c1, B: R.c2t, D: R.c2b, C: R.c3 }, focus: "D", keys: ["Left ⌘", "⇧", "→"], cap: "Any layout is a few presses away." },
-      { win: { A: R.c1, D: R.c2t, B: R.c2b, C: R.c3 }, focus: "D", keys: ["Left ⌘", "⇧", "↑"], cap: "↑ and ↓ swap places in a stack." },
+      { win: { A: R.c1, B: R.c2t, D: R.c2b, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "←"], cap: "First press: it stacks with its neighbor." },
+      { win: { A: R.f1, D: R.f2, B: R.f3, C: R.f4 }, focus: "D", keys: ["⇧", "Left ⌘", "←"], cap: "Press again: it moves past it." },
+      { win: { A: R.c1, B: R.c2t, D: R.c2b, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "→"], cap: "Any layout is a few presses away." },
+      { win: { A: R.c1, D: R.c2t, B: R.c2b, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "↑"], cap: "↑ and ↓ swap places in a stack." },
     ]},
-    { title: "Resize & Tidy", hint: "left ⌘⇧ + − / 0", steps: [
+    { title: "Resize & Tidy", hint: "⇧ + left ⌘ + − / 0", steps: [
       { win: four, focus: "B", keys: [], cap: "Give the focused window more room when it needs it." },
-      { win: { A: [1.5, 2, 24, 96], B: [27, 2, 44, 96], C: [72.5, 2, 26, 47.25], D: [72.5, 50.75, 26, 47.25] }, focus: "B", keys: ["Left ⌘", "⇧", "+"], cap: "Its neighbors make space." },
-      { win: { A: [1.5, 2, 19, 96], B: [22, 2, 54, 96], C: [77.5, 2, 21, 47.25], D: [77.5, 50.75, 21, 47.25] }, focus: "B", keys: ["Left ⌘", "⇧", "+"], cap: "A bit more." },
-      { win: four, focus: "B", keys: ["Left ⌘", "⇧", "0"], cap: "Tidy puts every split back to even." },
+      { win: { A: [1.5, 2, 24, 96], B: [27, 2, 44, 96], C: [72.5, 2, 26, 47.25], D: [72.5, 50.75, 26, 47.25] }, focus: "B", keys: ["⇧", "Left ⌘", "+"], cap: "Its neighbors make space." },
+      { win: { A: [1.5, 2, 19, 96], B: [22, 2, 54, 96], C: [77.5, 2, 21, 47.25], D: [77.5, 50.75, 21, 47.25] }, focus: "B", keys: ["⇧", "Left ⌘", "+"], cap: "A bit more." },
+      { win: four, focus: "B", keys: ["⇧", "Left ⌘", "0"], cap: "Tidy puts every split back to even." },
     ]},
-    { title: "Focus", hint: "left ⌘⇧F", steps: [
+    { title: "Focus", hint: "⇧ + left ⌘ + F", steps: [
       { win: four, focus: "A", keys: [], cap: "Need to concentrate on one window?" },
-      { win: { A: R.single, B: shelf(R.s1), C: shelf(R.s2), D: shelf(R.s3) }, focus: "A", keys: ["Left ⌘", "⇧", "F"], cap: "It takes the center. The rest wait on the Shelf, tilted out of the way." },
-      { win: four, focus: "A", keys: ["Left ⌘", "⇧", "F"], cap: "⌘⇧F again, or a click on any card on the Shelf, brings everything back." },
+      { win: { A: R.single, B: shelf(R.s1), C: shelf(R.s2), D: shelf(R.s3) }, focus: "A", keys: ["⇧", "Left ⌘", "F"], cap: "It takes the center. The rest wait on the Shelf, tilted out of the way." },
+      { win: four, focus: "A", keys: ["⇧", "Left ⌘", "F"], cap: "⇧⌘F again, or a click on any card on the Shelf, brings everything back." },
     ]},
     { title: "Three Workspaces", hint: "⌘ + your Workspace keys", steps: [
       { win: four, focus: "C", space: 1, keys: [], cap: "Pick three keys you never use, like Page Up, Page Down and End." },
       { win: { A: away(R.c1), B: away(R.c2), C: away(R.c3t), D: away(R.c3b), E: R.single }, focus: "E", space: 2, keys: ["⌘", "Page Down"], cap: "⌘ plus a Workspace key switches instantly. No slide, no wait." },
       { win: four, focus: "C", space: 1, keys: ["⌘", "Page Up"], cap: "Back again, focused on the rightmost window." },
-      { win: { A: away(R.c1), B: away(R.c2), D: away(R.c3b), E: R.halfL, C: R.halfR }, focus: "C", space: 2, keys: ["⌘", "⇧", "Page Down"], cap: "Add ⇧ and the window comes with you." },
-      { win: { A: away(R.c1), B: away(R.c2), D: away(R.c3b), E: R.single }, focus: "E", space: 2, keys: ["Left ⌘", "⇧", "H"], cap: "Stash (⌘⇧H) tucks a window away in Workspace 3." },
+      { win: { A: away(R.c1), B: away(R.c2), D: away(R.c3b), E: R.halfL, C: R.halfR }, focus: "C", space: 2, keys: ["⇧", "⌘", "Page Down"], cap: "Add ⇧ and the window comes with you." },
+      { win: { A: away(R.c1), B: away(R.c2), D: away(R.c3b), E: R.single }, focus: "E", space: 2, keys: ["⇧", "Left ⌘", "H"], cap: "Stash (⇧⌘H) tucks a window away in Workspace 3." },
     ]},
     { title: "Summon", hint: "⇧ then Space", steps: [
       { win: four, focus: "B", keys: [], cap: "Faster than Spotlight for the apps you use every day." },
@@ -702,9 +709,9 @@ const CHECKOUT_URL = "";
       { win: { A: R.c1t, F: R.c1b, B: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: ["⇧", "↩"], cap: "↩ goes to its window. ⇧↩ opens a new one, tiled and focused." },
       { win: { A: R.c1t, F: R.c1b, B: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: [], launcher: { q: "best desk lamp", rows: webRows, sel: 0 }, cap: "No match? It searches the web, in a tab right here. Never a pop-up." },
     ]},
-    { title: "Cheat Sheet", hint: "left ⌘⇧ Space", steps: [
+    { title: "Cheat Sheet", hint: "⇧ + left ⌘ + Space", steps: [
       { win: four, focus: "C", keys: [], cap: "Forget a shortcut? There's one to show them all." },
-      { win: four, focus: "C", keys: ["Left ⌘", "⇧", "Space"], help: { q: "" }, cap: "The Cheat Sheet: every shortcut, grouped." },
+      { win: four, focus: "C", keys: ["⇧", "Left ⌘", "Space"], help: { q: "" }, cap: "The Cheat Sheet: every shortcut, grouped." },
       { win: four, focus: "C", keys: ["H", "I", "D", "E"], help: { q: "hide" }, cap: "Search in your own words. “hide” finds Stash." },
       { win: four, focus: "C", keys: ["Esc"], cap: "Esc to close. Back to work." },
     ]},
