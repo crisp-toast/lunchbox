@@ -22,7 +22,7 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + ↑ ↓ | Swap with the window above or below in a stack |
 | Left ⌘ ⇧ + plus / minus | Give the window more or less space (a lone window, or one in Focus, grows or shrinks around the center) |
 | Left ⌘ ⇧ + F | **Focus**: the window alone in the center, the rest of the Workspace on the Shelf. Again, a click on a Shelf card, or ⌘-arrowing to one ends it. New Finder windows open in Focus |
-| Left ⌘ ⇧ + H | **Stash** the window: it always moves to Workspace 3 |
+| Left ⌘ ⇧ + H | **Hide** the window: it always moves to Workspace 3 |
 | Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
 | ⌘ + Workspace key 1 / 2 / 3 | Go to that Workspace |
 | ⌘ ⇧ + Workspace key 1 / 2 / 3 | Move the focused window to that Workspace and go there with it |
@@ -40,7 +40,7 @@ On Tyler's Boop65 they're the three keys on the far right, above the right arrow
 | **Focus** | ⌘⇧F: one window centered, the rest on the Shelf |
 | **the Shelf** | The tilted cards beside a Focus window |
 | **Tidy** | ⌘⇧0: even out every split in the space |
-| **Stash** | ⌘⇧H: send the window to Workspace 3 |
+| **Hide** | ⌘⇧H: send the window to Workspace 3 |
 | **Cheat Sheet** | ⌘⇧Space: every shortcut, searchable |
 | **Halo** | The blue outline around the focused window |
 | **Workspaces 1–3** | Tessel's own instant Workspaces, on your three **Workspace keys** |

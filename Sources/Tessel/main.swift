@@ -291,7 +291,10 @@ enum KeymapStore {
         guard let data = UserDefaults.standard.data(forKey: key),
               let stored = try? JSONDecoder().decode([String: KeyBinding].self, from: data) else { return Keymap() }
         var map = Keymap()
-        for (name, binding) in stored { if let c = Command(rawValue: name) { map.overrides[c] = binding } }
+        for (name, binding) in stored {
+            // Hide was called Stash before.
+            if let c = Command(rawValue: name == "stash" ? "hide" : name) { map.overrides[c] = binding }
+        }
         return map
     }
 

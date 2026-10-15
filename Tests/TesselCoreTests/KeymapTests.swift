@@ -74,8 +74,8 @@ let workspaceKeys: [Int64] = [116, 121, 119]
     @Test func naturalWords() {
         #expect(top("maximize") == "focusMode")
         #expect(top("fullscreen") == "focusMode")
-        #expect(finds("hide window", "stash"))
-        #expect(finds("minimize", "stash"))
+        #expect(finds("hide window", "hide"))
+        #expect(finds("minimize", "hide"))
         #expect(finds("launcher", "summon"))
         #expect(finds("open app", "summon"))
         #expect(finds("help", "cheatSheet"))
@@ -104,7 +104,8 @@ let workspaceKeys: [Int64] = [116, 121, 119]
 
     @Test func fillerWordsAreIgnored() {
         #expect(top("make it bigger") == "grow")
-        #expect(top("how do I hide a window") == "stash")
+        #expect(top("how do I hide a window") == "hide")
+        #expect(finds("tuck away", "hide"))
         #expect(!CheatSheetSearch.search("make it bigger", in: entries).closest)
     }
 

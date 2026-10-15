@@ -1262,7 +1262,7 @@ final class Tiler {
         case .switchSpace(let i): switchSpace(to: i, focusing: nil)
         case .sendToSpace(let i): send(toSpace: i, follow: true)
         case .close: closeFocused()
-        case .hide: send(toSpace: Self.spaceCount - 1, caption: "Stashed in Workspace \(Self.spaceCount)", follow: false)
+        case .hide: send(toSpace: Self.spaceCount - 1, caption: "Hidden in Workspace \(Self.spaceCount)", follow: false)
         case .spotlight: toggleSpotlight()
         case .normalize: normalize()
         case .launcher, .help: break // handled by the app delegate

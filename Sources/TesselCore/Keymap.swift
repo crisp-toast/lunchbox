@@ -6,7 +6,7 @@ public enum Command: String, CaseIterable, Codable, Sendable {
     case moveLeft, moveRight, moveUp, moveDown
     case grow, shrink, focusMode, tidy, close
     case workspace1, workspace2, workspace3
-    case moveToWorkspace1, moveToWorkspace2, moveToWorkspace3, stash
+    case moveToWorkspace1, moveToWorkspace2, moveToWorkspace3, hide
     case summon, cheatSheet
 
     public var action: KeyAction {
@@ -23,7 +23,7 @@ public enum Command: String, CaseIterable, Codable, Sendable {
         case .shrink: return .shrink
         case .focusMode: return .spotlight
         case .tidy: return .normalize
-        case .stash: return .hide
+        case .hide: return .hide
         case .close: return .close
         case .workspace1: return .switchSpace(0)
         case .workspace2: return .switchSpace(1)
@@ -38,7 +38,7 @@ public enum Command: String, CaseIterable, Codable, Sendable {
 
     public var group: String {
         switch self {
-        case .workspace1, .workspace2, .workspace3, .moveToWorkspace1, .moveToWorkspace2, .moveToWorkspace3, .stash:
+        case .workspace1, .workspace2, .workspace3, .moveToWorkspace1, .moveToWorkspace2, .moveToWorkspace3, .hide:
             return "Workspaces"
         case .summon: return "Summon"
         case .cheatSheet: return "Cheat Sheet"
@@ -60,7 +60,7 @@ public enum Command: String, CaseIterable, Codable, Sendable {
         case .shrink: return "Give the window less space"
         case .focusMode: return "Focus: this window centered, the rest on the Shelf"
         case .tidy: return "Tidy: even out every window in this Workspace"
-        case .stash: return "Stash: send the window to Workspace 3 and stay here"
+        case .hide: return "Hide: send the window to Workspace 3 and stay here"
         case .close: return "Close the window"
         case .workspace1: return "Go to Workspace 1"
         case .workspace2: return "Go to Workspace 2"
@@ -101,7 +101,7 @@ public enum Command: String, CaseIterable, Codable, Sendable {
         case .tidy: return ["tidy", "normalize", "normalise", "balance", "even", "equal", "reset", "clean up",
                             "cleanup", "organize", "organise", "arrange", "fix layout", "default size", "50/50",
                             "fifty", "align", "restore", "evenly", "auto arrange"]
-        case .stash: return ["stash", "hide", "minimize", "minimise", "put away", "tuck", "park", "send away",
+        case .hide: return ["hide", "stash", "minimize", "minimise", "put away", "tuck", "park", "send away",
                              "declutter", "out of the way", "workspace 3", "later", "hidden"] + workspace
         case .close: return ["close", "quit window", "kill", "dismiss", "exit window", "remove", "delete window",
                              "get rid", "shut"]
@@ -186,7 +186,7 @@ public struct Keymap: Equatable, Sendable {
             .focusLeft: leftCmd(123), .focusRight: leftCmd(124), .focusDown: leftCmd(125), .focusUp: leftCmd(126),
             .moveLeft: leftCmdShift(123), .moveRight: leftCmdShift(124), .moveDown: leftCmdShift(125), .moveUp: leftCmdShift(126),
             .grow: leftCmdShift(24), .shrink: leftCmdShift(27), .focusMode: leftCmdShift(3), .tidy: leftCmdShift(29),
-            .stash: leftCmdShift(4), .close: leftCmdShift(51), .cheatSheet: leftCmdShift(49),
+            .hide: leftCmdShift(4), .close: leftCmdShift(51), .cheatSheet: leftCmdShift(49),
             .summon: KeyBinding(.code(49), shift: true, shiftTap: true),
             .workspace1: KeyBinding(.workspaceKey(0), command: true),
             .workspace2: KeyBinding(.workspaceKey(1), command: true),
