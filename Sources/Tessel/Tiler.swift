@@ -32,6 +32,9 @@ private struct WindowInfo {
     let tileable: Bool
     let minimized: Bool
     let standard: Bool
+    /// A full window in all but name: resizable, with close, minimize and zoom
+    /// buttons, but not marked standard (Little Arc says it's a system dialog).
+    let windowLike: Bool
 }
 
 private func axCallback(_ observer: AXObserver, _ element: AXUIElement, _ notification: CFString, _ refcon: UnsafeMutableRawPointer?) {
@@ -103,6 +106,8 @@ final class Tiler {
                 savedPlacement[id] = (space, parts[1])
             }
         }
+        // Window numbers stay the same while a window lives, so this survives a relaunch.
+        adopted = Set(((defaults.array(forKey: "adopted") as? [Int]) ?? []).map(CGWindowID.init))
     }
 
     // MARK: Lifecycle
@@ -120,6 +125,9 @@ final class Tiler {
             if let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication { self?.track(app) }
         }
         on(NSWorkspace.didTerminateApplicationNotification) { [weak self] n in
+            // When an app quits, even a helper with no windows, macOS activates whichever app
+            // was before it, maybe one in another space. That isn't a request to go there.
+            self?.quietFocus(for: 0.8)
             if let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication { self?.untrack(app.processIdentifier) }
         }
         on(NSWorkspace.didActivateApplicationNotification) { [weak self] n in
@@ -233,8 +241,13 @@ final class Tiler {
         guard let app = apps.removeValue(forKey: pid) else { return }
         detach(app)
         let gone = windows.values.filter { $0.pid == pid }.map(\.id)
+        let focusedFrame = focusedID.flatMap { id in gone.contains(id) ? visibleFrames()[id] : nil }
+        if !gone.isEmpty { quietFocus(for: 1) }
         gone.forEach(forget)
         if !gone.isEmpty { relayout(animated: true) }
+        // An app that quits with its last window hands focus to whichever app was
+        // before it, maybe one parked in another space. Stay where the user was looking.
+        if let focusedFrame { focusNearest(to: focusedFrame) }
     }
 
     private func rescan(_ n: Notification) {
@@ -266,8 +279,14 @@ final class Tiler {
             guard let id = element.windowID, let frame = element.frame else { return nil }
             let standard = element.role == kAXWindowRole && element.subrole == kAXStandardWindowSubrole
             let minimized = element.isMinimized
-            let tileable = standard && !minimized && !element.isFullScreen && element.isResizable
-            return WindowInfo(id: id, element: element, frame: frame, tileable: tileable, minimized: minimized, standard: standard)
+            let usable = !minimized && !element.isFullScreen && element.isResizable
+            let tileable = standard && usable
+            let windowLike = tileable || (usable && element.role == kAXWindowRole
+                && element.element(kAXCloseButtonAttribute) != nil
+                && element.element(kAXMinimizeButtonAttribute) != nil
+                && element.element(kAXZoomButtonAttribute) != nil)
+            return WindowInfo(id: id, element: element, frame: frame, tileable: tileable, minimized: minimized,
+                              standard: standard, windowLike: windowLike)
         }
     }
 
@@ -308,10 +327,26 @@ final class Tiler {
             forget(w.id)
             changed = true
         }
+        // Whatever window answers a Summon open belongs in the layout, even one its app
+        // doesn't call standard, like the Little Arc window a web search opens in.
+        var arrived: CGWindowID?
+        if let arrival = summonedArrival, arrival.bundleID == app.bundleID {
+            if CACurrentMediaTime() > arrival.until {
+                summonedArrival = nil
+            } else if let fresh = infos.first(where: { !arrival.existing.contains($0.id) && $0.windowLike && onScreen.contains($0.id) }) {
+                summonedArrival = nil
+                if !fresh.tileable { adopted.insert(fresh.id) }
+                arrived = fresh.id
+            }
+        }
         for info in infos where consider(info, app: app, onScreen: onScreen) { changed = true }
         if changed {
             relayout(animated: true)
             persist()
+        }
+        if let arrived, place(of: arrived) != nil {
+            activate(arrived)
+            showRing(on: arrived)
         }
         // A window the launcher asked for has appeared: bring it forward.
         if let pending = pendingNewWindow, pending.pid == app.pid {
@@ -336,7 +371,7 @@ final class Tiler {
         window.minimized = info.minimized
         window.standard = info.standard
         let appHidden = NSRunningApplication(processIdentifier: app.pid)?.isHidden ?? false
-        let wantsTile = info.tileable
+        let wantsTile = (info.tileable || (adopted.contains(info.id) && info.windowLike))
             && !appHidden
             && !userFloating.contains(info.id)
             && !Self.floatingApps.contains(app.bundleID ?? "")
@@ -344,6 +379,7 @@ final class Tiler {
         let placed = place(of: info.id) != nil
         if wantsTile && !placed {
             insert(window)
+            if initialScanDone { confirmPlacement(of: info.id) }
             return true
         }
         if !wantsTile && placed {
@@ -402,6 +438,7 @@ final class Tiler {
             w.handle.app.windowIDs.removeValue(forKey: w.handle.element)
         }
         if focusedID == id { focusedID = nil }
+        adopted.remove(id)
         settlingUntil[id] = nil
         lastReassert[id] = nil
     }
@@ -492,8 +529,16 @@ final class Tiler {
     /// you to wherever that window was.
     func prepareForOpening(with bundleID: String?) {
         exitSpotlight()
-        if let bundleID { expectedArrival = (bundleID, CACurrentMediaTime() + 6) }
+        guard let bundleID else { return }
+        expectedArrival = (bundleID, CACurrentMediaTime() + 6)
+        let existing = Set(windows.values.filter { $0.handle.app.bundleID == bundleID }.map(\.id))
+        summonedArrival = (bundleID, existing, CACurrentMediaTime() + 6)
     }
+
+    /// The next new window from an app Summon just opened something in.
+    private var summonedArrival: (bundleID: String, existing: Set<CGWindowID>, until: CFTimeInterval)?
+    /// Windows tiled because they answered a Summon open, though their app doesn't call them standard.
+    private var adopted: Set<CGWindowID> = []
 
     private func appActivated(_ running: NSRunningApplication) {
         guard let app = apps[running.processIdentifier] else { return }
@@ -532,7 +577,10 @@ final class Tiler {
             // Right after we switch spaces or a window closes, macOS often hands focus
             // to some other window of the app, which may be parked in another space.
             // That isn't a request to go there; only a later ⌘-Tab or click is.
-            guard CACurrentMediaTime() > quietFocusUntil else { return }
+            guard CACurrentMediaTime() > quietFocusUntil else {
+                reclaimFocus()
+                return
+            }
             focusedID = id
             lastFocused[space] = id
             switchSpace(to: space, focusing: id)
@@ -566,7 +614,43 @@ final class Tiler {
     /// Focus changes before this time don't switch spaces.
     private var quietFocusUntil: CFTimeInterval = 0
 
-    private func quietFocus() { quietFocusUntil = CACurrentMediaTime() + 0.6 }
+    private func quietFocus(for seconds: CFTimeInterval = 0.6) {
+        quietFocusUntil = max(quietFocusUntil, CACurrentMediaTime() + seconds)
+    }
+
+    /// macOS just handed focus to a window parked in another space. Take it back
+    /// to the window Tessel had focused here, so typing can't land out of sight.
+    private func reclaimFocus() {
+        let visible = visibleFrames()
+        if let id = focusedID, visible[id] != nil {
+            activate(id)
+        } else if let display = activeDisplays.first(where: { spaces[currentSpace][$0.uuid] != nil }) ?? activeDisplays.first {
+            focusNearest(to: display.visible)
+        }
+    }
+
+    /// Some apps reposition a window they just opened, after Tessel has placed it
+    /// (Little Arc animates itself to the middle of the screen). Look again once
+    /// it has settled and put it back in its tile.
+    private func confirmPlacement(of id: CGWindowID, after delays: [Double] = [0.8, 1.6]) {
+        for delay in delays {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, let w = self.windows[id], !w.hidden, w.target != nil else { return }
+                let element = w.handle.element
+                w.handle.app.queue.async {
+                    let actual = element.frame
+                    DispatchQueue.main.async {
+                        guard let actual, let w = self.windows[id], let target = w.target, !w.hidden,
+                              !self.draggedByUser.contains(id), NSEvent.pressedMouseButtons & 1 == 0,
+                              !actual.isClose(to: target, tolerance: 2) else { return }
+                        w.frame = actual
+                        w.target = nil
+                        self.relayout(animated: true)
+                    }
+                }
+            }
+        }
+    }
 
     /// A tiled window moved or resized without us asking.
     private func windowChangedOnItsOwn(_ id: CGWindowID) {
@@ -774,6 +858,7 @@ final class Tiler {
         for (id, p) in savedPlacement where placement[String(id)] == nil { placement[String(id)] = "\(p.space)|\(p.display)" }
         UserDefaults.standard.set(placement, forKey: "placement")
         UserDefaults.standard.set(currentSpace, forKey: "currentSpace")
+        UserDefaults.standard.set(adopted.filter { windows[$0] != nil || savedPlacement[$0] != nil }.map(Int.init), forKey: "adopted")
     }
 
     // MARK: Keyboard actions
@@ -792,6 +877,7 @@ final class Tiler {
                 let id = app.element.element(kAXFocusedWindowAttribute)?.windowID
                 DispatchQueue.main.async {
                     guard let self else { return }
+                    log.debug("resolve \(front.bundleIdentifier ?? "?", privacy: .public): \(id.map(String.init) ?? "nil", privacy: .public), Tessel had \(self.focusedID.map(String.init) ?? "nil", privacy: .public)")
                     self.focusedID = id
                     self.run(action)
                 }
@@ -971,12 +1057,24 @@ final class Tiler {
     /// Presses the focused window's close button, exactly like clicking it, so apps
     /// still ask about unsaved changes. Focus moves on once the window is gone.
     private func closeFocused() {
-        guard let front = NSWorkspace.shared.frontmostApplication, let app = apps[front.processIdentifier] else { return }
-        let known = focusedID.flatMap { id in windows[id].flatMap { $0.handle.app === app ? $0.handle.element : nil } }
-        app.queue.async {
-            guard let window = known ?? app.element.element(kAXFocusedWindowAttribute) else { return }
-            Self.pressClose(window)
+        // Closing hands focus to another app, which may only have windows in another space.
+        quietFocus(for: 1.5)
+        let running = NSWorkspace.shared.frontmostApplication
+        let front = running.flatMap { apps[$0.processIdentifier] }
+        let known = focusedID.flatMap { id in visibleFrames()[id] != nil ? windows[id] : nil }
+        log.notice("close: front \(running?.bundleIdentifier ?? "?", privacy: .public) (tracked: \(front != nil)), Tessel focus \(self.focusedID.map(String.init) ?? "nil", privacy: .public)")
+        if let front, known?.handle.app !== front {
+            // The front app's own key window: a dialog, or a window Tessel doesn't tile.
+            front.queue.async {
+                if let window = front.element.element(kAXFocusedWindowAttribute) { Self.pressClose(window) }
+            }
+            return
         }
+        // The window Tessel has focused here. Also used when the front app isn't one
+        // Tessel tiles (a helper that took focus, or Tessel itself).
+        guard let known else { return }
+        let element = known.handle.element
+        known.handle.app.queue.async { Self.pressClose(element) }
     }
 
     /// Closes one specific window, whatever has focus. Used by the `close-<id>` script command.

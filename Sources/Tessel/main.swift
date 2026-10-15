@@ -150,20 +150,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         if command.hasPrefix("press:") {
-            // press:<keycode>[:cmd][:shift][:opt] posts a real key press through the
-            // whole system, exactly like the keyboard, for end-to-end tests.
+            // press:<keycode>[:cmd][:shift][:opt] presses modifiers down, taps the
+            // key, and lets go, through the whole system like a real keyboard
+            // (so ⇧ then Space works too). For end-to-end tests and demo recordings.
             let parts = command.split(separator: ":").map(String.init)
             guard parts.count >= 2, let code = CGKeyCode(parts[1]) else { return }
-            var flags = CGEventFlags()
-            if parts.contains("cmd") { flags.insert(.maskCommand); flags.insert(CGEventFlags(rawValue: Shortcuts.leftCommandMask)) }
-            if parts.contains("shift") { flags.insert(.maskShift); flags.insert(CGEventFlags(rawValue: 0x02)) }
-            if parts.contains("opt") { flags.insert(.maskAlternate) }
             let source = CGEventSource(stateID: .hidSystemState)
-            for down in [true, false] {
-                guard let e = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else { continue }
+            var mods: [(CGKeyCode, CGEventFlags)] = []
+            if parts.contains("cmd") { mods.append((55, [.maskCommand, CGEventFlags(rawValue: Shortcuts.leftCommandMask)])) }
+            if parts.contains("shift") { mods.append((56, [.maskShift, CGEventFlags(rawValue: 0x02)])) }
+            if parts.contains("opt") { mods.append((58, [.maskAlternate, CGEventFlags(rawValue: 0x20)])) }
+            var flags = CGEventFlags()
+            func post(_ key: CGKeyCode, _ down: Bool) {
+                guard let e = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: down) else { return }
                 e.flags = flags
                 e.post(tap: .cghidEventTap)
             }
+            for (key, f) in mods { flags.formUnion(f); post(key, true) }
+            post(code, true)
+            post(code, false)
+            for (key, f) in mods.reversed() { flags.subtract(f); post(key, false) }
             return
         }
         if command.hasPrefix("help:") {
