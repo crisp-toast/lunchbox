@@ -1,0 +1,143 @@
+import { test, beforeEach } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { onRequestGet as licenseGet } from "../../functions/api/license.js";
+import { onRequestPost as webhookPost } from "../../functions/api/stripe-webhook.js";
+import { onRequestPost as recoverPost } from "../../functions/api/recover.js";
+import { verifyLicense } from "../lib/license.js";
+
+const fixture = JSON.parse(readFileSync(new URL("./fixture.json", import.meta.url), "utf8"));
+const env = {
+  STRIPE_SECRET_KEY: "sk_test_x", STRIPE_WEBHOOK_SECRET: "whsec_test", STRIPE_PRICE_ID: "price_tessel",
+  LICENSE_PRIVATE_KEY: JSON.stringify(fixture.privateJwk), RESEND_API_KEY: "re_x",
+  EMAIL_FROM: "Tessel <support@example.com>", SUPPORT_EMAIL: "support@example.com", SITE_URL: "https://tessel.example",
+};
+
+const session = (over = {}) => ({
+  id: "cs_test_abcdefghij1", status: "complete", payment_status: "paid", created: 1792000000,
+  customer_details: { email: "Buyer@Example.com" },
+  line_items: { data: [{ price: { id: "price_tessel" } }] }, ...over,
+});
+
+let sessions, emails;
+beforeEach(() => {
+  sessions = { cs_test_abcdefghij1: session() };
+  emails = [];
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input instanceof Request ? input.url : input));
+    if (url.hostname === "api.resend.com") {
+      emails.push({ body: JSON.parse(init.body), key: init.headers["Idempotency-Key"] });
+      return new Response(JSON.stringify({ id: "email_1" }));
+    }
+    if (url.pathname === "/v1/checkout/sessions") {
+      const email = url.searchParams.get("customer_details[email]");
+      const data = Object.values(sessions).filter((s) => s.customer_details.email.toLowerCase() === email);
+      return new Response(JSON.stringify({ data }));
+    }
+    const id = url.pathname.split("/").pop();
+    return sessions[id] ? new Response(JSON.stringify(sessions[id])) : new Response(JSON.stringify({ error: { message: "No such session" } }), { status: 404 });
+  };
+});
+
+const get = (id) => licenseGet({ request: new Request(`https://tessel.example/api/license?session_id=${id}`), env });
+
+test("thank-you page gets the license for a paid Tessel purchase, the same on every refresh", async () => {
+  const first = await (await get("cs_test_abcdefghij1")).json();
+  const again = await (await get("cs_test_abcdefghij1")).json();
+  assert.equal(first.status, "paid");
+  assert.equal(first.license, again.license);
+  assert.deepEqual(await verifyLicense(first.license, fixture.publicKey), { email: "buyer@example.com", order: "cs_test_abcdefghij1", issued: 1792000000 });
+});
+
+test("no license for an unpaid, foreign or made-up session", async () => {
+  sessions.cs_test_abcdefghij1 = session({ payment_status: "unpaid" });
+  assert.equal((await (await get("cs_test_abcdefghij1")).json()).status, "processing");
+  sessions.cs_test_abcdefghij1 = session({ line_items: { data: [{ price: { id: "price_other" } }] } });
+  assert.equal((await get("cs_test_abcdefghij1")).status, 404);
+  assert.equal((await get("nonsense")).status, 404);
+});
+
+async function signed(body, secret = env.STRIPE_WEBHOOK_SECRET, t = Math.floor(Date.now() / 1000)) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${t}.${body}`)));
+  return `t=${t},v1=${[...mac].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
+}
+
+const hook = async (event, header) => {
+  const body = JSON.stringify(event);
+  const request = new Request("https://tessel.example/api/stripe-webhook", { method: "POST", body, headers: { "Stripe-Signature": header ?? (await signed(body)) } });
+  return webhookPost({ request, env });
+};
+
+test("webhook emails the license once per purchase, even when Stripe retries", async () => {
+  const event = { type: "checkout.session.completed", data: { object: { id: "cs_test_abcdefghij1" } } };
+  assert.equal(await (await hook(event)).text(), "sent");
+  await hook(event);
+  assert.equal(emails.length, 2);
+  assert.equal(emails[0].key, emails[1].key); // Resend drops the repeat
+  assert.deepEqual(emails[0].body.to, ["Buyer@Example.com"]);
+  assert.match(emails[0].body.text, /tessel1\./);
+  assert.match(emails[0].body.text, /https:\/\/tessel\.example\/activate\.html#tessel1\./);
+});
+
+test("webhook refuses forged or stale calls and skips unpaid sessions", async () => {
+  const event = { type: "checkout.session.completed", data: { object: { id: "cs_test_abcdefghij1" } } };
+  assert.equal((await hook(event, await signed(JSON.stringify(event), "whsec_wrong"))).status, 400);
+  assert.equal((await hook(event, await signed(JSON.stringify(event), env.STRIPE_WEBHOOK_SECRET, 1000))).status, 400);
+  sessions.cs_test_abcdefghij1 = session({ payment_status: "unpaid" });
+  assert.equal(await (await hook(event)).text(), "not a paid Tessel purchase");
+  assert.equal(emails.length, 0);
+});
+
+const recover = (email) => recoverPost({ request: new Request("https://tessel.example/api/recover", { method: "POST", body: JSON.stringify({ email }), headers: { "Content-Type": "application/json" } }), env });
+
+test("lost license: emails the buyer's licenses, and answers the same either way", async () => {
+  sessions.cs_test_second00001 = session({ id: "cs_test_second00001", created: 1792100000 });
+  const found = await (await recover(" buyer@example.com ")).json();
+  const missing = await (await recover("nobody@example.com")).json();
+  assert.deepEqual(found, missing);
+  assert.equal(emails.length, 1);
+  assert.equal((emails[0].body.text.match(/^tessel1\./gm) || []).length, 2);
+  assert.match(emails[0].key, /^tessel-recover-buyer@example\.com-\d{4}-\d{2}-\d{2}$/);
+  assert.equal((await recover("not-an-email")).status, 400);
+});
+
+import { onRequestPost as checkoutPost } from "../../functions/api/checkout.js";
+
+test("checkout: one Tessel, tax on, terms required, requirements shown; double clicks reuse the session", async () => {
+  const calls = [];
+  globalThis.fetch = async (input, init = {}) => {
+    calls.push({ url: String(input), key: init.headers["Idempotency-Key"], body: new URLSearchParams(init.body) });
+    return new Response(JSON.stringify({ id: "cs_test_new0000001", url: "https://checkout.stripe.com/c/pay/cs_test_new0000001" }));
+  };
+  const form = () => new Request("https://tessel.example/api/checkout", {
+    method: "POST", body: new URLSearchParams({ attempt: "6f1c2b9e-7d3a-4e5f-9a10-1b2c3d4e5f60" }),
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  });
+  const first = await checkoutPost({ request: form(), env });
+  await checkoutPost({ request: form(), env });
+  assert.equal(first.status, 303);
+  assert.equal(first.headers.get("Location"), "https://checkout.stripe.com/c/pay/cs_test_new0000001");
+  assert.equal(calls[0].key, calls[1].key);
+  const b = calls[0].body;
+  assert.equal(b.get("line_items[0][price]"), "price_tessel");
+  assert.equal(b.get("line_items[0][quantity]"), "1");
+  assert.equal(b.get("automatic_tax[enabled]"), "true");
+  assert.equal(b.get("consent_collection[terms_of_service]"), "required");
+  assert.match(b.get("custom_text[submit][message]"), /Apple silicon/);
+  assert.equal(b.get("success_url"), "https://tessel.example/thanks.html?session_id={CHECKOUT_SESSION_ID}");
+});
+
+test("checkout: if Stripe is down, the buyer lands back on pricing with a note, not an error page", async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: { message: "down" } }), { status: 500 });
+  const r = await checkoutPost({ request: new Request("https://tessel.example/api/checkout", { method: "POST" }), env });
+  assert.equal(r.status, 303);
+  assert.equal(r.headers.get("Location"), "https://tessel.example/?checkout=unavailable#pricing");
+});
+
+test("lost license works as a plain form too", async () => {
+  const r = await recoverPost({ request: new Request("https://tessel.example/api/recover", { method: "POST", body: new URLSearchParams({ email: "buyer@example.com" }), headers: { "Content-Type": "application/x-www-form-urlencoded" } }), env });
+  assert.equal(r.status, 303);
+  assert.equal(r.headers.get("Location"), "https://tessel.example/recover.html?sent");
+  assert.equal(emails.length, 1);
+});
