@@ -59,8 +59,6 @@ final class Tiler {
     static let gap: CGFloat = 8
     static let spaceCount = 3
     static let resizeStep = 0.08
-    /// Apps whose new windows open in spotlight (alone in the center, the rest shelved).
-    static let opensInSpotlight: Set<String> = ["com.apple.finder"]
     /// Apps whose windows always float.
     static let floatingApps: Set<String> = [
         "com.apple.systempreferences", "com.apple.iphonesimulator", "com.1password.1password",
@@ -578,8 +576,6 @@ final class Tiler {
         if returnFromFullScreen(window) { return }
         let saved = savedPlacement.removeValue(forKey: window.id)
         if saved == nil, initialScanDone, takePlaceholder(for: window) { return }
-        let opensInSpotlight = initialScanDone && saved == nil
-            && Self.opensInSpotlight.contains(window.handle.app.bundleID ?? "")
         let display = saved.flatMap { s in activeDisplays.first { $0.uuid == s.display } }
             ?? activeDisplays.first { $0.frame.contains(window.frame.center) }
             ?? activeDisplays.first { $0.isMain }
@@ -592,13 +588,6 @@ final class Tiler {
         if !(before.map { layout.restore(window.id, from: $0) } ?? false) {
             let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
             layout.insert(window.id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
-        }
-        if opensInSpotlight, layout.windowCount > 1 {
-            layout.spotlight = window.id
-            let shelved = layout.shelved
-            Snapshotter.capture(shelved) { [weak self] images in
-                for (wid, image) in images { self?.shelf.setSnapshot(image, for: wid) }
-            }
         }
         spaces[space][display.uuid] = layout
         log.notice("tiling window \(window.id) (\(window.handle.app.bundleID ?? "?")) in space \(space + 1)")
@@ -1807,13 +1796,6 @@ final class Tiler {
         var layout = spaces[currentSpace][display.uuid] ?? Layout()
         let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
         layout.insert(id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
-        if Self.opensInSpotlight.contains(bundleID), layout.windowCount > 1 {
-            // Its window opens in Focus, so the tile does too.
-            layout.spotlight = id
-            Snapshotter.capture(layout.shelved) { [weak self] images in
-                for (wid, image) in images { self?.shelf.setSnapshot(image, for: wid) }
-            }
-        }
         spaces[currentSpace][display.uuid] = layout
 
         let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
