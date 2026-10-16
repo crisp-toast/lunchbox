@@ -146,6 +146,7 @@ public struct Layout: Equatable, Sendable {
         guard let (c, r) = position(of: old), !contains(new) else { return false }
         columns[c].windows[r] = new
         if singleOwner == old { singleOwner = new }
+        if spotlight == old { spotlight = new }
         return true
     }
 

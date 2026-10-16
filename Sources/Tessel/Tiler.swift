@@ -41,6 +41,9 @@ private struct WindowInfo {
     let dialog: Bool
     /// In a Space of its own from the green button.
     let fullScreen: Bool
+    /// How many tabs its native tab bar shows (0 without one). macOS lists only the tab in
+    /// front; each tab is a window of its own, and the ones behind aren't on screen.
+    let tabs: Int
 }
 
 private func axCallback(_ observer: AXObserver, _ element: AXUIElement, _ notification: CFString, _ refcon: UnsafeMutableRawPointer?) {
@@ -343,7 +346,9 @@ final class Tiler {
                 && element.element(kAXMinimizeButtonAttribute) != nil
                 && element.element(kAXZoomButtonAttribute) != nil)
             return WindowInfo(id: id, element: element, frame: frame, tileable: tileable, minimized: minimized,
-                              standard: standard, windowLike: windowLike, dialog: dialog, fullScreen: fullScreen)
+                              standard: standard, windowLike: windowLike, dialog: dialog, fullScreen: fullScreen,
+                              tabs: element.elements(kAXChildrenAttribute)
+                                .first { $0.role == "AXTabGroup" }.map { $0.elements(kAXTabsAttribute).count } ?? 0)
         }
     }
 
@@ -419,7 +424,10 @@ final class Tiler {
                 arrived = fresh.id
             }
         }
-        for info in infos where consider(info, app: app, onScreen: onScreen, shown: shown) { changed = true }
+        // Windows on screen first: a tab coming forward takes over its tab group's tile
+        // before the tab that just went back is looked at.
+        let ordered = infos.filter { onScreen.contains($0.id) } + infos.filter { !onScreen.contains($0.id) }
+        for info in ordered where consider(info, app: app, onScreen: onScreen, shown: shown) { changed = true }
         if changed {
             relayout(animated: true)
             persist()
@@ -486,11 +494,44 @@ final class Tiler {
                 || (spot != nil && isOutOfView(info.id, shown: shown)))
         let placed = spot != nil
         if wantsTile && !placed {
+            // A tab of a native tab group came forward (switched to, or just opened): each tab is
+            // a window of its own and only the front one shows. It takes over the tile of the
+            // app's window that just went out of view: the one in the same frame, else the one
+            // last used.
+            let behind = info.tabs >= 2 && onScreen.contains(info.id) ? windows.values.filter { other in
+                other.pid == app.pid && other.id != info.id && !other.hidden && !onScreen.contains(other.id)
+                    && place(of: other.id) != nil
+            } : []
+            let tab = behind.first { $0.frame.isClose(to: info.frame, tolerance: 2) }
+                ?? behind.first { $0.id == focusedID } ?? behind.first { lastFocused.values.contains($0.id) } ?? behind.first
+            if let tab, let (s, uuid) = place(of: tab.id) {
+                spaces[s][uuid]?.replace(tab.id, with: info.id)
+                window.target = tab.target
+                tab.target = nil
+                offScreenSince[tab.id] = nil
+                log.notice("window \(info.id) is a tab of \(tab.id): took over its tile")
+                return true
+            }
             insert(window)
             if initialScanDone { confirmPlacement(of: info.id) }
             return true
         }
+        // A tiled window that only went out of view (a tab sent back, a window on its way to
+        // full screen, a closed window an app keeps around) keeps its tile a moment, so a
+        // tab coming forward can take it over instead of the layout reshuffling.
+        if !wantsTile && placed, initialScanDone, !onScreen.contains(info.id), !window.hidden, !info.minimized,
+           !info.fullScreen, !appHidden, info.tileable || info.windowLike {
+            let now = CACurrentMediaTime()
+            let since = offScreenSince[info.id] ?? now
+            offScreenSince[info.id] = since
+            if now - since < 0.6 {
+                scheduleScan(app, after: [0.65 - (now - since)])
+                return false
+            }
+        }
+        if wantsTile { offScreenSince[info.id] = nil }
         if !wantsTile && placed {
+            offScreenSince[info.id] = nil
             // The green button: the window leaves for a Space of its own (first vanishing
             // for a moment on the way). Remember exactly where it was, and whether it was
             // in Focus, so it comes back to the same spot.
@@ -586,10 +627,13 @@ final class Tiler {
 
     /// When a window still around first went missing from its app's list.
     private var unlistedSince: [CGWindowID: CFTimeInterval] = [:]
+    /// When a tiled window first went out of view without closing.
+    private var offScreenSince: [CGWindowID: CFTimeInterval] = [:]
 
     private func forget(_ id: CGWindowID) {
         fullScreenSpots[id] = nil
         unlistedSince[id] = nil
+        offScreenSince[id] = nil
         removeFromLayouts(id)
         if let w = windows.removeValue(forKey: id) {
             w.handle.app.windowIDs.removeValue(forKey: w.handle.element)
