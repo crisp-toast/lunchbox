@@ -174,6 +174,18 @@ feature with an animated mini Mac. Preview it with `python3 -m http.server 4173 
 The Buy buttons go nowhere yet: set `CHECKOUT_URL` at the top of the page's script once a checkout
 (Lemon Squeezy, Paddle, Stripe, …) exists. Until then they scroll to pricing and say checkout opens soon.
 
+## Staying out of your way
+
+- **Crashes:** Open at Login runs Tessel as a launchd agent. If it ever crashes, it's back within
+  seconds and puts every window where it was. Parked windows never stay stranded, and Quit still quits.
+- **Displays coming and going:** when a display is unplugged, its windows move to another display.
+  When it comes back, they return to their spots on it. Changes wait a second to settle, so a display
+  blinking off as the Mac wakes doesn't shuffle anything.
+- **macOS 27:** a parked window that macOS pulls back into view is parked again.
+- **Native tabs** share one tile. **Dialogs** float, centered. **Full screen** windows keep their spot.
+  **Show Desktop** works as usual.
+- **Updates:** Sparkle checks once a day and asks before installing (see docs/store.md).
+
 ## Selling it
 
 Buying, licensing, the free trial and the release are described in [docs/store.md](docs/store.md).
