@@ -14,6 +14,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     var onShowShortcuts: (() -> Void)?
     var onEnterLicense: (() -> Void)?
     var onBuy: (() -> Void)?
+    var onCheckForUpdates: (() -> Void)?
     var licensing: Licensing?
 
     init(tiler: Tiler) {
@@ -93,6 +94,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         teach.isEnabled = trusted
         options.addItem(teach)
         options.addItem(action("Welcome & Setup…") { [weak self] in self?.onShowWelcome?() })
+        options.addItem(action("Check for Updates…") { [weak self] in self?.onCheckForUpdates?() })
         if let license = licensing?.license {
             options.addItem(.separator())
             options.addItem(action("Licensed to \(license.email)…") { [weak self] in self?.onEnterLicense?() })

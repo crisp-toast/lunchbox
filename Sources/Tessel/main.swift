@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var onboarding: Onboarding = Onboarding(tap: tap, tiler: tiler)
     private lazy var shortcuts: ShortcutsWindow = ShortcutsWindow(tap: tap)
     private let licensing = Licensing()
+    private let updater = Updater()
     private lazy var licenseWindow = LicenseWindow(licensing: licensing)
     private var trialTimer: Timer?
     private var trustPoll: Timer?
@@ -40,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.licensing = licensing
         menu.onEnterLicense = { [weak self] in self?.licenseWindow.show() }
         menu.onBuy = { NSWorkspace.shared.open(Licensing.buyURL) }
+        menu.onCheckForUpdates = { [weak self] in self?.updater.checkNow() }
         licensing.onChange = { [weak self] in self?.licenseChanged() }
         licensing.onRevoked = { [weak self] license in
             self?.licenseWindow.show(error: "The license for \(license.email) was refunded, so it no longer unlocks Tessel. If that's a mistake, write to support@sentientdonut.com.")

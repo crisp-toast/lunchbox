@@ -15,9 +15,16 @@ cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 mkdir -p "$APP/Contents/Library/LaunchAgents"
 cp Resources/com.tyleryouens.tessel.agent.plist "$APP/Contents/Library/LaunchAgents/"
 
+# Sparkle (auto-updates) ships inside the app.
+[[ -d Vendor/Sparkle.xcframework ]] || bash scripts/fetch-sparkle.sh
+SPARKLE="$(find Vendor/Sparkle.xcframework -maxdepth 2 -type d -name Sparkle.framework | head -1)"
+mkdir -p "$APP/Contents/Frameworks"
+ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
+
 # Sign with a stable Apple Development identity so macOS keeps the Accessibility
 # permission across rebuilds. Ad-hoc signing would lose it on every build.
 IDENTITY="${IDENTITY:-$(security find-identity -v -p codesigning | awk '/Apple Development/ && /ZV7V23WVKL/ {print $2; exit}')}"
+codesign --force --deep --sign "${IDENTITY:--}" "$APP/Contents/Frameworks/Sparkle.framework"
 codesign --force --sign "${IDENTITY:--}" "$APP"
 echo "Built $APP (signed with ${IDENTITY:-ad-hoc})"
 

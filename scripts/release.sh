@@ -31,6 +31,19 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 plutil -replace CFBundleShortVersionString -string "$VERSION" "$APP/Contents/Info.plist"
 plutil -replace CFBundleVersion -string "$(git rev-list --count HEAD)" "$APP/Contents/Info.plist"
 
+# Sparkle (auto-updates): its helpers are signed one by one, inside out, as Sparkle documents.
+[[ -d Vendor/Sparkle.xcframework ]] || bash scripts/fetch-sparkle.sh
+SPARKLE="$(find Vendor/Sparkle.xcframework -maxdepth 2 -type d -name Sparkle.framework | head -1)"
+mkdir -p "$APP/Contents/Frameworks"
+ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
+SP="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
+plain() { codesign --force --options runtime --timestamp --sign "$IDENTITY" "$@"; }
+plain "$SP/XPCServices/Installer.xpc"
+plain --preserve-metadata=entitlements "$SP/XPCServices/Downloader.xpc"
+plain "$SP/Autoupdate"
+plain "$SP/Updater.app"
+plain "$APP/Contents/Frameworks/Sparkle.framework"
+
 sign() { codesign --force --options runtime --timestamp --entitlements Resources/Tessel.entitlements --sign "$IDENTITY" "$1"; }
 sign "$APP"
 codesign --verify --strict --deep "$APP"
@@ -61,4 +74,15 @@ fi
 
 mkdir -p site/download
 cp "$DMG" site/download/Tessel.dmg
+if [[ "$DRY" != "--dry-run" ]]; then
+  # The update feed: every release lives in the releases folder; generate_appcast signs each
+  # with the update key in this Mac's Keychain and writes site/appcast.xml.
+  RELEASES="${RELEASES_DIR:-/Volumes/Master Storage/Projects/tessel/releases}"
+  SPARKLE_BIN="${SPARKLE_BIN:-Vendor/sparkle-bin}"
+  mkdir -p "$RELEASES"
+  cp "$DMG" "$RELEASES/"
+  [[ -f "$OUT/notes.html" ]] && cp "$OUT/notes.html" "$RELEASES/Tessel-$VERSION.html"
+  "$SPARKLE_BIN/generate_appcast" --download-url-prefix "https://tessel.sentientdonut.com/download/" -o site/appcast.xml "$RELEASES"
+  cp "$DMG" "site/download/Tessel-$VERSION.dmg"
+fi
 echo "Built $DMG ($(du -h "$DMG" | cut -f1)) and copied it to site/download/Tessel.dmg${DRY:+ (dry run: not notarized, do not publish)}"

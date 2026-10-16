@@ -11,7 +11,14 @@ let package = Package(
         // Pure layout logic: no AppKit, no Accessibility. Fully unit-tested.
         .target(name: "TesselCore"),
         // The menu bar app: hotkeys, window tracking, animation.
-        .executableTarget(name: "Tessel", dependencies: ["TesselCore"]),
+        // Auto-updates for copies sold from the website. scripts/fetch-sparkle.sh puts it in Vendor/.
+        .binaryTarget(name: "Sparkle", path: "Vendor/Sparkle.xcframework"),
+        .executableTarget(
+            name: "Tessel",
+            dependencies: ["TesselCore", "Sparkle"],
+            // Sparkle.framework ships inside the app, in Contents/Frameworks.
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
+        ),
         .testTarget(name: "TesselCoreTests", dependencies: ["TesselCore"]),
     ],
     swiftLanguageModes: [.v5]
