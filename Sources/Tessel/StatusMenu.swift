@@ -85,14 +85,9 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         }
         displays.toolTip = "Turn off to tile only on the main display, for example when the other display is a dummy plug."
         options.addItem(displays)
-        options.addItem(action("Launch at Login", checked: SMAppService.mainApp.status == .enabled) {
-            let service = SMAppService.mainApp
-            do {
-                if service.status == .enabled { try service.unregister() } else { try service.register() }
-            } catch {
-                log.error("launch at login: \(error.localizedDescription, privacy: .public)")
-            }
-        })
+        let login = action("Launch at Login", checked: LoginItem.isEnabled) { LoginItem.set(!LoginItem.isEnabled) }
+        login.toolTip = "Also brings Tessel back by itself if it ever quits unexpectedly."
+        options.addItem(login)
         options.addItem(action("Keyboard Shortcuts…") { [weak self] in self?.onShowShortcuts?() })
         let teach = action("Set Up Workspace Keys…") { [weak self] in self?.onTeachKeys?() }
         teach.isEnabled = trusted

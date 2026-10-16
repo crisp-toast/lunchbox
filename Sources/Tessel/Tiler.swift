@@ -165,7 +165,7 @@ final class Tiler {
         on(NSWorkspace.didHideApplicationNotification) { [weak self] n in self?.rescan(n) }
         on(NSWorkspace.didUnhideApplicationNotification) { [weak self] n in self?.rescan(n) }
         on(NSWorkspace.activeSpaceDidChangeNotification) { [weak self] _ in self?.scanAll(after: [0.03, 0.8, 1.6]) }
-        on(NSApplication.didChangeScreenParametersNotification, .default) { [weak self] _ in self?.displaysChanged() }
+        on(NSApplication.didChangeScreenParametersNotification, .default) { [weak self] _ in self?.displaysMayHaveChanged() }
         // Showing or hiding the Dock changes the usable area of the screen.
         on(Notification.Name("com.apple.dock.prefchanged"), DistributedNotificationCenter.default()) { [weak self] _ in
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self?.displaysChanged() }
@@ -799,6 +799,30 @@ final class Tiler {
             stale[w.pid] = w.handle.app
         }
         for app in stale.values { scheduleScan(app) }
+        reparkStrays()
+    }
+
+    /// macOS 27 now and then pulls a parked window back into view, sometimes in front
+    /// of the tiles (AeroSpace users see it too). A parked window shows a sliver in the
+    /// corner at most; one showing more than that goes back.
+    private func reparkStrays() {
+        let parked = windows.values.filter { $0.hidden }
+        guard !parked.isEmpty else { return }
+        let bounds = onScreenWindowBounds()
+        let spot = Display.hidingSpot(in: displays)
+        let now = CACurrentMediaTime()
+        for w in parked {
+            guard now > settlingUntil[w.id] ?? 0, let frame = bounds[w.id] else { continue }
+            let showing = displays.contains { d in
+                let part = d.frame.intersection(frame)
+                return !part.isNull && part.width > 40 && part.height > 40
+            }
+            guard showing else { continue }
+            log.notice("window \(w.id) came back into view while parked; parking it again")
+            settlingUntil[w.id] = now + 0.6
+            let element = w.handle.element
+            w.handle.app.queue.async { element.setPosition(spot) }
+        }
     }
 
     private func refreshFocus() {
@@ -1090,12 +1114,51 @@ final class Tiler {
         }
     }
 
+    /// Displays come and go in bursts (waking, a dock reconnecting, a display blinking off
+    /// for a moment): act once things have settled.
+    private var pendingDisplayChange: DispatchWorkItem?
+
+    private func displaysMayHaveChanged() {
+        pendingDisplayChange?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.displaysChanged() }
+        pendingDisplayChange = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
+    }
+
     private func displaysChanged() {
         guard enabled else { return }
         displays = Display.current()
+        welcomeBackDisplays()
         mergeInactiveDisplays()
         relayout(animated: false)
         persist()
+    }
+
+    /// Each display's layouts (one per Workspace) from when it went away, so its windows
+    /// can go back when it returns.
+    private var departed: [String: [Layout?]] = [:]
+
+    /// A display that went away is back: its windows, if still in the same Workspace,
+    /// go back to the spots they had on it.
+    private func welcomeBackDisplays() {
+        for display in activeDisplays {
+            guard let before = departed.removeValue(forKey: display.uuid) else { continue }
+            for (s, snapshot) in before.enumerated() {
+                guard let snapshot, spaces.indices.contains(s) else { continue }
+                var layout = spaces[s][display.uuid] ?? Layout()
+                for id in snapshot.windows where windows[id] != nil {
+                    guard let (space, uuid) = place(of: id), space == s, uuid != display.uuid,
+                          var elsewhere = spaces[s][uuid] else { continue }
+                    elsewhere.remove(id)
+                    spaces[s][uuid] = elsewhere.isEmpty ? nil : elsewhere
+                    if !layout.restore(id, from: snapshot) {
+                        layout.insert(id, near: layout.windows.last, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
+                    }
+                }
+                spaces[s][display.uuid] = layout.isEmpty ? nil : layout
+            }
+            log.notice("display \(display.name, privacy: .public) is back; its windows returned")
+        }
     }
 
     /// Moves windows from displays Tessel doesn't tile on (unplugged, or ignored
@@ -1105,6 +1168,9 @@ final class Tiler {
         let active = Set(activeDisplays.map(\.uuid))
         for s in spaces.indices {
             for (uuid, layout) in spaces[s] where !active.contains(uuid) {
+                // Remember where everything was, for when the display comes back.
+                if departed[uuid] == nil { departed[uuid] = Array(repeating: nil, count: spaces.count) }
+                departed[uuid]?[s] = layout
                 var merged = spaces[s][main.uuid] ?? Layout()
                 for id in layout.windows {
                     merged.insert(id, near: merged.windows.last, maxColumns: Layout.maxColumns(forWidth: main.visible.width))
@@ -1122,6 +1188,7 @@ final class Tiler {
         UserDefaults.standard.set(on, forKey: "useAllDisplays")
         log.notice("use all displays: \(on)")
         guard enabled else { return }
+        if on { welcomeBackDisplays() }
         mergeInactiveDisplays()
         // Pick up windows sitting on a display that just became active (or inactive).
         for w in windows.values where !w.hidden { w.target = nil }

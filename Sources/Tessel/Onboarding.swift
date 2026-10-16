@@ -352,10 +352,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
     // MARK: Finish
 
     private func finishView() -> NSView {
-        let login = toggleRow("Open Tessel when you log in", on: SMAppService.mainApp.status == .enabled) { on in
-            do { if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() } }
-            catch { log.error("login item: \(error.localizedDescription, privacy: .public)") }
-        }
+        let login = toggleRow("Open Tessel when you log in", on: LoginItem.isEnabled) { on in LoginItem.set(on) }
         let displays = toggleRow("Tile on every display", on: tiler.useAllDisplays) { [weak self] on in
             self?.tiler.setUseAllDisplays(on)
         }

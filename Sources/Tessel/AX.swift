@@ -149,6 +149,17 @@ func isDialogShowing(_ id: CGWindowID, pid: pid_t, frame: CGRect) -> Bool {
     return false
 }
 
+/// Where each on-screen window is, by window number.
+func onScreenWindowBounds() -> [CGWindowID: CGRect] {
+    var out: [CGWindowID: CGRect] = [:]
+    for info in CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? [] {
+        guard let id = info[kCGWindowNumber as String] as? CGWindowID, let dict = info[kCGWindowBounds as String] as? NSDictionary,
+              let rect = CGRect(dictionaryRepresentation: dict) else { continue }
+        out[id] = rect
+    }
+    return out
+}
+
 /// Every window that exists, on screen or not (minimized, hidden, on another desktop).
 func allWindowIDs() -> Set<CGWindowID> {
     let list = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] ?? []

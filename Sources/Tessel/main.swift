@@ -112,12 +112,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Start at login by default, once; the menu can turn it off and that sticks.
         if !UserDefaults.standard.bool(forKey: "loginItemConfigured") {
-            do {
-                try SMAppService.mainApp.register()
-                UserDefaults.standard.set(true, forKey: "loginItemConfigured")
-            } catch {
-                log.error("launch at login: \(error.localizedDescription, privacy: .public)")
-            }
+            LoginItem.set(true)
+            UserDefaults.standard.set(true, forKey: "loginItemConfigured")
+        } else {
+            LoginItem.migrate()
         }
         if tap.spaceKeys.count != 3, !onboarding.isVisible {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.onboarding.show(at: .keys) }
@@ -344,6 +342,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 }
+
+// One Tessel at a time; and when it's set to open at login, launchd runs it, so it comes
+// back by itself after a crash.
+if LoginItem.anotherCopyIsRunning() { exit(0) }
+if LoginItem.handOff() { exit(0) }
 
 let app = NSApplication.shared
 let delegate = AppDelegate()
