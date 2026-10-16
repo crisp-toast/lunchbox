@@ -112,6 +112,9 @@ final class Tiler {
             self.activate(id)
             self.showRing(on: id)
         }
+        // Dragging a file onto a card: Focus ends and the windows come back to their tiles,
+        // so the drop can land in any of them. Nothing is activated mid-drag.
+        shelf.onDragRest = { [weak self] _ in self?.exitSpotlight() }
         let defaults = UserDefaults.standard
         currentSpace = min(Self.spaceCount - 1, max(0, defaults.integer(forKey: "currentSpace")))
         // Window numbers stay the same while a window lives, so this survives a relaunch.

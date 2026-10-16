@@ -21,6 +21,9 @@ final class Shelf {
     }
 
     var onPick: ((CGWindowID) -> Void)?
+    /// Something being dragged (a file, an image, text) rested on a card: end Focus so it
+    /// can be dropped into one of the windows.
+    var onDragRest: ((CGWindowID) -> Void)?
 
     private var panel: NSPanel?
     private var stage: CALayer?
@@ -149,8 +152,22 @@ final class Shelf {
     }
 
     fileprivate func picked(at point: CGPoint) {
-        guard let id = hitRects.first(where: { $0.1.contains(point) })?.0 else { return }
+        guard let id = card(at: point) else { return }
         onPick?(id)
+    }
+
+    fileprivate func card(at point: CGPoint) -> CGWindowID? {
+        hitRects.first(where: { $0.1.contains(point) })?.0
+    }
+
+    /// A drag is over this card (or none): light it up, the way Finder answers a folder.
+    fileprivate func dragHover(_ id: CGWindowID?) {
+        for (cardID, card) in cards { card.highlighted = cardID == id }
+    }
+
+    fileprivate func dragRested(on id: CGWindowID) {
+        dragHover(nil)
+        onDragRest?(id)
     }
 
     private func makePanel() -> NSPanel {
@@ -164,6 +181,7 @@ final class Shelf {
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
         let view = ShelfView(shelf: self)
         view.wantsLayer = true
+        view.acceptDrags()
         let stage = CALayer()
         var perspective = CATransform3DIdentity
         perspective.m34 = -1 / 850
@@ -188,6 +206,44 @@ private final class ShelfView: NSView {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) { shelf?.picked(at: convert(event.locationInWindow, from: nil)) }
+
+    // MARK: Spring-loading: a dragged file resting on a card ends Focus, so it can be dropped.
+
+    private var hovered: CGWindowID?
+    private var rest: DispatchWorkItem?
+
+    func acceptDrags() {
+        registerForDraggedTypes([.fileURL, .URL, .string, .tiff, .png, .pdf, .rtf, .html, .color,
+                                 NSPasteboard.PasteboardType("com.apple.pasteboard.promised-file-url"),
+                                 NSPasteboard.PasteboardType("public.data")]
+                                + NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) })
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { track(sender) }
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { track(sender) }
+    override func draggingExited(_ sender: NSDraggingInfo?) { hover(nil) }
+    override func draggingEnded(_ sender: NSDraggingInfo) { hover(nil) }
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool { false }
+
+    private func track(_ drag: NSDraggingInfo) -> NSDragOperation {
+        hover(shelf?.card(at: convert(drag.draggingLocation, from: nil)))
+        return [] // nothing drops onto a card; it opens the windows up instead
+    }
+
+    private func hover(_ id: CGWindowID?) {
+        guard id != hovered else { return }
+        hovered = id
+        rest?.cancel()
+        shelf?.dragHover(id)
+        guard let id else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.hovered == id else { return }
+            self.hovered = nil
+            self.shelf?.dragRested(on: id)
+        }
+        rest = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+    }
 }
 
 /// One card: the window's snapshot (or its app icon), rounded, with a soft
@@ -240,6 +296,15 @@ private final class CardLayer: CALayer {
 
     override init(layer: Any) { super.init(layer: layer) }
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// A drag resting on the card.
+    var highlighted = false {
+        didSet {
+            guard highlighted != oldValue else { return }
+            face.borderWidth = highlighted ? 2.5 : 0.5
+            face.borderColor = (highlighted ? NSColor.controlAccentColor : NSColor.white.withAlphaComponent(0.22)).cgColor
+        }
+    }
 
     func layoutCard() {
         face.frame = bounds
