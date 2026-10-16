@@ -1916,21 +1916,8 @@ final class Tiler {
 
     // MARK: Menu commands
 
-    var focusedIsTiled: Bool { focusedID.map { place(of: $0) != nil } ?? false }
-
-    func toggleFloatingForFocused() {
-        guard let id = focusedID, let w = windows[id] else { return }
-        if place(of: id) != nil {
-            userFloating.insert(id)
-            removeFromLayouts(id)
-            w.target = nil
-            relayout(animated: true)
-        } else {
-            userFloating.remove(id)
-            scheduleScan(w.handle.app)
-        }
-        persist()
-    }
+    /// Whether a display in the Workspace being viewed is in Focus.
+    var focusModeIsOn: Bool { activeDisplays.contains { spaces[currentSpace][$0.uuid]?.spotlight != nil } }
 
     /// ⌘⇧0: even out every split in the space being viewed (stacks and columns
     /// back to equal shares, a lone window back to its default size), end

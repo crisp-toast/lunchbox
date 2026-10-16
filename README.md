@@ -91,7 +91,7 @@ and background launches tile when their windows appear, as always. **New Window*
 right-click menu opens here too, and picking one of the app's windows from that menu goes to it.
 Summon is the one that brings things to you: whatever it opens lands in the current Workspace.
 
-The menu bar shows the current space. Its menu can pause tiling, float or tile the focused window,
+The menu bar shows the current space. Its menu can pause tiling, put the focused window in Focus (or end Focus),
 normalize, re-tile everything, and open **Keyboard Shortcuts…** (the same searchable list as Left ⌘⇧Space). **Settings** holds Launch at Login, Set Up Space Keys, and
 **Use All Displays** (on by default). Turn that off to tile only on the main display, for example
 when the second display is a dummy plug: windows that open on other displays move to the main one,

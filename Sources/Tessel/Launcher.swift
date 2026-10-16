@@ -633,6 +633,8 @@ private final class ResultRow: NSView {
 final class Keycap: NSView {
     private let label: NSTextField
     var onAccent = false { didSet { refresh() } }
+    /// A color for a key the user picks one of (the Workspace keys in onboarding).
+    var tint: NSColor? { didSet { refresh() } }
 
     init(text: String) {
         label = NSTextField(labelWithString: text)
@@ -657,6 +659,12 @@ final class Keycap: NSView {
     required init?(coder: NSCoder) { fatalError("not used") }
 
     private func refresh() {
+        if let tint {
+            label.textColor = tint
+            layer?.borderColor = tint.withAlphaComponent(0.75).cgColor
+            layer?.backgroundColor = tint.withAlphaComponent(0.14).cgColor
+            return
+        }
         let color = onAccent ? NSColor.white : NSColor.secondaryLabelColor
         label.textColor = color
         layer?.borderColor = color.withAlphaComponent(onAccent ? 0.7 : 0.45).cgColor

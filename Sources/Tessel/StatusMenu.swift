@@ -49,11 +49,13 @@ final class StatusMenu: NSObject, NSMenuDelegate {
                 menu.addItem(entry)
             }
             menu.addItem(.separator())
-            let float = action(tiler.focusedIsTiled ? "Float Focused Window" : "Tile Focused Window") { [weak self] in
-                self?.tiler.toggleFloatingForFocused()
+            let inFocus = tiler.focusModeIsOn
+            let focus = action(inFocus ? "End Focus" : "Focus on This Window") { [weak self] in
+                guard let self else { return }
+                if self.tiler.focusModeIsOn { self.tiler.exitSpotlight() } else { self.tiler.perform(.spotlight) }
             }
-            float.isEnabled = tiler.enabled && tiler.focusedID != nil
-            menu.addItem(float)
+            focus.isEnabled = tiler.enabled && (inFocus || tiler.focusedID != nil)
+            menu.addItem(focus)
             let even = action("Tidy This Workspace") { [weak self] in self?.tiler.normalize() }
             even.isEnabled = tiler.enabled
             menu.addItem(even)

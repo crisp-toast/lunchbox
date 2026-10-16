@@ -35,6 +35,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
 
     private static let normalSize = NSSize(width: 760, height: 560)
     private static let practiceSize = NSSize(width: 1300, height: 760)
+    private static let finishSize = NSSize(width: 600, height: 540)
 
     // Finish step
     private let previewStatus = NSTextField(labelWithString: "")
@@ -118,7 +119,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
         }
         swap(to: view, animated: animated)
         updateFooter()
-        resizeWindow(to: target == .practice ? Self.practiceSize : Self.normalSize, animated: animated)
+        resizeWindow(to: target == .practice ? Self.practiceSize : target == .finish ? Self.finishSize : Self.normalSize, animated: animated)
     }
 
     /// The practice step opens up into a big window with the playground; the
@@ -280,13 +281,15 @@ final class Onboarding: NSObject, NSWindowDelegate {
             let mods = all[0].dropLast()
             guard !keys.isEmpty, all.allSatisfy({ $0.dropLast() == mods }) else { return caps(.workspace2) }
             let short = ["Page Up": "PgUp", "Page Down": "PgDn"]
-            return Array(mods) + all.compactMap(\.last).map { short[$0] ?? $0 }
+            // "=" marks a key to pick one of (drawn green), "/" the slash between them.
+            let choices = all.compactMap(\.last).map { "=" + (short[$0] ?? $0) }
+            return Array(mods) + choices.flatMap { [$0, "/"] }.dropLast()
         }()
         let items: [(String, [String], String)] = [
             // Summon first: it's how every window gets opened in the first place.
             ("summon", caps(.summon), "Open an app with Summon (type, then ↩)"),
             ("focus", anyDirection([.focusLeft, .focusRight, .focusUp, .focusDown]), "Move focus in any direction"),
-            ("move", anyDirection([.moveLeft, .moveRight, .moveUp, .moveDown]), "Move a window any way (press again to pass)"),
+            ("move", anyDirection([.moveLeft, .moveRight, .moveUp, .moveDown]), "Move a window any way"),
             ("size", caps(.grow), "Give a window more space"),
             ("focusMode", caps(.focusMode), "Focus on one window, then again to undo"),
             ("tidy", caps(.tidy), "Tidy everything back to even"),
@@ -334,8 +337,8 @@ final class Onboarding: NSObject, NSWindowDelegate {
         right.spacing = 14
         right.setCustomSpacing(22, after: text)
         right.translatesAutoresizingMaskIntoConstraints = false
-        right.widthAnchor.constraint(equalToConstant: 400).isActive = true
-        for row in rows { row.widthAnchor.constraint(equalToConstant: 400).isActive = true }
+        right.widthAnchor.constraint(equalToConstant: 420).isActive = true
+        for row in rows { row.widthAnchor.constraint(equalToConstant: 420).isActive = true }
 
         let layout = NSStackView(views: [left, right])
         layout.orientation = .horizontal
@@ -586,6 +589,15 @@ private final class PracticeRow: NSStackView {
             switch k {
             case "then": return NSTextField(labelWithString: "then") as NSView
             case "arrows": return ArrowCluster()
+            case "/":
+                let slash = NSTextField(labelWithString: "/")
+                slash.textColor = .systemGreen
+                slash.font = .systemFont(ofSize: 13, weight: .semibold)
+                return slash
+            case _ where k.hasPrefix("="):
+                let cap = Keycap(text: String(k.dropFirst()))
+                cap.tint = .systemGreen
+                return cap
             default: return Keycap(text: k)
             }
         })
@@ -596,7 +608,7 @@ private final class PracticeRow: NSStackView {
         capsBox.translatesAutoresizingMaskIntoConstraints = false
         capsBox.addSubview(caps)
         NSLayoutConstraint.activate([
-            capsBox.widthAnchor.constraint(equalToConstant: 190),
+            capsBox.widthAnchor.constraint(equalToConstant: 212),
             capsBox.heightAnchor.constraint(equalTo: caps.heightAnchor),
             caps.leadingAnchor.constraint(equalTo: capsBox.leadingAnchor),
             caps.centerYAnchor.constraint(equalTo: capsBox.centerYAnchor),
