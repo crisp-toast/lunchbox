@@ -57,6 +57,13 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             }
             focus.isEnabled = tiler.enabled && (inFocus || tiler.focusedID != nil)
             menu.addItem(focus)
+            if Learning.shared.isOn {
+                let floats = tiler.focusedFloats
+                let float = action(floats == true ? "Tile This Window" : "Float This Window") { [weak self] in self?.tiler.toggleFloating() }
+                float.toolTip = "Tessel learns from this: the next window like it does the same."
+                float.isEnabled = tiler.enabled && floats != nil
+                menu.addItem(float)
+            }
             let even = action("Tidy This Workspace") { [weak self] in self?.tiler.normalize() }
             even.isEnabled = tiler.enabled
             menu.addItem(even)
@@ -95,6 +102,11 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         options.addItem(teach)
         options.addItem(action("Welcome & Setup…") { [weak self] in self?.onShowWelcome?() })
         options.addItem(action("Check for Updates…") { [weak self] in self?.onCheckForUpdates?() })
+        if Learning.shared.isOn {
+            let reset = action("Reset What Tessel Learned") { Learning.shared.reset() }
+            reset.toolTip = "Forgets which windows you float. Nothing it learned ever left this Mac."
+            options.addItem(reset)
+        }
         if let license = licensing?.license {
             options.addItem(.separator())
             options.addItem(action("Licensed to \(license.email)…") { [weak self] in self?.onEnterLicense?() })

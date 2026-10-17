@@ -44,6 +44,8 @@ private struct WindowInfo {
     /// How many tabs its native tab bar shows (0 without one). macOS lists only the tab in
     /// front; each tab is a window of its own, and the ones behind aren't on screen.
     let tabs: Int
+    /// Whether it floats, by what you taught Tessel (nil unless Learning is on).
+    let learned: FloatDecision?
 }
 
 private func axCallback(_ observer: AXObserver, _ element: AXUIElement, _ notification: CFString, _ refcon: UnsafeMutableRawPointer?) {
@@ -146,6 +148,8 @@ final class Tiler {
         initialScanDone = false
         loadSaved()
         displays = Display.current()
+        Learning.shared.start()
+        Learning.shared.setScreens(displays.map(\.visible))
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 1.0)
 
         func on(_ name: Notification.Name, _ center: NotificationCenter = NSWorkspace.shared.notificationCenter, _ body: @escaping (Notification) -> Void) {
@@ -207,6 +211,7 @@ final class Tiler {
         guard enabled else { return }
         persist() // resuming puts everything back where it is now
         revealHiddenWindows()
+        Learning.shared.stop()
         enabled = false
         notificationTokens.forEach {
             NSWorkspace.shared.notificationCenter.removeObserver($0)
@@ -346,10 +351,17 @@ final class Tiler {
                 && element.element(kAXCloseButtonAttribute) != nil
                 && element.element(kAXMinimizeButtonAttribute) != nil
                 && element.element(kAXZoomButtonAttribute) != nil)
+            let tabs = element.elements(kAXChildrenAttribute)
+                .first { $0.role == "AXTabGroup" }.map { $0.elements(kAXTabsAttribute).count } ?? 0
+            // The first time a window that could tile shows up, Learning decides whether it does.
+            let rule: FloatChoice = tileable && !floatingApps.contains(app.bundleID ?? "") ? .tile : .float
+            let learned = windowLike ? Learning.shared.decide(id, rule: rule) { screens in
+                Learning.features(of: element, app: app, frame: frame, subrole: element.subrole,
+                                  resizable: element.isResizable, tabs: tabs, screens: screens)
+            } : nil
             return WindowInfo(id: id, element: element, frame: frame, tileable: tileable, minimized: minimized,
                               standard: standard, windowLike: windowLike, dialog: dialog, fullScreen: fullScreen,
-                              tabs: element.elements(kAXChildrenAttribute)
-                                .first { $0.role == "AXTabGroup" }.map { $0.elements(kAXTabsAttribute).count } ?? 0)
+                              tabs: tabs, learned: learned)
         }
     }
 
@@ -483,12 +495,13 @@ final class Tiler {
         window.minimized = info.minimized
         window.standard = info.standard
         let appHidden = NSRunningApplication(processIdentifier: app.pid)?.isHidden ?? false
-        let wantsTile = (info.tileable || (adopted.contains(info.id) && info.windowLike))
+        let ruleTiles = (info.tileable || (adopted.contains(info.id) && info.windowLike))
+            && !Self.floatingApps.contains(app.bundleID ?? "")
+        let wantsTile = tiles(info, rule: ruleTiles, placed: spot != nil)
             && !offDisplay.contains(info.id)
             && !leftAloneApps.contains(app.bundleID ?? "")
             && !appHidden
             && !userFloating.contains(info.id)
-            && !Self.floatingApps.contains(app.bundleID ?? "")
             // While a display shows a full screen app, its desktop's windows are out of
             // sight, not gone: they keep their tiles.
             && (onScreen.contains(info.id) || window.hidden
@@ -568,6 +581,55 @@ final class Tiler {
         return window
     }
 
+    /// Whether a window tiles: what the rules say, unless you taught Tessel otherwise
+    /// (Learning, off by default). Your own choice for this window always stands. Otherwise
+    /// a window Summon opened tiles as the rules say, and a window already tiled (or tiled
+    /// before a relaunch or a pause) stays tiled: what Tessel learns never moves a window
+    /// that's already in place.
+    private func tiles(_ info: WindowInfo, rule: Bool, placed: Bool) -> Bool {
+        guard info.windowLike, let learned = Learning.shared.decision(for: info.id) ?? info.learned else { return rule }
+        if learned.source != .you, adopted.contains(info.id) || placed || savedPlacement[info.id] != nil {
+            let choice: FloatChoice = (adopted.contains(info.id) ? rule : true) ? .tile : .float
+            if learned.choice != choice { Learning.shared.overrule(info.id, to: choice) }
+            return choice == .tile
+        }
+        return learned.choice == .tile
+    }
+
+    /// Floats the focused window where it is, or tiles a floating one (the `float` command
+    /// and menu item, with Learning on). Tessel learns from it: the next window of the
+    /// same kind floats (or tiles) too.
+    func toggleFloating() {
+        guard enabled, Learning.shared.isOn, let id = focusedID, let w = windows[id], !w.hidden else { return }
+        let tiled = place(of: id) != nil
+        guard Learning.shared.corrected(id, to: tiled ? .float : .tile, by: .toggle) else { return }
+        log.notice("window \(id) (\(w.handle.app.bundleID ?? "?", privacy: .public)) \(tiled ? "floats" : "tiles", privacy: .public) now")
+        if tiled {
+            float(w)
+        } else {
+            scheduleScan(w.handle.app) // consider() tiles it, next to the focused window
+        }
+    }
+
+    /// Whether the focused window floats, for the menu: nil without one that could go
+    /// either way.
+    var focusedFloats: Bool? {
+        guard let id = focusedID, let w = windows[id], !w.hidden, Learning.shared.decision(for: id) != nil else { return nil }
+        return place(of: id) == nil
+    }
+
+    /// Takes a window out of the layout, leaving it where it is; the others close the gap.
+    private func float(_ w: ManagedWindow) {
+        removeFromLayouts(w.id)
+        w.target = nil
+        relayout(animated: true)
+        persist()
+        showRing(on: w.id)
+    }
+
+    /// The window last dragged out of its tile (it glided back), and when.
+    private var lastDragOut: (id: CGWindowID, at: CFTimeInterval)?
+
     /// Set once the windows that were already open at launch are placed, so
     /// only windows opened afterwards count as new.
     private var initialScanDone = false
@@ -623,6 +685,7 @@ final class Tiler {
     private var offScreenSince: [CGWindowID: CFTimeInterval] = [:]
 
     private func forget(_ id: CGWindowID) {
+        Learning.shared.closed(id)
         fullScreenSpots[id] = nil
         unlistedSince[id] = nil
         offScreenSince[id] = nil
@@ -1133,6 +1196,18 @@ final class Tiler {
                 var layout = spaces[currentSpace][d.uuid] ?? Layout()
                 layout.insert(id, near: layout.windows.last, maxColumns: Layout.maxColumns(forWidth: d.visible.width))
                 spaces[currentSpace][d.uuid] = layout
+            } else if Learning.shared.isOn {
+                // Dragged out of its tile, it glides back. Dragged out again right away,
+                // it stays where you put it, floating, and Tessel learns from that.
+                let now = CACurrentMediaTime()
+                if let last = lastDragOut, last.id == id, now - last.at < 10,
+                   Learning.shared.corrected(id, to: .float, by: .dragOut) {
+                    lastDragOut = nil
+                    log.notice("window \(id) dragged out twice: it floats now")
+                    float(w)
+                    return
+                }
+                lastDragOut = (id, now)
             }
         }
         w.target = nil
@@ -1244,6 +1319,7 @@ final class Tiler {
         // changes without the set of displays changing.
         let fresh = Display.current()
         if Set(fresh.map(\.uuid)) == Set(displays.map(\.uuid)) { displays = fresh }
+        Learning.shared.setScreens(displays.map(\.visible))
         let now = CACurrentMediaTime()
         let spot = Display.hidingSpot(in: displays)
         var moves: [(window: WindowHandle, from: CGRect, to: CGRect, kind: Animator.Kind)] = []
@@ -2005,6 +2081,9 @@ final class Tiler {
         guard let actual else { scheduleScan(w.handle.app); return }
         guard !w.hidden else { return }
         w.frame = actual
+        if let target = w.target, abs(actual.width - target.width) > 2 || abs(actual.height - target.height) > 2 {
+            Learning.shared.sizeLimited(id) // it has a minimum or maximum size
+        }
         if ringWindow == id, ring.isShowing, let target = w.target, !actual.isClose(to: target, tolerance: 2) {
             ring.flash(actual, on: displays)
         }

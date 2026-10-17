@@ -307,6 +307,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("retile", _): tiler.retile()
         case ("pause", _): setTiling(false)
         case ("resume", _): setTiling(true)
+        // With the learnFloating default on: float (or tile) the focused window, and forget what was learned.
+        case ("float", _): tiler.toggleFloating()
+        case ("learning", "reset"?): Learning.shared.reset()
         case ("dump", _): dumpState()
         default: log.error("unknown command \(command, privacy: .public)")
         }
@@ -339,6 +342,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state["spaceKeys"] = tap.spaceKeys
         state["launcher"] = launcher.stateDescription
         state["help"] = help.stateDescription
+        state["learning"] = Learning.shared.stateDescription
         if let data = try? JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: dir.appendingPathComponent("state.json"))
         }

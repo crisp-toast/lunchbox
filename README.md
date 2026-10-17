@@ -143,8 +143,8 @@ Commands: `welcome`, `welcome-<step 0…4>`, `welcomeclose`, `find:<text>` (open
 `balance`, `retile`, `displays-all`, `displays-main`, `pause`, `resume`, `expect:<bundle id>` (holds a
 placeholder for a window of that app, without opening anything, to try placeholders), `leave-app:<bundle id>` and
 `manage-app:<bundle id>` (stop and resume tiling one app's windows, for agents testing it on a
-dummy-plug display), and `dump`, which writes the current state to
-`~/Library/Application Support/Tessel/state.json`.
+dummy-plug display), `float` and `learning-reset` (see Learning below), and `dump`, which writes the
+current state to `~/Library/Application Support/Tessel/state.json`.
 
 `pause` and `resume` do what the menu's **Tiling** item does. Pausing brings back windows parked in
 other spaces, stops tiling, and lets every shortcut through to apps. Both are safe to send twice.
@@ -164,6 +164,16 @@ Logs (`/usr/bin/log`, since zsh has its own `log` builtin):
 ```bash
 /usr/bin/log stream --predicate 'subsystem == "com.tyleryouens.tessel"' --info
 ```
+
+## Learning (prototype, off by default)
+
+Tessel can learn which windows you want floating instead of tiled, from your corrections, entirely
+on this Mac ([docs/learning.md](docs/learning.md) has the whole plan). Turn it on with
+`defaults write com.tyleryouens.tessel learnFloating -bool YES`, then pause and resume tiling. The
+menu gains **Float This Window** / **Tile This Window** (also the `float` command), and dragging a
+tiled window out of its tile twice in a row floats it where you drop it. The next window of the same
+kind follows. **Settings › Reset What Tessel Learned** (or `learning-reset`) forgets it all. The log
+is `~/Library/Application Support/Tessel/Learning/float.jsonl`, and `dump` adds a `learning` section.
 
 ## Website
 
