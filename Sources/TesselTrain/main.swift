@@ -141,7 +141,7 @@ func fit(_ train: [Example]) -> BehaviorModel {
 // MARK: Leave one app out
 
 let floatingApps: Set<String> = [
-    "com.apple.systempreferences", "com.apple.iphonesimulator", "com.1password.1password",
+    "com.apple.systempreferences", "com.apple.iphonesimulator",
     "com.apple.calculator", "com.apple.QuickTimePlayerX", "com.apple.ScreenSharing",
     "com.apple.screencaptureui", "com.tyleryouens.tessel",
 ]

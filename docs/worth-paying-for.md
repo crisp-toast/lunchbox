@@ -7,8 +7,8 @@ because it really saves them time.
 ## The short answer
 
 1. **The decision you'd notice is already above 95%.** Whether a window tiles or floats is
-   right **96% of the time (81 of 84)** on apps the classifier never saw. The exact placement
-   (tile, float, or float centered) is right 90% of the time. Every miss costs one correction,
+   right **98% of the time (82 of 84)** on apps the classifier never saw. The exact placement
+   (tile, float, or float centered) is right 92% of the time. Every miss costs one correction,
    and that kind of window is right from then on.
 2. **Laya and Julia 1 lose in the other jobs too.** On finding a window by typing, plain word
    matching beats them. On plain-English commands they get 38–58% of actions right. Don't ship
@@ -27,13 +27,17 @@ apps:
 
 | | Tiles or floats | Exact placement (tile / float / float centered) |
 |---|---|---|
-| Today's rules | 88% (74) | 85% (71) |
+| Today's rules | 89% (75) | 86% (72) |
 | The classifier alone | 93% (78) | 87% (73) |
-| **As shipped** (classifier when sure, rules as the floor) | **96% (81)** | **90% (76)** |
+| **As shipped** (classifier when sure, rules as the floor) | **98% (82)** | **92% (77)** |
 
-**The 3 misses that change your layout:**
-- 1Password's Welcome window and a Preview image float when they should tile.
+**The 2 misses that change your layout:**
+- A Preview image floats when it should tile.
 - Archive Utility's progress window tiles when it should float.
+
+(A third, 1Password's main window floating, came from a rule in Tessel's first commit that
+floated every 1Password window. That rule is gone since 2026-10-17: 1Password tiles like any
+app, and its small windows still float by the usual rules.)
 
 **The 5 misses that only change where a floating window sits:**
 - **Settings windows Tessel centers:** Terminal's settings ("General"), iTerm's Settings and
@@ -48,7 +52,7 @@ apps:
 **What's behind these numbers:**
 - 84 windows is a small set.
 - I labeled them myself.
-- The 0.5 threshold was picked on the same windows, so 96% flatters a little.
+- The 0.5 threshold was picked on the same windows, so 98% flatters a little.
 
 **Getting a trustworthy "above 95%":**
 - **It's already true in use, after a fix:** float a window once (a document window twice), and
@@ -56,7 +60,7 @@ apps:
   not one every day.
 - **One decision for you:** should settings windows that macOS marks as dialogs stay where the
   app put them, instead of being centered? On these windows, that would make exact placement
-  95% (80 of 84). But that change would be chosen on the very windows it's measured on, so it
+  96% (81 of 84). But that change would be chosen on the very windows it's measured on, so it
   only counts once fresh windows confirm it.
 - **The real proof is a fresh census of 300+ windows** (already proposed as a follow-up). It's
   also the data any fine-tuned model would need.
@@ -206,7 +210,7 @@ copy, not published (site copy stays yours):
 ## Item 1, as built (2026-10-17)
 
 Built on branch `claude/keen-agnesi-7eeb29`, on top of the learning branch
-(`claude/bold-villani-c70383`). `swift test`: 171 pass.
+(`claude/bold-villani-c70383`, merged through 121416b). `swift test`: 182 pass.
 
 ### The count
 
@@ -217,7 +221,7 @@ else, and the menu's "how it's counted" line is made from them, so it can't drif
 | Counted | Seconds | Where |
 |---|---|---|
 | A new window tiled into place | 2 | `Tiler.insert` (a window that opened under 10 s ago), and `takePlaceholder` (a window filling the tile Summon or a Dock click held for it) |
-| An app opening into its usual spot and share | 2 | The same two places, when the usual spot (or a lone window's shape) was used |
+| An app opening into its usual spot and share | 2 | The same two places, when the usual spot was used: a lone window's shape, or a learned four-window shape (`.anchored`) instead of the 2×2 grid |
 | A new window sent to its Workspace | 3 | `Learning.placed`, from `placedInHome` |
 | A window put back | 2 | `welcomeBackDisplays`, when a display really comes back (plugged in, or awake again), and `insert`, for windows back in their Workspace and spot after Tessel starts again |
 | A jump to a window from Summon | 1 | `goToWindow` (only Summon calls it), when it took you somewhere: another window, another Workspace, or out of the Dock |

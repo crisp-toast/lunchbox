@@ -34,6 +34,9 @@ public enum AutomaticAction: Equatable, Sendable {
     case arranged(app: String)
     /// A lone window took the shape you gave that app's windows before.
     case shaped(app: String)
+    /// Four windows took the shape you gave them before: this app's window with a column to
+    /// itself, at full height, on the `side` ("left", "right" or "middle").
+    case anchored(app: String, side: String)
     /// A new window opened in the Workspace its app lives in, and you stayed where you were.
     case sent(app: String, space: Int)
     /// A new window you opened went to the Workspace its app lives in, and you went with it.
@@ -42,7 +45,7 @@ public enum AutomaticAction: Equatable, Sendable {
 
 /// The one line Tessel shows when it did something on its own.
 public enum QuietLine {
-    /// `undoKey` names the undo key ("⌘ Page Up"), nil when there isn't one.
+    /// `undoKey` names the undo key ("Left ⌘ 1"), nil when there isn't one.
     public static func text(for actions: [AutomaticAction], undoKey: String?) -> String {
         guard let first = actions.first else { return "" }
         let what: String
@@ -57,6 +60,7 @@ public enum QuietLine {
             case .tiled(let app): (what, undo) = ("\(app) tiles, like the last one", "floats it")
             case .arranged(let app): (what, undo) = ("\(app) is back in its usual spot", "undoes")
             case .shaped(let app): (what, undo) = ("\(app) is the size you gave it", "undoes")
+            case .anchored(let app, let side): (what, undo) = ("\(app) has the \(side) to itself, like last time", "makes a grid")
             case .sent(let app, let space): (what, undo) = ("\(app) opened in Workspace \(space + 1)", "keeps it here")
             case .followed(let app, let space): (what, undo) = ("\(app) lives in Workspace \(space + 1)", "takes it back")
             }

@@ -37,15 +37,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // tiling starts (waiting for Accessibility, or after the trial ended).
         TimeBackLedger.shared.load()
         tiler.onChange = { [weak self] in self?.menu.refresh() }
-        // The quiet line names the undo key: ⌘ and the Workspace key you were in.
+        // The quiet line names the undo key: ⌘ and the number of the Workspace you were in.
         tiler.undoKeyName = { [weak self] space in
-            guard let self, self.tap.spaceKeys.count == 3 else { return nil }
-            let command = [Command.workspace1, .workspace2, .workspace3][space]
-            return Keymap.keycaps(for: self.tap.keymap.binding(for: command), workspaceKeys: self.tap.spaceKeys).joined(separator: " ")
+            guard let self, space < Command.maxWorkspaces else { return nil }
+            return Keymap.keycaps(for: self.tap.keymap.binding(for: .goTo(space)), workspaceKeys: self.tap.spaceKeys).joined(separator: " ")
         }
+        tap.spaceCount = tiler.spaceCount
+        tiler.onSpaceCountChange = { [weak self] count in self?.tap.spaceCount = count }
         _ = launcher // build the app list now, so the first ⇧Space already finds apps
         menu.onToggle = { [weak self] in self?.toggleTiling() }
-        menu.onTeachKeys = { [weak self] in self?.onboarding.show(at: .keys) }
         menu.onShowWelcome = { [weak self] in self?.onboarding.show() }
         menu.onShowShortcuts = { [weak self] in self?.shortcuts.show() }
         menu.onShowWindowClasses = { [weak self] in self?.windowClasses.show() }
@@ -61,7 +61,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shortcuts.onChange = { KeymapStore.save($0) }
         help.onCustomize = { [weak self] in self?.shortcuts.show() }
         onboarding.onCustomize = { [weak self] in self?.shortcuts.show() }
-        onboarding.onSpaceKeys = { [weak self] keys in self?.saveSpaceKeys(keys) }
         onboarding.onRequestAccess = {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
             if !AXIsProcessTrustedWithOptions(options) { Self.openAccessibilitySettings() }
@@ -80,9 +79,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         listenForCommands()
 
-        // New here (or setup unfinished): the welcome window walks through
-        // Accessibility and the space keys instead of a bare system prompt.
-        let setUp = AXIsProcessTrusted() && tap.spaceKeys.count == 3
+        // New here (or setup unfinished): the welcome window walks through Accessibility and a
+        // little practice instead of a bare system prompt. (Earlier versions had you choose
+        // three Workspace keys: having them means setup was done.)
+        let setUp = AXIsProcessTrusted()
+            && (UserDefaults.standard.bool(forKey: "onboardingDone") || tap.spaceKeys.count == 3)
         if !setUp { onboarding.show() }
         if AXIsProcessTrusted() {
             begin()
@@ -131,9 +132,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             UserDefaults.standard.set(true, forKey: "loginItemConfigured")
         } else {
             LoginItem.migrate()
-        }
-        if tap.spaceKeys.count != 3, !onboarding.isVisible {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.onboarding.show(at: .keys) }
         }
     }
 
@@ -187,12 +185,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func saveSpaceKeys(_ keys: [Int64]) {
-        tap.spaceKeys = keys
-        UserDefaults.standard.set(keys.map(Int.init), forKey: "spaceKeys")
-        log.notice("space keys set to \(keys.map(String.init).joined(separator: ","), privacy: .public)")
-    }
-
     static func openAccessibilitySettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
@@ -201,7 +193,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Lets scripts drive Tessel without the keyboard, e.g.
     /// `osascript -l JavaScript -e '…postNotificationName("com.tyleryouens.tessel.command", "focus-left")…'`.
-    /// Commands: focus-/move-left|right|up|down, grow, shrink, space-1…3, send-1…3,
+    /// Commands: focus-/move-left|right|up|down, grow, shrink, space-1…9, send-1…9, workspaces-3…9,
     /// balance, retile, pause, resume, dump (writes the state to ~/Library/Application Support/Tessel/state.json),
     /// timeback-add:<action>:<count>[:<days ago>].
     private func listenForCommands() {
@@ -354,6 +346,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("learning", "off"?): tiler.setLearning(false)
         case ("learning", "reset"?): Learning.shared.reset()
         case ("dump", _): dumpState()
+        case ("workspaces", let n?): if let n = Int(n) { tiler.setSpaceCount(n) }
         default: log.error("unknown command \(command, privacy: .public)")
         }
     }
@@ -400,6 +393,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         var state = tiler.stateDescription()
         state["spaceKeys"] = tap.spaceKeys
+        state["spaceCount"] = tiler.spaceCount
         state["launcher"] = launcher.stateDescription
         state["help"] = help.stateDescription
         state["learning"] = Learning.shared.stateDescription
