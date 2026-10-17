@@ -22,6 +22,8 @@ final class ManagedWindow {
     /// It opened while Tessel was running (not one already open when it started), so how
     /// long it lived means something.
     var openedWhileRunning = false
+    /// Its title when Summon last opened, so Summon can find it. Kept in memory only.
+    var title: String?
 
     init(handle: WindowHandle, frame: CGRect) {
         self.handle = handle
@@ -89,7 +91,15 @@ final class Tiler {
     /// The layout of each display (by UUID) in each space.
     private var spaces: [[String: Layout]] = Array(repeating: [:], count: Tiler.spaceCount)
     private var userFloating = Set<CGWindowID>()
-    private(set) var focusedID: CGWindowID?
+    private(set) var focusedID: CGWindowID? {
+        didSet {
+            guard let id = focusedID, recentlyFocused.first != id else { return }
+            recentlyFocused.removeAll { $0 == id }
+            recentlyFocused.insert(id, at: 0)
+        }
+    }
+    /// Windows by when they last had focus, the latest first: the order Summon lists them in.
+    private var recentlyFocused: [CGWindowID] = []
     private var lastFocused: [Int: CGWindowID] = [:]
     private var savedPlacement: [CGWindowID: (space: Int, display: String)] = [:]
     /// Each layout as it was when Tessel last ran (or was paused), by "space|display".
@@ -1092,6 +1102,7 @@ final class Tiler {
             w.handle.app.windowIDs.removeValue(forKey: w.handle.element)
         }
         if focusedID == id { focusedID = nil }
+        recentlyFocused.removeAll { $0 == id }
         adopted.remove(id)
         offDisplay.remove(id)
         centeredDialogs.remove(id)
@@ -2095,15 +2106,92 @@ final class Tiler {
     /// only on another macOS desktop) doesn't count as open.
     private func reachableWindows(ofApp pid: pid_t) -> [ManagedWindow] {
         let onScreen = recentOnScreenWindowIDs()
-        return windows.values.filter { w in
-            guard w.pid == pid else { return false }
-            if place(of: w.id) != nil { return true }
-            return w.standard && (w.minimized || onScreen.contains(w.id))
-                && w.frame.width >= 100 && w.frame.height >= 80
-        }
+        return windows.values.filter { $0.pid == pid && isReachable($0, onScreen: onScreen) }
+    }
+
+    private func isReachable(_ w: ManagedWindow, onScreen: Set<CGWindowID>) -> Bool {
+        if place(of: w.id) != nil { return true }
+        return w.standard && (w.minimized || onScreen.contains(w.id))
+            && w.frame.width >= 100 && w.frame.height >= 80
     }
 
     func hasReachableWindow(ofApp pid: pid_t) -> Bool { !reachableWindows(ofApp: pid).isEmpty }
+
+    /// A window Summon can go to, for its window rows.
+    struct OpenWindow {
+        let id: CGWindowID
+        let pid: pid_t
+        let appID: String?
+        let appName: String
+        let appURL: URL?
+        /// As read when Summon last opened ("" before that, or when it has none).
+        let title: String
+        /// The Workspace it's tiled in, from 0; nil when it floats or is minimized.
+        let space: Int?
+        /// The display it's on, by name, when Tessel tiles more than one; else nil.
+        let display: String?
+        let minimized: Bool
+    }
+
+    /// Every window Summon can go to (the same ones its app rows count as open), the most
+    /// recently used first and the focused one last. In memory only: no Accessibility reads.
+    func openWindows() -> [OpenWindow] {
+        let onScreen = recentOnScreenWindowIDs()
+        let recency = Dictionary(recentlyFocused.enumerated().map { ($1, $0) }, uniquingKeysWith: min)
+        func order(_ w: ManagedWindow) -> (Int, Int, CGWindowID) { (w.id == focusedID ? 1 : 0, recency[w.id] ?? .max, w.id) }
+        var appInfo: [pid_t: (name: String, url: URL?)] = [:]
+        let several = activeDisplays.count > 1
+        return windows.values.filter { isReachable($0, onScreen: onScreen) }
+            .sorted { order($0) < order($1) }
+            .map { w in
+                if appInfo[w.pid] == nil {
+                    let running = NSRunningApplication(processIdentifier: w.pid)
+                    appInfo[w.pid] = (running?.localizedName ?? w.handle.app.bundleID ?? "", running?.bundleURL)
+                }
+                let app = appInfo[w.pid]!
+                let spot = place(of: w.id)
+                let display = several ? (spot.flatMap { s in displays.first { $0.uuid == s.display } }
+                    ?? displays.first { $0.frame.contains(w.frame.center) })?.name : nil
+                return OpenWindow(id: w.id, pid: w.pid, appID: w.handle.app.bundleID, appName: app.name, appURL: app.url,
+                                  title: w.title ?? "", space: spot?.space, display: display, minimized: w.minimized)
+            }
+    }
+
+    /// Reads the title of every window Summon can go to, each app's on its own queue, and calls
+    /// `done` on the main thread once all are in, or after a quarter second if an app is slow to
+    /// answer (its titles still land, for the next search).
+    func readWindowTitles(then done: @escaping () -> Void) {
+        let onScreen = recentOnScreenWindowIDs()
+        var finished = false
+        let finish = {
+            guard !finished else { return }
+            finished = true
+            done()
+        }
+        let group = DispatchGroup()
+        for (pid, list) in Dictionary(grouping: windows.values.filter { isReachable($0, onScreen: onScreen) }, by: \.pid) {
+            guard let app = apps[pid] else { continue }
+            let elements = list.map { ($0.id, $0.handle.element) }
+            group.enter()
+            app.queue.async { [weak self] in
+                let titles = elements.map { id, element in (id, element.string(kAXTitleAttribute) ?? "") }
+                DispatchQueue.main.async {
+                    for (id, title) in titles { self?.windows[id]?.title = title }
+                    group.leave()
+                }
+            }
+        }
+        group.notify(queue: .main, execute: finish)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: finish)
+    }
+
+    /// Focuses one window wherever it is: in another Workspace, on another display, or
+    /// minimized in the Dock. Returns false when it's gone.
+    func goToWindow(_ id: CGWindowID) -> Bool {
+        guard let w = windows[id], isReachable(w, onScreen: recentOnScreenWindowIDs()) else { return false }
+        bringForward(w)
+        return true
+    }
 
     private var onScreenCache: (ids: Set<CGWindowID>, at: CFTimeInterval)?
 
@@ -2146,6 +2234,12 @@ final class Tiler {
             ?? mine.first { !$0.minimized }
             ?? mine.first
         guard let w = choice, mine.contains(where: { $0 === w }) else { return false }
+        bringForward(w)
+        return true
+    }
+
+    /// Restores the window if it's minimized, switches to its Workspace, and focuses it.
+    private func bringForward(_ w: ManagedWindow) {
         if w.minimized {
             // Restore it; Tessel tiles it again when it comes back.
             let element = w.handle.element
@@ -2154,7 +2248,6 @@ final class Tiler {
         if let space = place(of: w.id)?.space, space != currentSpace { switchSpace(to: space, focusing: w.id) }
         activate(w.id)
         showRing(on: w.id)
-        return true
     }
 
     /// Opens a new window of a running app, tiled in the current space and
