@@ -74,8 +74,12 @@ Apps you open often rise to the top.
   more of what you typed come first, then the ones you used most recently. Window rows sit below
   apps whose name you typed and above files. It's plain word matching on titles read as Summon
   opens, so typing never waits on another app, and titles are never saved.
-- When no app matches, it searches Spotlight's index for files and folders, most
-  recently used first, listed after any windows.
+- **Files and folders** come from Spotlight's index as you type (two letters or more), alongside
+  apps and windows and listed after them, with at least two rows kept for them. A name that is what
+  you typed comes first, then names that start with it, then names with a word starting each typed
+  word; among those, the Desktop, Documents and Downloads (on this Mac or in iCloud Drive) come
+  before deeper folders, then the most recently used. iCloud Drive and cloud storage folders
+  (Dropbox, Google Drive) are searched; the rest of Library, hidden files and apps aren't.
 - Opening an app that isn't running yet (or is running with no windows), or a **New … window**,
   makes room right away, so a slow launch never looks like nothing happened: the windows here glide
   aside and a frosted **placeholder** with the app's icon, gently pulsing, holds the exact spot and

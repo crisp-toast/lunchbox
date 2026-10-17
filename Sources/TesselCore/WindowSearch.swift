@@ -115,21 +115,4 @@ public struct WindowSearch: Sendable {
         endWord()
         return words.map { $0.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).lowercased() }
     }
-
-    /// One row in Summon's list.
-    public enum Row<App, Window> {
-        case app(App)
-        case window(Window)
-    }
-
-    /// Summon's order: apps whose name matches what you typed (the whole name, its start, a
-    /// word's start or the initials), then windows, then apps that only loosely match, like
-    /// "lunch" in Launchpad. Spotlight's files come after all of these.
-    ///
-    /// `apps` in the order they should show, each with its `Fuzzy.score` for the name alone.
-    public static func summonOrder<App, Window>(apps: [(app: App, nameScore: Int)], windows: [Window], limit: Int) -> [Row<App, Window>] {
-        let named = apps.filter { Fuzzy.matchesName($0.nameScore) }.map { Row<App, Window>.app($0.app) }
-        let loose = apps.filter { !Fuzzy.matchesName($0.nameScore) }.map { Row<App, Window>.app($0.app) }
-        return Array((named + windows.map { .window($0) } + loose).prefix(limit))
-    }
 }

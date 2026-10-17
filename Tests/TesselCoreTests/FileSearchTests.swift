@@ -1,0 +1,83 @@
+import Testing
+@testable import TesselCore
+
+@Suite struct FileSearching {
+    static let home = "/Users/tyler"
+    static let cloud = home + "/Library/Mobile Documents/com~apple~CloudDocs"
+
+    @Test func desktopFilesInICloudAreShown() {
+        // With Desktop & Documents in iCloud, Spotlight reports them under Library.
+        #expect(!FileSearch.isHidden(Self.cloud + "/Desktop/CommuterRail.pdf", home: Self.home))
+        #expect(!FileSearch.isHidden(Self.cloud + "/Documents/Budget.numbers", home: Self.home))
+        #expect(!FileSearch.isHidden(Self.home + "/Library/CloudStorage/Dropbox/Taxes.pdf", home: Self.home))
+        #expect(!FileSearch.isHidden(Self.home + "/Desktop/Lunch.txt", home: Self.home))
+        #expect(!FileSearch.isHidden("/Volumes/Master Storage/Projects/tessel/demo.mp4", home: Self.home))
+    }
+
+    @Test func libraryCachesAndAppsAreNot() {
+        #expect(FileSearch.isHidden(Self.home + "/Library/Preferences/com.apple.finder.plist", home: Self.home))
+        #expect(FileSearch.isHidden(Self.home + "/Library/Application Support/Code/notes.json", home: Self.home))
+        #expect(FileSearch.isHidden(Self.cloud + "/.Trash/old.pdf", home: Self.home))
+        #expect(FileSearch.isHidden(Self.home + "/code/tessel/.build/debug/Tessel", home: Self.home))
+        #expect(FileSearch.isHidden(Self.home + "/code/site/node_modules/react/index.js", home: Self.home))
+        #expect(FileSearch.isHidden("/Applications/Notes.app", home: Self.home))
+        #expect(FileSearch.isHidden("/Applications/Xcode.app/Contents/Info.plist", home: Self.home))
+    }
+
+    @Test func iCloudDriveIsNamed() {
+        #expect(FileSearch.folder(of: Self.cloud + "/Desktop/CommuterRail.pdf", home: Self.home) == "iCloud Drive/Desktop")
+        #expect(FileSearch.folder(of: Self.cloud + "/Group 1286.pdf", home: Self.home) == "iCloud Drive")
+        #expect(FileSearch.folder(of: Self.home + "/Downloads/a.zip", home: Self.home) == "~/Downloads")
+        #expect(FileSearch.folder(of: "/Volumes/Master Storage/Inbox/b.zip", home: Self.home) == "/Volumes/Master Storage/Inbox")
+    }
+
+    @Test func theNameItselfThenItsStartThenItsWords() {
+        let paths = [
+            Self.home + "/Desktop/old budget notes.txt",   // a word starts "budget"
+            Self.home + "/Desktop/rebudgeting.txt",        // only inside a word
+            Self.home + "/Desktop/Budget 2026.numbers",    // starts with it
+            Self.home + "/Desktop/Budget.numbers",         // is it
+        ]
+        #expect(FileSearch.rank(paths, query: "budget", home: Self.home) == [
+            Self.home + "/Desktop/Budget.numbers", Self.home + "/Desktop/Budget 2026.numbers",
+            Self.home + "/Desktop/old budget notes.txt", Self.home + "/Desktop/rebudgeting.txt",
+        ])
+    }
+
+    @Test func desktopDocumentsAndDownloadsBeforeDeepPaths() {
+        let deep = Self.home + "/code/archive/2024/clients/acme/invoice.pdf"
+        let shallow = Self.home + "/code/invoice.pdf"
+        let desktop = Self.cloud + "/Desktop/invoice.pdf"
+        let downloads = Self.home + "/Downloads/invoice.pdf"
+        #expect(FileSearch.rank([deep, shallow, desktop, downloads], query: "invoice", home: Self.home)
+            == [desktop, downloads, shallow, deep])
+        // A better name still wins over a better place.
+        let named = Self.home + "/code/archive/2024/clients/acme/Invoice.pdf"
+        let wordy = Self.home + "/Desktop/march invoice.pdf"
+        #expect(FileSearch.rank([wordy, named], query: "invoice", home: Self.home) == [named, wordy])
+    }
+
+    @Test func tiesKeepSpotlightsOrder() {
+        let a = Self.home + "/Documents/notes a.txt", b = Self.home + "/Documents/notes b.txt"
+        #expect(FileSearch.rank([a, b], query: "notes", home: Self.home) == [a, b])
+        #expect(FileSearch.rank([b, a], query: "notes", home: Self.home) == [b, a])
+    }
+
+    @Test func places() {
+        #expect(FileSearch.place(of: Self.home + "/Desktop/x.txt", home: Self.home) == 2)
+        #expect(FileSearch.place(of: Self.home + "/Documents/a/b/x.txt", home: Self.home) == 2)
+        #expect(FileSearch.place(of: Self.home + "/Documents/a/b/c/x.txt", home: Self.home) == 0)
+        #expect(FileSearch.place(of: Self.cloud + "/Desktop/A&M Info/A&M Info.pages", home: Self.home) == 2)
+        #expect(FileSearch.place(of: Self.cloud + "/Group 1286.pdf", home: Self.home) == 1)
+        #expect(FileSearch.place(of: "/Volumes/Master Storage/Projects/tessel/demo.mp4", home: Self.home) == 1)
+        #expect(FileSearch.place(of: Self.home + "/code/tessel/Sources/Tessel/Launcher.swift", home: Self.home) == 0)
+    }
+
+    @Test func termsAndMatching() {
+        #expect(FileSearch.terms(in: " lunch  *plans? ") == ["lunch", "plans"])
+        #expect(FileSearch.matches(["plans", "lunch"], name: "Lunch plans.txt"))
+        #expect(FileSearch.matches(["cafe"], name: "Café.pdf"))
+        #expect(!FileSearch.matches(["lunch", "dinner"], name: "Lunch plans.txt"))
+        #expect(!FileSearch.matches([], name: "anything"))
+    }
+}

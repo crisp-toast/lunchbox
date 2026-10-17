@@ -127,21 +127,22 @@ import Testing
 }
 
 @Suite struct SummonOrder {
-    typealias Row = WindowSearch.Row<String, String>
+    typealias Row = Summon.Row<String, String, String>
 
     func names(_ rows: [Row]) -> [String] {
         rows.map {
             switch $0 {
             case .app(let a): return "app:" + a
             case .window(let w): return "window:" + w
+            case .file(let f): return "file:" + f
             }
         }
     }
 
-    func order(_ query: String, apps: [String], windows: [String], limit: Int = 8) -> [String] {
+    func order(_ query: String, apps: [String], windows: [String], files: [String] = [], limit: Int = 8) -> [String] {
         let scored = apps.compactMap { name in Fuzzy.score(query, name).map { (app: name, nameScore: $0) } }
             .sorted { $0.nameScore > $1.nameScore }
-        return names(WindowSearch.summonOrder(apps: scored, windows: windows, limit: limit))
+        return names(Summon.order(apps: scored, windows: windows, files: files, limit: limit))
     }
 
     @Test func appsByNameThenWindowsThenLooseApps() {
@@ -151,6 +152,25 @@ import Testing
         #expect(order("mail", apps: ["Mail"], windows: ["Re: mail merge"]) == ["app:Mail", "window:Re: mail merge"])
         #expect(order("code", apps: ["Visual Studio Code"], windows: ["code review"])
             == ["app:Visual Studio Code", "window:code review"])
+    }
+
+    @Test func filesShowBesideAppsBelowWindows() {
+        // Files no longer wait for no app to match.
+        #expect(order("notes", apps: ["Notes"], windows: ["Ideas"], files: ["notes.txt"])
+            == ["app:Notes", "window:Ideas", "file:notes.txt"])
+        #expect(order("lunch", apps: ["Launchpad"], windows: [], files: ["Lunch menu.pdf"])
+            == ["file:Lunch menu.pdf", "app:Launchpad"])
+    }
+
+    @Test func filesKeepTwoRowsWhateverElseMatches() {
+        let windows = (1...10).map { "Notes \($0)" }
+        let rows = order("notes", apps: ["Notes"], windows: windows, files: ["a.txt", "b.txt", "c.txt"], limit: 8)
+        #expect(rows.count == 8)
+        #expect(rows.first == "app:Notes")
+        #expect(rows.suffix(2) == ["file:a.txt", "file:b.txt"])
+        // With room to spare, files take it.
+        #expect(order("notes", apps: ["Notes"], windows: [], files: ["a.txt", "b.txt", "c.txt"])
+            == ["app:Notes", "file:a.txt", "file:b.txt", "file:c.txt"])
     }
 
     @Test func theListStopsAtTheLimit() {
