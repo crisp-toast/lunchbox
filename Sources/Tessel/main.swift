@@ -33,6 +33,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         tiler.onChange = { [weak self] in self?.menu.refresh() }
+        // The quiet line names the undo key: ⌘ and the Workspace key you were in.
+        tiler.undoKeyName = { [weak self] space in
+            guard let self, self.tap.spaceKeys.count == 3 else { return nil }
+            let command = [Command.workspace1, .workspace2, .workspace3][space]
+            return Keymap.keycaps(for: self.tap.keymap.binding(for: command), workspaceKeys: self.tap.spaceKeys).joined(separator: " ")
+        }
         _ = launcher // build the app list now, so the first ⇧Space already finds apps
         menu.onToggle = { [weak self] in self?.toggleTiling() }
         menu.onTeachKeys = { [weak self] in self?.onboarding.show(at: .keys) }
@@ -88,6 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         tiler.revealHiddenWindows()
+        Learning.shared.saveNow()
     }
 
     private func begin() {
@@ -307,8 +314,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("retile", _): tiler.retile()
         case ("pause", _): setTiling(false)
         case ("resume", _): setTiling(true)
-        // With the learnFloating default on: float (or tile) the focused window, and forget what was learned.
+        // Learning (Settings › Learn Where Windows Go): float or tile the focused window, switch
+        // learning on or off, forget everything it learned.
         case ("float", _): tiler.toggleFloating()
+        case ("learning", "on"?): tiler.setLearning(true)
+        case ("learning", "off"?): tiler.setLearning(false)
         case ("learning", "reset"?): Learning.shared.reset()
         case ("dump", _): dumpState()
         default: log.error("unknown command \(command, privacy: .public)")

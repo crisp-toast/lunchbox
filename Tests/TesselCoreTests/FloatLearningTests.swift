@@ -203,6 +203,18 @@ private func tiled(_ f: FloatFeatures, at time: Double = t0) -> FloatEvent {
         #expect(TitleKind(title: "Informational memo", appName: "Pages") == .document)
     }
 
+    @Test func lessonsInWords() {
+        #expect(palette.kindInWords == "small tool windows")
+        #expect(window(share: 0.6).kindInWords == "large document windows")
+        #expect(window(subrole: "AXFloatingWindow").kindInWords == "medium panels")
+        var model = FloatClassifier()
+        model.learn(floated(palette), now: t0)
+        model.learn(floated(window(share: 0.6), at: t0 + 1), now: t0 + 1) // once isn't a lesson for a document
+        let lessons = model.lessons { _ in .tile }
+        #expect(lessons.map(\.signature) == [palette.signature])
+        #expect(lessons.first?.choice == .float)
+    }
+
     @Test func sizeClassesAndSignatures() {
         #expect(window(share: 0.05).sizeClass == "s")
         #expect(window(share: 0.2).sizeClass == "m")

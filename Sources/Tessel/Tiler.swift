@@ -17,6 +17,8 @@ final class ManagedWindow {
     var standard = false
     /// When Tessel first saw it.
     let seenAt = CACurrentMediaTime()
+    /// It opened just now: only new windows are placed by what Tessel learned.
+    var isNew: Bool { CACurrentMediaTime() - seenAt < 10 }
 
     init(handle: WindowHandle, frame: CGRect) {
         self.handle = handle
@@ -153,7 +155,7 @@ final class Tiler {
         initialScanDone = false
         loadSaved()
         displays = Display.current()
-        Learning.shared.start()
+        Learning.shared.start(alive: allWindowIDs())
         Learning.shared.setScreens(displays.map(\.visible))
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 1.0)
 
@@ -204,6 +206,10 @@ final class Tiler {
         timer.tolerance = 0.5
         RunLoop.main.add(timer, forMode: .common)
         ghostTimer = timer
+        let minute = Timer(timeInterval: 60, repeats: true) { [weak self] _ in self?.learningTick() }
+        minute.tolerance = 5
+        RunLoop.main.add(minute, forMode: .common)
+        learningTimer = minute
 
         for app in NSWorkspace.shared.runningApplications { track(app, scan: false) }
         mergeInactiveDisplays()
@@ -216,6 +222,12 @@ final class Tiler {
         guard enabled else { return }
         persist() // resuming puts everything back where it is now
         revealHiddenWindows()
+        for key in Array(standing.keys) { flushStanding(key) }
+        automatic = nil
+        placedForYou = [:]
+        requested = []
+        learningTimer?.invalidate()
+        learningTimer = nil
         Learning.shared.stop()
         enabled = false
         notificationTokens.forEach {
@@ -268,6 +280,8 @@ final class Tiler {
         apps[pid] = app
         // An app Tessel is holding a tile for has started: from now on it's this process.
         for e in expected where e.pid == nil && e.bundleID == running.bundleIdentifier { e.pid = pid }
+        // Started right after a key press or click (Spotlight, Finder, a launcher): you opened it.
+        if scan, Self.secondsSinceInput() < 1.5 { launchedByYou[pid] = CACurrentMediaTime() }
         attachObserver(app)
         if scan { scheduleScan(app, after: [0.1, 0.5, 1.5]) }
     }
@@ -301,6 +315,7 @@ final class Tiler {
     }
 
     private func untrack(_ pid: pid_t) {
+        launchedByYou[pid] = nil
         guard let app = apps.removeValue(forKey: pid) else { return }
         detach(app)
         let gone = windows.values.filter { $0.pid == pid }.map(\.id)
@@ -445,6 +460,7 @@ final class Tiler {
         // Windows on screen first: a tab coming forward takes over its tab group's tile
         // before the tab that just went back is looked at.
         let ordered = infos.filter { onScreen.contains($0.id) } + infos.filter { !onScreen.contains($0.id) }
+        if let arrived { requested.insert(arrived) }
         for info in ordered where consider(info, app: app, onScreen: onScreen, shown: shown) { changed = true }
         if changed {
             relayout(animated: true)
@@ -511,6 +527,16 @@ final class Tiler {
             // sight, not gone: they keep their tiles.
             && (onScreen.contains(info.id) || window.hidden
                 || (spot != nil && isOutOfView(info.id, shown: shown)))
+        // A new window going against the rules because of what you taught Tessel: one quiet line.
+        if initialScanDone, window.isNew, info.windowLike, onScreen.contains(info.id), savedPlacement[info.id] == nil,
+           !announced.contains(info.id), let d = Learning.shared.decision(for: info.id), d.source == .learned {
+            announced.insert(info.id)
+            let name = Learning.appName(app.bundleID ?? "")
+            let display = displays.first { $0.frame.contains(info.frame.center) }
+            didOnItsOwn(d.choice == .float ? .floated(app: name) : .tiled(app: name),
+                        undo: d.choice == .float ? .float(info.id) : .tile(info.id),
+                        key: "float|\(info.id)", from: currentSpace, on: display)
+        }
         let placed = spot != nil
         if wantsTile && !placed {
             // A tab of a native tab group came forward (switched to, or just opened): each tab is
@@ -601,11 +627,15 @@ final class Tiler {
         return learned.choice == .tile
     }
 
-    /// Floats the focused window where it is, or tiles a floating one (the `float` command
-    /// and menu item, with Learning on). Tessel learns from it: the next window of the
-    /// same kind floats (or tiles) too.
+    /// Floats the focused window, or tiles a floating one (the `float` command and menu item,
+    /// with Learning on). Tessel learns from it: the next window of the same kind follows.
     func toggleFloating() {
-        guard enabled, Learning.shared.isOn, let id = focusedID, let w = windows[id], !w.hidden else { return }
+        guard enabled, let id = focusedID else { return }
+        toggleFloating(id)
+    }
+
+    private func toggleFloating(_ id: CGWindowID) {
+        guard Learning.shared.isOn, let w = windows[id], !w.hidden else { return }
         let tiled = place(of: id) != nil
         guard Learning.shared.corrected(id, to: tiled ? .float : .tile, by: .toggle) else { return }
         log.notice("window \(id) (\(w.handle.app.bundleID ?? "?", privacy: .public)) \(tiled ? "floats" : "tiles", privacy: .public) now")
@@ -623,13 +653,324 @@ final class Tiler {
         return place(of: id) == nil
     }
 
-    /// Takes a window out of the layout, leaving it where it is; the others close the gap.
-    private func float(_ w: ManagedWindow) {
+    /// Takes a window out of the layout; the others close the gap. It goes back to the size
+    /// it opened at: centered where its tile was, or with its top-left corner where you
+    /// dropped it (`droppedAt`), kept on screen either way.
+    private func float(_ w: ManagedWindow, droppedAt: CGPoint? = nil) {
+        let from = droppedAt == nil ? (w.target ?? w.frame) : w.frame
         removeFromLayouts(w.id)
         w.target = nil
         relayout(animated: true)
         persist()
+        if let size = Learning.shared.openingSize(of: w.id), size.width >= 100, size.height >= 60,
+           let d = displays.first(where: { $0.frame.contains(from.center) }) ?? displays.first(where: \.isMain) {
+            let origin = droppedAt ?? CGPoint(x: from.midX - size.width / 2, y: from.midY - size.height / 2)
+            let width = min(size.width, d.visible.width), height = min(size.height, d.visible.height)
+            let x = min(max(origin.x, d.visible.minX), d.visible.maxX - width)
+            let y = min(max(origin.y, d.visible.minY), d.visible.maxY - height)
+            let frame = CGRect(x: x.rounded(), y: y.rounded(), width: width, height: height)
+            if !frame.isClose(to: from, tolerance: 2) {
+                animator.run([(w.handle, from, frame, animationsAllowed ? .animate : .snap)])
+                w.frame = frame
+            }
+        }
         showRing(on: w.id)
+    }
+
+    // MARK: Learning: what Tessel does on its own
+
+    /// Settings › Learn Where Windows Go. Windows already open stay as they are until Tessel
+    /// looks at them again.
+    func setLearning(_ on: Bool) {
+        Learning.shared.setSwitch(on, alive: allWindowIDs())
+        if !on {
+            for key in Array(standing.keys) { flushStanding(key) }
+            automatic = nil
+        }
+        scanAll()
+        onChange?()
+    }
+
+    /// Says what Tessel did on its own, and which key undoes it.
+    private let quietLine = QuietLineView()
+    /// Names the undo key for a Workspace, like "⌘ Page Up" (set by the app, which knows the keys).
+    var undoKeyName: ((Int) -> String?)?
+
+    /// What Tessel just did on its own, undoable for a few seconds with ⌘ and the key of the
+    /// Workspace you were in (Etiquette). Things done within a second of each other (windows
+    /// coming back after a login) share one line and one undo.
+    private struct Automatic {
+        enum Undo {
+            /// It floated by itself: tile it.
+            case float(CGWindowID)
+            /// It tiled by itself: float it.
+            case tile(CGWindowID)
+            /// It took its usual spot: put it where it would have gone.
+            case layout(space: Int, display: String, applied: Layout, plain: Layout)
+            /// It went to its app's Workspace: bring it to the one you were in.
+            case place(CGWindowID, from: Int)
+        }
+        var actions: [AutomaticAction]
+        var undos: [Undo]
+        var keys: [String]
+        /// The Workspace you were in: its key undoes this.
+        var from: Int
+        var at: CFTimeInterval
+        var until: CFTimeInterval
+        var display: Display?
+    }
+    private var automatic: Automatic?
+    /// Windows Tessel opened in their app's Workspace while you stayed here: their app reaching
+    /// for focus isn't you asking to go there.
+    private var placedForYou: [CGWindowID: CFTimeInterval] = [:]
+    /// Windows that answered something you opened from Tessel (Summon): they come to you.
+    private var requested = Set<CGWindowID>()
+    /// New windows whose learned float or tile was already announced.
+    private var announced = Set<CGWindowID>()
+    /// Apps you just launched yourself (Spotlight, Finder, a launcher), and when: when their
+    /// window goes to its home, you go with it.
+    private var launchedByYou: [pid_t: CFTimeInterval] = [:]
+    /// Arrangements you made (or let stand), and since when, by "space|display".
+    private var standing: [String: (arrangement: Arrangement, display: String, since: CFTimeInterval)] = [:]
+    private var learningTimer: Timer?
+    private var learningTicks = 0
+
+    private func didOnItsOwn(_ action: AutomaticAction, undo: Automatic.Undo, key: String, from: Int, on display: Display?) {
+        let now = CACurrentMediaTime()
+        // Following you to another Workspace, the undo key also just takes you back: it only
+        // brings the window along while the line is up.
+        let window: Double
+        if case .followed = action { window = Etiquette.lineSeconds + 1 } else { window = Etiquette.undoSeconds }
+        if var a = automatic, now - a.at < Etiquette.batchSeconds, a.from == from {
+            a.actions.append(action)
+            a.undos.append(undo)
+            a.keys.append(key)
+            a.until = min(a.until, now + window)
+            automatic = a
+        } else {
+            if let a = automatic { a.keys.forEach { Learning.shared.kept($0) } }
+            automatic = Automatic(actions: [action], undos: [undo], keys: [key], from: from, at: now, until: now + window,
+                                  display: display ?? displays.first(where: \.isMain))
+            DispatchQueue.main.asyncAfter(deadline: .now() + Etiquette.undoSeconds + 0.1) { [weak self] in
+                guard let self, let a = self.automatic, a.at == now else { return }
+                a.keys.forEach { Learning.shared.kept($0) }
+                self.automatic = nil
+            }
+        }
+        guard let a = automatic else { return }
+        quietLine.show(QuietLine.text(for: a.actions, undoKey: undoKeyName?(a.from)), on: a.display)
+        log.notice("on its own: \(String(describing: action), privacy: .public)")
+    }
+
+    /// ⌘ and the key of the Workspace you were in, right after Tessel did something on its own:
+    /// undo it. False when there's nothing to undo, so the key does what it always does.
+    private func undoAutomatic(pressed index: Int) -> Bool {
+        guard let a = automatic, a.from == index, CACurrentMediaTime() < a.until else { return false }
+        automatic = nil
+        for key in a.keys where !key.hasPrefix("float|") { Learning.shared.undone(key) }
+        var back: [CGWindowID] = []
+        for undo in a.undos.reversed() {
+            switch undo {
+            case .float(let id):
+                if place(of: id) == nil { toggleFloating(id) } // tiles it; Tessel learns from that
+            case .tile(let id):
+                if place(of: id) != nil { toggleFloating(id) }
+            case .layout(let space, let display, let applied, var plain):
+                guard var now = spaces[space][display] else { continue }
+                // A placeholder that has since been filled by its window counts as the same.
+                for id in applied.placeholders where !now.contains(id) {
+                    if let filled = now.windows.first(where: { !applied.contains($0) }) {
+                        plain.replace(id, with: filled)
+                        now.replace(filled, with: id)
+                    }
+                }
+                if now == applied { spaces[space][display] = plain }
+            case .place(let id, let from):
+                guard windows[id] != nil, let (space, uuid) = place(of: id), space != from else { continue }
+                removeFromLayouts(id)
+                var layout = spaces[from][uuid] ?? Layout()
+                let near = lastFocused[from].flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
+                let width = displays.first { $0.uuid == uuid }?.visible.width ?? 1600
+                layout.insert(id, near: near, maxColumns: Layout.maxColumns(forWidth: width))
+                spaces[from][uuid] = layout
+                placedForYou[id] = nil
+                back.append(id)
+            }
+        }
+        quietLine.show("Undone", on: a.display)
+        if currentSpace != index {
+            switchSpace(to: index, focusing: back.first)
+        } else {
+            relayout(animated: true)
+            persist()
+        }
+        if let id = back.first {
+            activate(id)
+            showRing(on: id)
+        }
+        return true
+    }
+
+    /// Something you opened from Tessel is on its way to this app: its window comes to you.
+    private func isRequested(_ w: ManagedWindow) -> Bool {
+        if requested.contains(w.id) { return true }
+        let now = CACurrentMediaTime()
+        let bundleID = w.handle.app.bundleID
+        if let p = pendingNewWindow, p.pid == w.pid, now < p.deadline { return true }
+        if let m = dockMenuActivation, m.pid == w.pid, now < m.until { return true }
+        if let d = dockClick, d.pid == w.pid, now < d.until { return true }
+        if let a = summonedArrival, a.bundleID == bundleID, now < a.until { return true }
+        if let e = expectedArrival, e.bundleID == bundleID, now < e.until { return true }
+        return false
+    }
+
+    /// You opened this window yourself, just now (outside Tessel): you go where it goes.
+    private func openedByYou(_ w: ManagedWindow) -> Bool {
+        if let at = launchedByYou[w.pid], CACurrentMediaTime() - at < 30 { return true }
+        return NSWorkspace.shared.frontmostApplication?.processIdentifier == w.pid && Self.secondsSinceInput() < 2
+    }
+
+    /// Seconds since your last key press or click.
+    static func secondsSinceInput() -> Double {
+        min(CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown),
+            CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .leftMouseDown))
+    }
+
+    /// The Workspaces an app's windows are in right now.
+    private func spacesOf(_ app: String, excluding id: CGWindowID) -> Set<Int> {
+        Set(spaces.indices.filter { s in
+            spaces[s].values.contains { layout in layout.windows.contains { $0 != id && windows[$0]?.handle.app.bundleID == app } }
+        })
+    }
+
+    /// The app of a window or of a placeholder.
+    private func appID(of id: CGWindowID) -> String? {
+        windows[id]?.handle.app.bundleID ?? expected.first { $0.id == id }?.bundleID
+    }
+
+    /// What a display is remembered by: its size, so the same arrangement comes back on any
+    /// display that size (and the same display, wherever it's plugged in).
+    static func displayKey(_ d: Display) -> String { "\(Int(d.frame.width))x\(Int(d.frame.height))" }
+
+    /// Where a new window (or a placeholder) usually goes next to the windows in `layout`: its
+    /// usual spot and share, or the shape you gave its app's windows when alone.
+    private func usualPlace(_ id: CGWindowID, app: String, in layout: Layout,
+                            display: Display) -> (Layout, AutomaticAction, String)? {
+        guard Learning.shared.isOn else { return nil }
+        let key = Self.displayKey(display)
+        let name = Learning.appName(app)
+        if layout.isEmpty {
+            guard let shape = Learning.shared.loneShape(of: app, on: key) else { return nil }
+            var lone = Layout(columns: [Column(windows: [id])])
+            lone.singleOwner = id
+            lone.singleScale = shape.scale
+            lone.singleHeight = shape.height
+            return (lone, .shaped(app: name), ArrangementMemory.loneKey(display: key, app: app))
+        }
+        var apps: [WindowID: String] = [:]
+        for wid in layout.windows { apps[wid] = appID(of: wid) }
+        guard apps.count == layout.windowCount else { return nil }
+        let all = Array(apps.values) + [app]
+        guard let usual = Learning.shared.arrangement(display: key, apps: all),
+              let placed = usual.place(id, app: app, in: layout, apps: apps) else { return nil }
+        return (placed, .arranged(app: name), ArrangementMemory.key(display: key, apps: all))
+    }
+
+    /// A new window went to the Workspace its app lives in. If you just opened it, you go
+    /// with it, the way the Dock takes you to an app's window. If it opened by itself, you
+    /// stay, and so does the keyboard.
+    private func placedInHome(_ window: ManagedWindow, app: String, home: Int, display: Display) {
+        let from = currentSpace
+        let name = Learning.appName(app)
+        Learning.shared.placed(app, in: home)
+        if openedByYou(window) {
+            didOnItsOwn(.followed(app: name, space: home), undo: .place(window.id, from: from), key: "place|\(app)",
+                        from: from, on: display)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.place(of: window.id)?.space == home else { return }
+                self.lastFocused[home] = window.id
+                self.switchSpace(to: home, focusing: window.id)
+                self.activate(window.id)
+                self.showRing(on: window.id)
+            }
+        } else {
+            placedForYou[window.id] = CACurrentMediaTime() + 3
+            didOnItsOwn(.sent(app: name, space: home), undo: .place(window.id, from: from), key: "place|\(app)",
+                        from: from, on: display)
+            // Its app may have taken the keyboard on its way: give it back.
+            for delay in [0.1, 0.5] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    guard let self, NSWorkspace.shared.frontmostApplication?.processIdentifier == window.pid
+                        || self.focusedID == window.id else { return }
+                    if self.focusedID == window.id { self.focusedID = self.lastFocused[self.currentSpace] }
+                    self.reclaimFocus()
+                }
+            }
+        }
+    }
+
+    /// You arranged a layout (or let Tessel's arrangement stand): from now on it counts,
+    /// for as long as it stays the same. A lone window's shape is kept right away.
+    private func noteArranged(space: Int, display uuid: String, byYou: Bool = true) {
+        guard Learning.shared.isOn, let d = displays.first(where: { $0.uuid == uuid }) else { return }
+        let key = "\(space)|\(uuid)"
+        flushStanding(key)
+        guard let layout = spaces[space][uuid]?.withoutPlaceholders() else { return }
+        if byYou, layout.windowCount == 1, let id = layout.windows.first, let app = appID(of: id) {
+            // The shape you left it at; after Tidy, the default one.
+            let shape = layout.singleOwner == id ? LoneShape(scale: layout.singleScale, height: layout.singleHeight)
+                : LoneShape(scale: Layout.defaultSingleScale, height: nil)
+            Learning.shared.shaped(app, shape: shape, on: Self.displayKey(d))
+            return
+        }
+        var apps: [WindowID: String] = [:]
+        for id in layout.windows { apps[id] = appID(of: id) }
+        guard let a = Arrangement(layout, apps: apps) else { return }
+        standing[key] = (a, Self.displayKey(d), CACurrentMediaTime())
+    }
+
+    /// Counts the time an arrangement stood, and stops counting.
+    private func flushStanding(_ key: String) {
+        guard let s = standing.removeValue(forKey: key) else { return }
+        Learning.shared.arranged(s.arrangement, on: s.display, dwell: CACurrentMediaTime() - s.since)
+    }
+
+    /// An arrangement that changed by itself (a window closed or opened) stops counting.
+    private func checkStanding() {
+        for (key, s) in standing {
+            let parts = key.split(separator: "|", maxSplits: 1).map(String.init)
+            guard parts.count == 2, let space = Int(parts[0]), let layout = spaces[space][parts[1]]?.withoutPlaceholders() else {
+                flushStanding(key)
+                continue
+            }
+            var apps: [WindowID: String] = [:]
+            for id in layout.windows { apps[id] = appID(of: id) }
+            if Arrangement(layout, apps: apps) != s.arrangement { flushStanding(key) }
+        }
+    }
+
+    /// Once a minute: how long each app's windows spent in each Workspace (while you're at
+    /// the Mac: a night away isn't a night in Workspace 2), and every ten minutes, the time
+    /// arrangements stood.
+    private func learningTick() {
+        guard enabled, Learning.shared.isOn else { return }
+        learningTicks += 1
+        if learningTicks % 10 == 0 {
+            for (key, s) in standing {
+                Learning.shared.arranged(s.arrangement, on: s.display, dwell: CACurrentMediaTime() - s.since)
+                standing[key]?.since = CACurrentMediaTime()
+            }
+        }
+        guard Self.secondsSinceInput() < 300 else { return }
+        var lived: [String: [Int: Double]] = [:]
+        for (s, layouts) in spaces.enumerated() {
+            for layout in layouts.values {
+                for id in layout.windows {
+                    if let app = windows[id]?.handle.app.bundleID { lived[app, default: [:]][s, default: 0] += 60 }
+                }
+            }
+        }
+        Learning.shared.lived(lived.flatMap { app, bySpace in bySpace.map { (app: app, space: $0.key, seconds: $0.value) } })
     }
 
     /// The window last dragged out of its tile (it glided back), and when.
@@ -648,16 +989,42 @@ final class Tiler {
             ?? activeDisplays.first { $0.isMain }
             ?? activeDisplays.first
         guard let display else { return }
-        let space = saved?.space ?? currentSpace
+        // A window that just opened: not one back from before a relaunch or a pause, nor one
+        // that was around already (floating, minimized, in full screen) and is tiling again.
+        let fresh = saved == nil && initialScanDone && window.isNew
+        let app = window.handle.app.bundleID
+        var space = saved?.space ?? currentSpace
+        // Learned: a new window you didn't open from Tessel goes to the Workspace its app lives in.
+        var home: Int?
+        if fresh, let app {
+            home = Learning.shared.home(for: app, requested: isRequested(window), current: currentSpace,
+                                        appSpaces: spacesOf(app, excluding: window.id))
+            if let home { space = home }
+        }
         var layout = spaces[space][display.uuid] ?? Layout()
         // Back from before a relaunch: the same stack and column it had, else a new spot.
         let before = saved.flatMap { s in s.display == display.uuid ? savedLayouts["\(s.space)|\(s.display)"] : nil }
+        var usual: (action: AutomaticAction, undo: Automatic.Undo, key: String)?
         if !(before.map { layout.restore(window.id, from: $0) } ?? false) {
+            var plain = layout
             let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
-            layout.insert(window.id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
+            plain.insert(window.id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
+            // Learned: the spot and share it usually has next to these apps.
+            if fresh, let app, let (placed, action, key) = usualPlace(window.id, app: app, in: layout, display: display) {
+                layout = placed
+                usual = (action, .layout(space: space, display: display.uuid, applied: placed, plain: plain), key)
+            } else {
+                layout = plain
+            }
         }
         spaces[space][display.uuid] = layout
-        log.notice("tiling window \(window.id) (\(window.handle.app.bundleID ?? "?")) in space \(space + 1)")
+        log.notice("tiling window \(window.id) (\(app ?? "?")) in space \(space + 1)")
+        if let usual, home == nil {
+            didOnItsOwn(usual.action, undo: usual.undo, key: usual.key, from: currentSpace, on: display)
+            standing["\(space)|\(display.uuid)"] = nil // it starts standing once you leave it be
+            DispatchQueue.main.async { [weak self] in self?.noteArranged(space: space, display: display.uuid, byYou: false) }
+        }
+        if let home, let app { placedInHome(window, app: app, home: home, display: display) }
     }
 
     /// Where each window in full screen was tiled: its Workspace, display, the layout
@@ -691,6 +1058,9 @@ final class Tiler {
 
     private func forget(_ id: CGWindowID) {
         Learning.shared.closed(id)
+        requested.remove(id)
+        announced.remove(id)
+        placedForYou[id] = nil
         fullScreenSpots[id] = nil
         unlistedSince[id] = nil
         offScreenSince[id] = nil
@@ -961,7 +1331,8 @@ final class Tiler {
             if clicked { dockClick = nil }
             switch ForeignFocus.decide(summoned: summoned, fromDockMenu: menu != nil, fromDockClick: clicked,
                                        windowHere: clicked ? windowHere(ofApp: app.pid) : nil,
-                                       settling: now <= quietFocusUntil) {
+                                       settling: now <= quietFocusUntil,
+                                       placedForYou: (placedForYou[id] ?? 0) > now) {
             case .bringHere:
                 bringToCurrentSpace(id)
             case .waitForNewWindow:
@@ -1206,6 +1577,7 @@ final class Tiler {
             w.target = nil
             relayout(animated: true)
             persist()
+            noteArranged(space: space, display: uuid)
             return
         }
         if abs(frame.width - target.width) > 4 || abs(frame.height - target.height) > 4 {
@@ -1230,7 +1602,7 @@ final class Tiler {
                    Learning.shared.corrected(id, to: .float, by: .dragOut) {
                     lastDragOut = nil
                     log.notice("window \(id) dragged out twice: it floats now")
-                    float(w)
+                    float(w, droppedAt: frame.origin)
                     return
                 }
                 lastDragOut = (id, now)
@@ -1239,6 +1611,9 @@ final class Tiler {
         w.target = nil
         relayout(animated: true)
         persist()
+        // A resize, a swap or a move to another display: an arrangement you made.
+        if let (s, d) = place(of: id) { noteArranged(space: s, display: d) }
+        if place(of: id)?.display != uuid { noteArranged(space: space, display: uuid) }
     }
 
     private func swapWindows(_ a: CGWindowID, _ b: CGWindowID) {
@@ -1390,6 +1765,7 @@ final class Tiler {
         }
         animator.run(moves)
         updateShelf()
+        if !standing.isEmpty { checkStanding() }
         onChange?()
     }
 
@@ -1525,6 +1901,8 @@ final class Tiler {
         }
         relayout(animated: true)
         persist()
+        if let (s, d) = place(of: id) { noteArranged(space: s, display: d) }
+        if uuid != place(of: id)?.display { noteArranged(space: space, display: uuid) }
         let after = place(of: id).flatMap { spaces[$0.space][$0.display]?.columns.map(\.windows) } ?? []
         log.notice("move \(direction.rawValue, privacy: .public): window \(id) (\(self.windows[id]?.handle.app.bundleID ?? "?", privacy: .public)) \(String(describing: before), privacy: .public) -> \(String(describing: after), privacy: .public)")
         showRing(on: id)
@@ -1537,12 +1915,15 @@ final class Tiler {
             spaces[space][uuid] = layout
             relayout(animated: true)
             persist()
+            noteArranged(space: space, display: uuid)
         }
         showRing(on: id)
     }
 
     func switchSpace(to index: Int, focusing preferred: CGWindowID?) {
         guard enabled, (0..<Self.spaceCount).contains(index) else { return }
+        // Right after Tessel did something on its own, the key of the Workspace you were in undoes it.
+        if preferred == nil, undoAutomatic(pressed: index) { return }
         let display = focusedID.flatMap { id in windows[id].flatMap { w in displays.first { $0.frame.contains((w.target ?? w.frame).center) } } }
         guard index != currentSpace else {
             badge.show(space: index, count: Self.spaceCount, on: display)
@@ -1582,6 +1963,10 @@ final class Tiler {
         var destination = spaces[index][uuid] ?? Layout()
         destination.insert(id, near: destination.windows.last, maxColumns: Layout.maxColumns(forWidth: display?.visible.width ?? 1600))
         spaces[index][uuid] = destination
+        // You put this app's window in that Workspace (hiding a window is putting it away, not a home).
+        if caption == nil, let app = windows[id]?.handle.app.bundleID { Learning.shared.moved(app, to: index) }
+        noteArranged(space: space, display: uuid)
+        noteArranged(space: index, display: uuid)
         if follow {
             lastFocused[index] = id
             switchSpace(to: index, focusing: id) // shows the space badge
@@ -1898,8 +2283,17 @@ final class Tiler {
         let id = Placeholder.id(placeholderCount)
         placeholderCount += 1
         var layout = spaces[currentSpace][display.uuid] ?? Layout()
+        var plain = layout
         let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
-        layout.insert(id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
+        plain.insert(id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
+        // Learned: the placeholder takes the spot the window usually has next to these apps.
+        if let (placed, action, key) = usualPlace(id, app: bundleID, in: layout, display: display) {
+            layout = placed
+            didOnItsOwn(action, undo: .layout(space: currentSpace, display: display.uuid, applied: placed, plain: plain),
+                        key: key, from: currentSpace, on: display)
+        } else {
+            layout = plain
+        }
         spaces[currentSpace][display.uuid] = layout
 
         let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
@@ -2135,6 +2529,8 @@ final class Tiler {
         }
         relayout(animated: true)
         persist()
+        // Even shares (and default sizes) are an arrangement you chose too.
+        for uuid in spaces[currentSpace].keys { noteArranged(space: currentSpace, display: uuid) }
         if let id = focusedID { showRing(on: id) }
     }
 

@@ -1,5 +1,6 @@
 import AppKit
 import QuartzCore
+import TesselCore
 
 private func overlayPanel(frame: NSRect) -> NSPanel {
     let panel = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -209,5 +210,74 @@ final class NumberDot: NSView {
         let baseline = bounds.midY - font.capHeight / 2
         let origin = NSPoint(x: (bounds.midX - text.size().width / 2).rounded(), y: (baseline + font.descender).rounded())
         text.draw(at: origin)
+    }
+}
+
+/// One line saying what Tessel just did on its own, and which key undoes it: a small frosted
+/// pill near the bottom of the screen for a couple of seconds. Click-through, never focused,
+/// one at a time (a newer line replaces it), and gone on its own.
+final class QuietLineView {
+    private var panel: NSPanel?
+    private var label: NSTextField?
+    private var hide: DispatchWorkItem?
+
+    func show(_ text: String, on display: Display?) {
+        let panel = self.panel ?? makePanel()
+        guard let label else { return }
+        label.stringValue = text
+        let width = min(720, ceil(label.intrinsicContentSize.width) + 36)
+        let size = NSSize(width: width, height: 34)
+        let screen = display.flatMap { d in
+            NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == d.id }
+        } ?? NSScreen.main ?? NSScreen.screens.first
+        if let s = screen?.visibleFrame {
+            panel.setFrame(NSRect(x: (s.midX - size.width / 2).rounded(), y: (s.minY + s.height * 0.06).rounded(),
+                                  width: size.width, height: size.height), display: true)
+        }
+        hide?.cancel()
+        panel.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = reduceMotion ? 0 : 0.15
+            panel.animator().alphaValue = 1
+        }
+        let work = DispatchWorkItem {
+            NSAnimationContext.runAnimationGroup({ ctx in
+                ctx.duration = reduceMotion ? 0 : 0.4
+                panel.animator().alphaValue = 0
+            }, completionHandler: {
+                if panel.alphaValue == 0 { panel.orderOut(nil) }
+            })
+        }
+        hide = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Etiquette.lineSeconds, execute: work)
+    }
+
+    private func makePanel() -> NSPanel {
+        let panel = overlayPanel(frame: NSRect(x: 0, y: 0, width: 300, height: 34))
+        panel.alphaValue = 0
+        let blur = NSVisualEffectView()
+        blur.material = .hudWindow
+        blur.blendingMode = .behindWindow
+        blur.state = .active
+        blur.wantsLayer = true
+        blur.layer?.cornerRadius = 17
+        blur.layer?.cornerCurve = .continuous
+        blur.layer?.masksToBounds = true
+        let label = NSTextField(labelWithString: "")
+        label.font = .systemFont(ofSize: 12.5, weight: .medium)
+        label.textColor = NSColor.white.withAlphaComponent(0.85)
+        label.alignment = .center
+        label.lineBreakMode = .byTruncatingMiddle
+        label.translatesAutoresizingMaskIntoConstraints = false
+        blur.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: blur.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: blur.centerYAnchor),
+            label.leadingAnchor.constraint(greaterThanOrEqualTo: blur.leadingAnchor, constant: 18),
+        ])
+        panel.contentView = blur
+        self.panel = panel
+        self.label = label
+        return panel
     }
 }

@@ -113,6 +113,18 @@ public struct FloatFeatures: Codable, Equatable, Sendable {
         screenShare < 0.12 ? "s" : screenShare < 0.4 ? "m" : "l"
     }
 
+    /// The kind of window in a few words, for the list of what Tessel learned: "small tool windows".
+    public var kindInWords: String {
+        let size = ["s": "small", "m": "medium", "l": "large"][sizeClass] ?? ""
+        guard standard else { return "\(size) panels" }
+        switch title {
+        case .utility: return "\(size) tool windows"
+        case .document: return "\(size) document windows"
+        case .app: return "\(size) main windows"
+        case .empty: return "\(size) untitled windows"
+        }
+    }
+
     /// Windows with the same signature are the same kind of window: what you teach Tessel
     /// about one applies to the rest. Coarse on purpose, so a lesson carries over.
     public var signature: String {
@@ -175,7 +187,7 @@ public struct FloatEvent: LoggedEvent, Equatable {
 }
 
 /// What Tessel does with a window it just saw.
-public struct FloatDecision: Equatable, Sendable {
+public struct FloatDecision: Codable, Equatable, Sendable {
     public var choice: FloatChoice
     public var source: FloatSource
     /// How sure it is the window should float, 0 to 1.
@@ -205,6 +217,8 @@ public struct FloatClassifier: Sendable {
         /// The way you corrected it last, and when.
         public var lastCorrection: FloatChoice?
         public var lastCorrectionTime = 0.0
+        /// A window of this kind you corrected, to put the lesson into words.
+        public var example: FloatFeatures?
 
         public var total: Double { float + tile }
 
@@ -280,8 +294,20 @@ public struct FloatClassifier: Sendable {
         byApp[f.app, default: Evidence()].add(w, to: choice)
         if event.kind == .corrected {
             bySignature[f.signature]?.noteCorrection(at: event.time, to: choice)
+            bySignature[f.signature]?.example = f
             byApp[f.app]?.noteCorrection(at: event.time, to: choice)
         }
+    }
+
+    /// The kinds of window Tessel now treats differently from its rules, with an example of
+    /// each. `rule` says what the rules would do with a window.
+    public func lessons(rule: (FloatFeatures) -> FloatChoice) -> [(signature: String, example: FloatFeatures, choice: FloatChoice)] {
+        bySignature.compactMap { key, e in
+            guard let example = e.example else { return nil }
+            let d = decide(example, rule: rule(example))
+            return d.source == .learned ? (key, example, d.choice) : nil
+        }
+        .sorted { $0.signature < $1.signature }
     }
 
     /// Whether a window just seen should tile or float. `rule` is what Tessel's built-in
@@ -304,13 +330,6 @@ public struct FloatClassifier: Sendable {
         return FloatDecision(choice: rule, source: .rule, floatProbability: p)
     }
 
-    /// What Tessel has learned, in words, for a "What Tessel learned" list.
-    public func lessons() -> [(signature: String, choice: FloatChoice, corrections: Double)] {
-        bySignature.compactMap { key, e in
-            e.lastCorrection.map { (key, $0, $0 == .float ? e.float : e.tile) }
-        }
-        .sorted { $0.signature < $1.signature }
-    }
 }
 
 private extension FloatClassifier.Evidence {

@@ -102,10 +102,33 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         options.addItem(teach)
         options.addItem(action("Welcome & Setup…") { [weak self] in self?.onShowWelcome?() })
         options.addItem(action("Check for Updates…") { [weak self] in self?.onCheckForUpdates?() })
+        options.addItem(.separator())
+        let learning = action("Learn Where Windows Go", checked: Learning.shared.isOn) { [weak self] in
+            guard let self else { return }
+            self.tiler.setLearning(!Learning.shared.isOn)
+        }
+        learning.toolTip = "Tessel learns which windows you float, how you arrange your apps, and which Workspace each app lives in. All on this Mac."
+        learning.isEnabled = tiler.enabled
+        options.addItem(learning)
         if Learning.shared.isOn {
-            let reset = action("Reset What Tessel Learned") { Learning.shared.reset() }
-            reset.toolTip = "Forgets which windows you float. Nothing it learned ever left this Mac."
-            options.addItem(reset)
+            let learned = NSMenuItem(title: "What Tessel Learned", action: nil, keyEquivalent: "")
+            let lessons = NSMenu()
+            let list = Learning.shared.lessons()
+            if list.isEmpty {
+                lessons.addItem(disabled: "Nothing yet")
+                lessons.addItem(disabled: "Float a window, arrange some apps, or move an app to a Workspace.")
+            } else {
+                lessons.addItem(disabled: "Click a lesson to forget it")
+                for lesson in list {
+                    let row = action(lesson.text) { Learning.shared.forget(lesson.key) }
+                    row.toolTip = "Forget this"
+                    lessons.addItem(row)
+                }
+            }
+            lessons.addItem(.separator())
+            lessons.addItem(action("Reset What Tessel Learned…") { Self.confirmReset() })
+            learned.submenu = lessons
+            options.addItem(learned)
         }
         if let license = licensing?.license {
             options.addItem(.separator())
@@ -115,6 +138,17 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         menu.addItem(settings)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Tessel", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+    }
+
+    /// Asks once, since it can't be undone. Windows stay where they are either way.
+    private static func confirmReset() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Forget everything Tessel learned about how you work?"
+        alert.informativeText = "Your windows stay where they are. Nothing Tessel learned ever left this Mac."
+        alert.addButton(withTitle: "Forget Everything")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn { Learning.shared.reset() }
     }
 
     private func action(_ title: String, checked: Bool = false, _ body: @escaping () -> Void) -> NSMenuItem {
