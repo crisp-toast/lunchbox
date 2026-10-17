@@ -248,6 +248,16 @@ final class Learning {
         }
     }
 
+    /// The shape you gave four windows around one of these apps' window, if any (and you
+    /// haven't undone it twice): that app, and the shape.
+    func anchoredShape(display: String, apps: [String]) -> (app: String, shape: AnchoredShape)? {
+        state.withLock { s in
+            guard s.on, let found = s.arrangements.anchoredShape(display: display, apps: apps),
+                  s.ledger.allows(ArrangementMemory.shapeKey(display: display, app: found.app)) else { return nil }
+            return found
+        }
+    }
+
     func loneShape(of app: String, on display: String) -> LoneShape? {
         state.withLock { s in
             guard s.on, s.ledger.allows(ArrangementMemory.loneKey(display: display, app: app)) else { return nil }
@@ -255,16 +265,21 @@ final class Learning {
         }
     }
 
-    /// An arrangement you made (or let stand) stood for `dwell` seconds.
-    func arranged(_ a: Arrangement, on display: String, dwell: Double) {
+    /// An arrangement you made (`byYou`) or let stand stood for `dwell` seconds.
+    func arranged(_ a: Arrangement, on display: String, dwell: Double, byYou: Bool = false) {
         guard dwell >= 1 else { return }
         let now = Self.now
         let on = state.withLock { s in
             guard s.on else { return false }
             s.arrangements.record(a, on: display, dwell: dwell, at: now)
+            if byYou {
+                s.arrangements.recordShape(a, on: display, dwell: dwell, at: now)
+                // A shape you made yourself is a new lesson, even one you'd undone before.
+                for app in a.apps { s.ledger.forget(ArrangementMemory.shapeKey(display: display, app: app)) }
+            }
             return true
         }
-        if on { write(ArrangeEvent.arranged(a, on: display, dwell: dwell, at: now), to: arrangeLog) }
+        if on { write(ArrangeEvent.arranged(a, on: display, dwell: dwell, byYou: byYou, at: now), to: arrangeLog) }
     }
 
     /// You gave a lone window of an app a shape of its own (or put it back to the default
@@ -357,6 +372,10 @@ final class Learning {
             guard let best = list.first, best.dwell >= ArrangementMemory.minimumDwell else { continue }
             let names = Array(NSOrderedSet(array: best.arrangement.apps.map(Self.appName))) as? [String] ?? []
             out.append((key, "\(names.joined(separator: " and ")): your usual arrangement"))
+        }
+        for (key, shape) in s.arrangements.anchored where s.ledger.allows(key) && shape.dwell >= ArrangementMemory.minimumDwell {
+            let app = String(key.split(separator: "|").last ?? "")
+            out.append((key, "\(Self.appName(app)): the \(shape.side) side to itself, with four windows"))
         }
         for (key, _) in s.arrangements.lone where s.ledger.allows(key) {
             let app = String(key.split(separator: "|").last ?? "")

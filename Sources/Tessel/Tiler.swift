@@ -64,17 +64,21 @@ final class Tiler {
     static weak var shared: Tiler?
 
     static let gap: CGFloat = 8
-    static let spaceCount = 3
     static let resizeStep = 0.08
     /// Apps whose windows always float.
     static let floatingApps: Set<String> = [
-        "com.apple.systempreferences", "com.apple.iphonesimulator", "com.1password.1password",
+        "com.apple.systempreferences", "com.apple.iphonesimulator",
         "com.apple.calculator", "com.apple.QuickTimePlayerX", "com.apple.ScreenSharing",
         "com.apple.screencaptureui", "com.tyleryouens.tessel",
     ]
 
     private(set) var enabled = false
     private(set) var currentSpace = 0
+    /// How many Workspaces there are: three to start, more if you add them (up to nine).
+    private(set) var spaceCount = min(Command.maxWorkspaces, max(Command.defaultWorkspaces,
+                                                                 UserDefaults.standard.integer(forKey: "workspaceCount")))
+    /// The number of Workspaces changed (the shortcuts for the new ones start working).
+    var onSpaceCountChange: ((Int) -> Void)?
     private(set) var displays: [Display] = []
     /// Off: Tessel uses only the main display and ignores the others (e.g. a dummy display plug).
     private(set) var useAllDisplays = UserDefaults.standard.object(forKey: "useAllDisplays") as? Bool ?? true
@@ -87,7 +91,7 @@ final class Tiler {
     private var apps: [pid_t: AppHandle] = [:]
     private var windows: [CGWindowID: ManagedWindow] = [:]
     /// The layout of each display (by UUID) in each space.
-    private var spaces: [[String: Layout]] = Array(repeating: [:], count: Tiler.spaceCount)
+    private var spaces: [[String: Layout]] = []
     private var userFloating = Set<CGWindowID>()
     private(set) var focusedID: CGWindowID?
     private var lastFocused: [Int: CGWindowID] = [:]
@@ -126,7 +130,8 @@ final class Tiler {
         // so the drop can land in any of them. Nothing is activated mid-drag.
         shelf.onDragRest = { [weak self] _ in self?.exitSpotlight() }
         let defaults = UserDefaults.standard
-        currentSpace = min(Self.spaceCount - 1, max(0, defaults.integer(forKey: "currentSpace")))
+        spaces = Array(repeating: [:], count: spaceCount)
+        currentSpace = min(spaceCount - 1, max(0, defaults.integer(forKey: "currentSpace")))
         // Window numbers stay the same while a window lives, so this survives a relaunch.
         adopted = Set(((defaults.array(forKey: "adopted") as? [Int]) ?? []).map(CGWindowID.init))
         // Left from when lone windows took their app's own size; they're always 16:10 now.
@@ -143,7 +148,8 @@ final class Tiler {
         for (key, value) in (defaults.dictionary(forKey: "placement") as? [String: String]) ?? [:] {
             let parts = value.split(separator: "|", maxSplits: 1).map(String.init)
             if let id = CGWindowID(key), parts.count == 2, let space = Int(parts[0]) {
-                savedPlacement[id] = (space, parts[1])
+                // A Workspace taken away since: its windows are in the last one now.
+                savedPlacement[id] = (min(space, spaceCount - 1), parts[1])
             }
         }
         let json = defaults.string(forKey: "layouts").map { Data($0.utf8) }
@@ -250,7 +256,7 @@ final class Tiler {
         for pid in Array(apps.keys) { detach(apps[pid]!) }
         apps = [:]
         windows = [:]
-        spaces = Array(repeating: [:], count: Self.spaceCount)
+        spaces = Array(repeating: [:], count: spaceCount)
         onChange?()
     }
 
@@ -707,7 +713,7 @@ final class Tiler {
 
     /// Says what Tessel did on its own, and which key undoes it.
     private let quietLine = QuietLineView()
-    /// Names the undo key for a Workspace, like "⌘ Page Up" (set by the app, which knows the keys).
+    /// Names the undo key for a Workspace, like "Left ⌘ 1" (set by the app, which knows the keys).
     var undoKeyName: ((Int) -> String?)?
 
     /// What Tessel just did on its own, undoable for a few seconds with ⌘ and the key of the
@@ -744,8 +750,9 @@ final class Tiler {
     /// Apps you just launched yourself (Spotlight, Finder, a launcher), and when: when their
     /// window goes to its home, you go with it.
     private var launchedByYou: [pid_t: CFTimeInterval] = [:]
-    /// Arrangements you made (or let stand), and since when, by "space|display".
-    private var standing: [String: (arrangement: Arrangement, display: String, since: CFTimeInterval)] = [:]
+    /// Arrangements you made (or let stand), and since when, by "space|display". `byYou`: you
+    /// made it (moved, sized or dragged windows into it), rather than letting Tessel's stand.
+    private var standing: [String: (arrangement: Arrangement, display: String, since: CFTimeInterval, byYou: Bool)] = [:]
     private var learningTimer: Timer?
     private var learningTicks = 0
 
@@ -790,7 +797,7 @@ final class Tiler {
             case .tile(let id):
                 if place(of: id) != nil { toggleFloating(id) }
             case .layout(let space, let display, let applied, var plain):
-                guard var now = spaces[space][display] else { continue }
+                guard spaces.indices.contains(space), var now = spaces[space][display] else { continue }
                 // A placeholder that has since been filled by its window counts as the same.
                 for id in applied.placeholders where !now.contains(id) {
                     if let filled = now.windows.first(where: { !applied.contains($0) }) {
@@ -800,7 +807,7 @@ final class Tiler {
                 }
                 if now == applied { spaces[space][display] = plain }
             case .place(let id, let from):
-                guard windows[id] != nil, let (space, uuid) = place(of: id), space != from else { continue }
+                guard windows[id] != nil, let (space, uuid) = place(of: id), space != from, spaces.indices.contains(from) else { continue }
                 removeFromLayouts(id)
                 var layout = spaces[from][uuid] ?? Layout()
                 let near = lastFocused[from].flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
@@ -885,6 +892,25 @@ final class Tiler {
         for wid in layout.windows { apps[wid] = appID(of: wid) }
         guard apps.count == layout.windowCount else { return nil }
         let all = Array(apps.values) + [app]
+        // The fourth window: instead of the 2×2 grid, the whole shape you gave these four
+        // before, or the one you gave four windows around one of these apps (Claude on the
+        // left at full height, say).
+        if layout.windowCount + 1 == ArrangementMemory.anchoredWindows {
+            var withNew = apps
+            withNew[id] = app
+            let four = layout.windows + [id]
+            if let usual = Learning.shared.arrangement(display: key, apps: all),
+               let placed = usual.layout(of: four, apps: withNew) {
+                return (placed, .arranged(app: name), ArrangementMemory.key(display: key, apps: all))
+            }
+            if let (anchorApp, shape) = Learning.shared.anchoredShape(display: key, apps: all),
+               let anchor = four.first(where: { withNew[$0] == anchorApp }),
+               let placed = shape.layout(anchor: anchor, others: four.filter { $0 != anchor }) {
+                return (placed, .anchored(app: Learning.appName(anchorApp), side: shape.side),
+                        ArrangementMemory.shapeKey(display: key, app: anchorApp))
+            }
+            return nil
+        }
         guard let usual = Learning.shared.arrangement(display: key, apps: all),
               let placed = usual.place(id, app: app, in: layout, apps: apps) else { return nil }
         return (placed, .arranged(app: name), ArrangementMemory.key(display: key, apps: all))
@@ -941,20 +967,21 @@ final class Tiler {
         var apps: [WindowID: String] = [:]
         for id in layout.windows { apps[id] = appID(of: id) }
         guard let a = Arrangement(layout, apps: apps) else { return }
-        standing[key] = (a, Self.displayKey(d), CACurrentMediaTime())
+        standing[key] = (a, Self.displayKey(d), CACurrentMediaTime(), byYou)
     }
 
     /// Counts the time an arrangement stood, and stops counting.
     private func flushStanding(_ key: String) {
         guard let s = standing.removeValue(forKey: key) else { return }
-        Learning.shared.arranged(s.arrangement, on: s.display, dwell: CACurrentMediaTime() - s.since)
+        Learning.shared.arranged(s.arrangement, on: s.display, dwell: CACurrentMediaTime() - s.since, byYou: s.byYou)
     }
 
     /// An arrangement that changed by itself (a window closed or opened) stops counting.
     private func checkStanding() {
         for (key, s) in standing {
             let parts = key.split(separator: "|", maxSplits: 1).map(String.init)
-            guard parts.count == 2, let space = Int(parts[0]), let layout = spaces[space][parts[1]]?.withoutPlaceholders() else {
+            guard parts.count == 2, let space = Int(parts[0]), spaces.indices.contains(space),
+                  let layout = spaces[space][parts[1]]?.withoutPlaceholders() else {
                 flushStanding(key)
                 continue
             }
@@ -973,7 +1000,7 @@ final class Tiler {
         learningTicks += 1
         if learningTicks % 10 == 0 {
             for (key, s) in standing {
-                Learning.shared.arranged(s.arrangement, on: s.display, dwell: CACurrentMediaTime() - s.since)
+                Learning.shared.arranged(s.arrangement, on: s.display, dwell: CACurrentMediaTime() - s.since, byYou: s.byYou)
                 standing[key]?.since = CACurrentMediaTime()
             }
         }
@@ -1019,6 +1046,7 @@ final class Tiler {
         if fresh, let app {
             home = Learning.shared.home(for: app, requested: isRequested(window), current: currentSpace,
                                         appSpaces: spacesOf(app, excluding: window.id))
+                .flatMap { $0 < spaceCount ? $0 : nil }
             if let home { space = home }
         }
         var layout = spaces[space][display.uuid] ?? Layout()
@@ -1866,7 +1894,7 @@ final class Tiler {
         case .switchSpace(let i): switchSpace(to: i, focusing: nil)
         case .sendToSpace(let i): send(toSpace: i, follow: true)
         case .close: closeFocused()
-        case .hide: send(toSpace: Self.spaceCount - 1, caption: "Hidden in Workspace \(Self.spaceCount)", follow: false)
+        case .hide: send(toSpace: spaceCount - 1, caption: "Hidden in Workspace \(spaceCount)", follow: false)
         case .spotlight: toggleSpotlight()
         case .normalize: normalize()
         case .launcher, .help: break // handled by the app delegate
@@ -1943,13 +1971,49 @@ final class Tiler {
         showRing(on: id)
     }
 
+    /// Adds Workspaces up to `count`, or takes the last ones away: their windows join the last
+    /// Workspace that stays, and if you were in one of them, so do you.
+    func setSpaceCount(_ count: Int) {
+        let count = min(Command.maxWorkspaces, max(Command.defaultWorkspaces, count))
+        guard count != spaceCount else { return }
+        if count > spaceCount {
+            spaces += Array(repeating: [:], count: count - spaceCount)
+        } else {
+            let last = count - 1
+            for s in count..<spaceCount {
+                for (uuid, layout) in spaces[s] {
+                    let width = displays.first { $0.uuid == uuid }?.visible.width ?? 1600
+                    var into = spaces[last][uuid] ?? Layout()
+                    for id in layout.windows { into.insert(id, near: into.windows.last, maxColumns: Layout.maxColumns(forWidth: width)) }
+                    spaces[last][uuid] = into
+                }
+            }
+            spaces.removeLast(spaceCount - count)
+            for s in count..<spaceCount {
+                lastFocused[s] = nil
+                for uuid in Array(standing.keys) where uuid.hasPrefix("\(s)|") { standing[uuid] = nil }
+            }
+            if currentSpace > last { currentSpace = last }
+        }
+        spaceCount = count
+        UserDefaults.standard.set(count, forKey: "workspaceCount")
+        log.notice("now \(count) Workspaces")
+        onSpaceCountChange?(count)
+        if enabled {
+            relayout(animated: true)
+            persist()
+            badge.show(space: currentSpace, count: spaceCount, caption: "\(count) Workspaces", on: displays.first(where: \.isMain))
+        }
+        onChange?()
+    }
+
     func switchSpace(to index: Int, focusing preferred: CGWindowID?) {
-        guard enabled, (0..<Self.spaceCount).contains(index) else { return }
+        guard enabled, (0..<spaceCount).contains(index) else { return }
         // Right after Tessel did something on its own, the key of the Workspace you were in undoes it.
         if preferred == nil, undoAutomatic(pressed: index) { return }
         let display = focusedID.flatMap { id in windows[id].flatMap { w in displays.first { $0.frame.contains((w.target ?? w.frame).center) } } }
         guard index != currentSpace else {
-            badge.show(space: index, count: Self.spaceCount, on: display)
+            badge.show(space: index, count: spaceCount, on: display)
             return
         }
         if let id = focusedID, place(of: id)?.space == currentSpace { lastFocused[currentSpace] = id }
@@ -1971,14 +2035,14 @@ final class Tiler {
             // Nothing here yet: hand focus to the desktop so typing can't land in a parked window.
             focusDesktop()
         }
-        badge.show(space: index, count: Self.spaceCount, on: display)
+        badge.show(space: index, count: spaceCount, on: display)
     }
 
     /// Moves the focused window to another space. With `follow`, you go along
     /// and it stays focused; without, focus moves to its nearest neighbor here.
     private func send(toSpace index: Int, caption: String? = nil, follow: Bool) {
         guard let id = focusedID, let (space, uuid) = place(of: id), space == currentSpace, index != space,
-              (0..<Self.spaceCount).contains(index) else { return }
+              (0..<spaceCount).contains(index) else { return }
         let display = displays.first { $0.uuid == uuid }
         let oldFrame = windows[id]?.target
         quietFocus()
@@ -2001,7 +2065,7 @@ final class Tiler {
         persist()
 
         if let oldFrame { focusNearest(to: oldFrame) } else { focusedID = nil }
-        badge.show(space: index, count: Self.spaceCount, caption: caption ?? "Moved to Workspace \(index + 1)", on: display)
+        badge.show(space: index, count: spaceCount, caption: caption ?? "Moved to Workspace \(index + 1)", on: display)
     }
 
     /// Focuses `preferred` if it's visible, else the visible window closest to `frame`, or the
@@ -2137,7 +2201,7 @@ final class Tiler {
     func goToWindow(ofApp pid: pid_t) -> Bool {
         let mine = reachableWindows(ofApp: pid)
         guard !mine.isEmpty else { return false }
-        let recent = ([currentSpace] + (0..<Self.spaceCount).filter { $0 != currentSpace })
+        let recent = ([currentSpace] + (0..<spaceCount).filter { $0 != currentSpace })
             .compactMap { lastFocused[$0] }
             .first { windows[$0]?.pid == pid }
         let choice = recent.flatMap { windows[$0] }

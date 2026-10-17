@@ -2,11 +2,11 @@ import Foundation
 
 /// "Sends new windows to the Workspace they belong in": where you keep each app.
 ///
-/// An app gets a home when you move one of its windows to a Workspace yourself (⌘⇧ and a
-/// Workspace key), and Tessel trusts that home once the app's windows have spent ten
+/// An app gets a home when you move one of its windows to a Workspace yourself (⌥⌘ and the
+/// Workspace's number), and Tessel trusts that home once the app's windows have spent ten
 /// minutes there, all told, and nine tenths of their time since the move. Moving one of its
-/// windows somewhere else starts over from there. Hiding a window (to Workspace 3) is putting
-/// it away, not a home, so it doesn't count as a move.
+/// windows somewhere else starts over from there. Hiding a window (to the last Workspace) is
+/// putting it away, not a home, so it doesn't count as a move.
 public struct WorkspaceMemory: Codable, Equatable, Sendable {
     public struct Home: Codable, Equatable, Sendable {
         public var space: Int

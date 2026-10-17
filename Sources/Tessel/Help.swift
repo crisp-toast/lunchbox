@@ -6,8 +6,10 @@ import TesselCore
 enum CheatSheetContent {
     static let groupOrder = ["Windows", "Workspaces", "Summon", "Mouse", "Cheat Sheet"]
 
-    static func entries(keymap: Keymap, workspaceKeys: [Int64]) -> [CheatEntry] {
-        var all = Command.allCases.map { c in
+    /// Only the Workspaces there are: with three, ⌘4 isn't Tessel's.
+    static func entries(keymap: Keymap, workspaceKeys: [Int64],
+                        spaces: Int = Tiler.shared?.spaceCount ?? Command.defaultWorkspaces) -> [CheatEntry] {
+        var all = Command.allCases.filter { $0.isActive(spaces: spaces) }.map { c in
             CheatEntry(id: c.rawValue, keys: Keymap.keycaps(for: keymap.binding(for: c), workspaceKeys: workspaceKeys),
                        title: c.title, group: c.group, keywords: c.keywords)
         }

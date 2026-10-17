@@ -2,14 +2,13 @@ import AppKit
 import ServiceManagement
 import TesselCore
 
-/// First-run setup: welcome, Accessibility, the three space keys, a short
-/// hands-on practice, and a few preferences. Also reachable from the menu.
+/// First-run setup: welcome, Accessibility, a short hands-on practice, and a few
+/// preferences. Also reachable from the menu.
 final class Onboarding: NSObject, NSWindowDelegate {
     enum Step: Int, CaseIterable {
-        case welcome, access, keys, practice, finish
+        case welcome, access, practice, finish
     }
 
-    var onSpaceKeys: (([Int64]) -> Void)?
     var onRequestAccess: (() -> Void)?
     var onCustomize: (() -> Void)?
 
@@ -22,11 +21,6 @@ final class Onboarding: NSObject, NSWindowDelegate {
     private let next = NSButton(title: "Continue", target: nil, action: nil)
     private var step: Step = .welcome
     private var trustTimer: Timer?
-
-    // Keys step
-    private var keys: [Int64] = []
-    private var slots: [KeySlot] = []
-    private let keyHint = NSTextField(labelWithString: "")
 
     // Practice step
     private var practiceRows: [String: PracticeRow] = [:]
@@ -106,14 +100,12 @@ final class Onboarding: NSObject, NSWindowDelegate {
     // MARK: Steps
 
     private func go(to target: Step, animated: Bool = true) {
-        if step == .keys && target != .keys { tap.learnNextKey(nil) }
         trustTimer?.invalidate()
         step = target
         let view: NSView
         switch target {
         case .welcome: view = welcomeView()
         case .access: view = accessView()
-        case .keys: view = keysView()
         case .practice: view = practiceView()
         case .finish: view = finishView()
         }
@@ -142,7 +134,6 @@ final class Onboarding: NSObject, NSWindowDelegate {
         switch step {
         case .welcome: next.title = "Get Started"; next.isEnabled = true
         case .access: next.title = "Continue"; next.isEnabled = AXIsProcessTrusted()
-        case .keys: next.title = "Continue"; next.isEnabled = keys.count == 3
         case .practice: next.title = practiced.count == practiceRows.count ? "Continue" : "Skip for Now"; next.isEnabled = true
         case .finish: next.title = "Start Using Tessel"; next.isEnabled = true
         }
@@ -204,63 +195,6 @@ final class Onboarding: NSObject, NSWindowDelegate {
 
     @objc private func requestAccess() { onRequestAccess?() }
 
-    // MARK: Space keys
-
-    private func keysView() -> NSView {
-        keys = []
-        slots = (1...3).map { KeySlot(space: $0) }
-        slots.first?.isCurrent = true
-        let row = NSStackView(views: slots)
-        row.spacing = 18
-        keyHint.font = .systemFont(ofSize: 13)
-        keyHint.textColor = .secondaryLabelColor
-        keyHint.alignment = .center
-        keyHint.stringValue = AXIsProcessTrusted() ? " " : "Allow Accessibility first, then come back to this step."
-        let redo = NSButton(title: "Start Over", target: self, action: #selector(restartKeys))
-        redo.bezelStyle = .inline
-        let column = NSStackView(views: [row, keyHint, redo])
-        column.orientation = .vertical
-        column.spacing = 14
-        listenForKey()
-        return page(top: symbol("keyboard"),
-                    title: "Choose your Workspace keys",
-                    body: "Tessel gives you three Workspaces. Tap three keys you never use, ideally out of the way on the right side of your keyboard. Page Up, Page Down and End are perfect, or F13, F14 and F15. They become Workspaces 1, 2 and 3.",
-                    content: column)
-    }
-
-    private func listenForKey() {
-        guard AXIsProcessTrusted(), keys.count < 3 else { return }
-        tap.learnNextKey { [weak self] code, _ in self?.learned(code) }
-    }
-
-    private func learned(_ code: Int64) {
-        guard step == .keys, keys.count < 3 else { return }
-        if !KeyNames.isGoodWorkspaceKey(code) {
-            keyHint.stringValue = "That key is used for typing. Try one on the far right, like Page Up or End."
-        } else if keys.contains(code) {
-            keyHint.stringValue = "You already picked that one. Tap a different key."
-        } else {
-            slots[keys.count].fill(with: KeyNames.name(code))
-            keys.append(code)
-            keyHint.stringValue = keys.count == 3 ? "All set. ⌘ plus a Workspace key switches Workspaces." : " "
-            if keys.count < 3 { slots[keys.count].isCurrent = true }
-            if keys.count == 3 {
-                onSpaceKeys?(keys)
-                next.isEnabled = true
-            }
-        }
-        listenForKey()
-    }
-
-    @objc private func restartKeys() {
-        tap.learnNextKey(nil)
-        keys = []
-        for (i, slot) in slots.enumerated() { slot.clear(); slot.isCurrent = i == 0 }
-        keyHint.stringValue = " "
-        next.isEnabled = false
-        listenForKey()
-    }
-
     // MARK: Practice
 
     private func practiceView() -> NSView {
@@ -275,15 +209,13 @@ final class Onboarding: NSObject, NSWindowDelegate {
             guard all.allSatisfy({ $0.dropLast() == mods }), Set(all.compactMap(\.last)) == ["←", "→", "↑", "↓"] else { return all[1] }
             return Array(mods) + ["arrows"]
         }
-        // ⌘ and every Workspace key the user picked: going between all three.
+        // ⌘ and each Workspace's number: going between all of them.
         let betweenWorkspaces: [String] = {
-            let all = [Command.workspace1, .workspace2, .workspace3].map(caps)
+            let all = (0..<tiler.spaceCount).map { caps(.goTo($0)) }
             let mods = all[0].dropLast()
-            guard !keys.isEmpty, all.allSatisfy({ $0.dropLast() == mods }) else { return caps(.workspace2) }
-            let short = ["Page Up": "PgUp", "Page Down": "PgDn"]
+            guard all.allSatisfy({ $0.dropLast() == mods }) else { return caps(.goTo(1)) }
             // "/" is the slash between keys to pick one of.
-            let choices = all.compactMap(\.last).map { short[$0] ?? $0 }
-            return Array(mods) + choices.flatMap { [$0, "/"] }.dropLast()
+            return Array(mods) + all.compactMap(\.last).flatMap { [$0, "/"] }.dropLast()
         }()
         // More or less space: ⌘⇧ + / −, when grow and shrink share their modifiers.
         let growOrShrink: [String] = {
@@ -505,71 +437,6 @@ final class Onboarding: NSObject, NSWindowDelegate {
         window.contentView = background
         self.window = window
         return window
-    }
-}
-
-/// One of the three big key slots: empty and numbered until a key is tapped.
-private final class KeySlot: NSView {
-    private let keyLabel = NSTextField(labelWithString: "")
-    private let caption: NSTextField
-    var isCurrent = false { didSet { refresh() } }
-    private var filled = false
-
-    init(space: Int) {
-        caption = NSTextField(labelWithString: "Workspace \(space)")
-        super.init(frame: .zero)
-        wantsLayer = true
-        layer?.cornerRadius = 18
-        layer?.cornerCurve = .continuous
-        layer?.borderWidth = 2
-        translatesAutoresizingMaskIntoConstraints = false
-        keyLabel.font = .systemFont(ofSize: 20, weight: .semibold)
-        keyLabel.alignment = .center
-        keyLabel.stringValue = "\(space)"
-        caption.font = .systemFont(ofSize: 12, weight: .medium)
-        caption.textColor = .secondaryLabelColor
-        for v in [keyLabel, caption] {
-            v.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(v)
-        }
-        NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: 150),
-            heightAnchor.constraint(equalToConstant: 100),
-            keyLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-            keyLabel.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -8),
-            keyLabel.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -16),
-            caption.centerXAnchor.constraint(equalTo: centerXAnchor),
-            caption.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
-        ])
-        refresh()
-    }
-
-    required init?(coder: NSCoder) { fatalError("not used") }
-
-    func fill(with name: String) {
-        filled = true
-        isCurrent = false
-        keyLabel.stringValue = name
-        refresh()
-        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion, let layer else { return }
-        let pop = CAKeyframeAnimation(keyPath: "transform.scale")
-        pop.values = [0.92, 1.06, 1]
-        pop.keyTimes = [0, 0.55, 1]
-        pop.duration = 0.32
-        layer.add(pop, forKey: "pop")
-    }
-
-    func clear() {
-        filled = false
-        keyLabel.stringValue = caption.stringValue.replacingOccurrences(of: "Workspace ", with: "")
-        refresh()
-    }
-
-    private func refresh() {
-        let accent = NSColor.controlAccentColor
-        layer?.borderColor = (filled || isCurrent ? accent : NSColor.separatorColor).cgColor
-        layer?.backgroundColor = (filled ? accent.withAlphaComponent(0.14) : NSColor.labelColor.withAlphaComponent(0.04)).cgColor
-        keyLabel.textColor = filled ? .labelColor : (isCurrent ? accent : .tertiaryLabelColor)
     }
 }
 

@@ -5,11 +5,36 @@ public enum Command: String, CaseIterable, Codable, Sendable {
     case focusLeft, focusRight, focusUp, focusDown
     case moveLeft, moveRight, moveUp, moveDown
     case grow, shrink, focusMode, tidy, close
-    case workspace1, workspace2, workspace3
-    case moveToWorkspace1, moveToWorkspace2, moveToWorkspace3, hide
+    case workspace1, workspace2, workspace3, workspace4, workspace5, workspace6, workspace7, workspace8, workspace9
+    case moveToWorkspace1, moveToWorkspace2, moveToWorkspace3, moveToWorkspace4, moveToWorkspace5, moveToWorkspace6,
+         moveToWorkspace7, moveToWorkspace8, moveToWorkspace9, hide
     case summon, cheatSheet
 
+    /// Tessel starts with three Workspaces; you can add more, up to nine (⌘1 to ⌘9).
+    public static let defaultWorkspaces = 3
+    public static let maxWorkspaces = 9
+
+    /// Go to Workspace `space` (counting from 0).
+    public static func goTo(_ space: Int) -> Command { Command(rawValue: "workspace\(space + 1)")! }
+    /// Move the window to Workspace `space` (counting from 0).
+    public static func moveTo(_ space: Int) -> Command { Command(rawValue: "moveToWorkspace\(space + 1)")! }
+
+    /// The Workspace (counting from 0) a go-to or move-to command is for.
+    public var workspace: Int? {
+        for prefix in ["moveToWorkspace", "workspace"] where rawValue.hasPrefix(prefix) {
+            return Int(rawValue.dropFirst(prefix.count)).map { $0 - 1 }
+        }
+        return nil
+    }
+
+    var movesWindow: Bool { rawValue.hasPrefix("moveToWorkspace") }
+
+    /// Whether the command does anything with `spaces` Workspaces: ⌘4 is the app's own until
+    /// there's a Workspace 4.
+    public func isActive(spaces: Int) -> Bool { workspace.map { $0 < spaces } ?? true }
+
     public var action: KeyAction {
+        if let space = workspace { return movesWindow ? .sendToSpace(space) : .switchSpace(space) }
         switch self {
         case .focusLeft: return .focus(.left)
         case .focusRight: return .focus(.right)
@@ -25,21 +50,16 @@ public enum Command: String, CaseIterable, Codable, Sendable {
         case .tidy: return .normalize
         case .hide: return .hide
         case .close: return .close
-        case .workspace1: return .switchSpace(0)
-        case .workspace2: return .switchSpace(1)
-        case .workspace3: return .switchSpace(2)
-        case .moveToWorkspace1: return .sendToSpace(0)
-        case .moveToWorkspace2: return .sendToSpace(1)
-        case .moveToWorkspace3: return .sendToSpace(2)
         case .summon: return .launcher
         case .cheatSheet: return .help
+        default: fatalError("a Workspace command without a number: \(rawValue)")
         }
     }
 
     public var group: String {
+        if workspace != nil { return "Workspaces" }
         switch self {
-        case .workspace1, .workspace2, .workspace3, .moveToWorkspace1, .moveToWorkspace2, .moveToWorkspace3, .hide:
-            return "Workspaces"
+        case .hide: return "Workspaces"
         case .summon: return "Summon"
         case .cheatSheet: return "Cheat Sheet"
         default: return "Windows"
@@ -47,6 +67,9 @@ public enum Command: String, CaseIterable, Codable, Sendable {
     }
 
     public var title: String {
+        if let space = workspace {
+            return movesWindow ? "Move the window to Workspace \(space + 1) and go with it" : "Go to Workspace \(space + 1)"
+        }
         switch self {
         case .focusLeft: return "Focus the window to the left"
         case .focusRight: return "Focus the window to the right"
@@ -60,16 +83,11 @@ public enum Command: String, CaseIterable, Codable, Sendable {
         case .shrink: return "Give the window less space"
         case .focusMode: return "Focus: this window centered, the rest on the Shelf"
         case .tidy: return "Tidy: even out every window in this Workspace"
-        case .hide: return "Hide: send the window to Workspace 3 and stay here"
+        case .hide: return "Hide: send the window to the last Workspace and stay here"
         case .close: return "Close the window"
-        case .workspace1: return "Go to Workspace 1"
-        case .workspace2: return "Go to Workspace 2"
-        case .workspace3: return "Go to Workspace 3"
-        case .moveToWorkspace1: return "Move the window to Workspace 1 and go with it"
-        case .moveToWorkspace2: return "Move the window to Workspace 2 and go with it"
-        case .moveToWorkspace3: return "Move the window to Workspace 3 and go with it"
         case .summon: return "Summon: open an app, file or website"
         case .cheatSheet: return "Open this Cheat Sheet"
+        default: return rawValue
         }
     }
 
@@ -80,7 +98,13 @@ public enum Command: String, CaseIterable, Codable, Sendable {
         let move = ["move", "swap", "rearrange", "reorder", "drag", "push", "place", "position", "snap",
                     "stack", "tile", "shuffle", "relocate", "arrow"]
         let workspace = ["workspace", "desktop", "virtual desktop", "space", "spaces", "screen", "room", "page", "switch"]
-        let numbers = ["one", "two", "three"]
+        let numbers = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
+        if let space = self.workspace {
+            let n = space + 1
+            return movesWindow
+                ? workspace + ["move to", "send", "throw", "carry", "take window", "move window", "workspace \(n)", "\(n)", numbers[space]]
+                : workspace + ["go to", "switch to", "show", "workspace \(n)", "\(n)", numbers[space]]
+        }
         switch self {
         case .focusLeft: return focus + ["left", "west"]
         case .focusRight: return focus + ["right", "east"]
@@ -102,26 +126,22 @@ public enum Command: String, CaseIterable, Codable, Sendable {
                             "cleanup", "organize", "organise", "arrange", "fix layout", "default size", "50/50",
                             "fifty", "align", "restore", "evenly", "auto arrange"]
         case .hide: return ["hide", "stash", "minimize", "minimise", "put away", "tuck", "park", "send away",
-                             "declutter", "out of the way", "workspace 3", "later", "hidden"] + workspace
+                             "declutter", "out of the way", "last workspace", "later", "hidden"] + workspace
         case .close: return ["close", "quit window", "kill", "dismiss", "exit window", "remove", "delete window",
                              "get rid", "shut"]
-        case .workspace1, .workspace2, .workspace3:
-            let n = ["workspace1": 1, "workspace2": 2, "workspace3": 3][rawValue]!
-            return workspace + ["go to", "switch to", "show", "workspace \(n)", "\(n)", numbers[n - 1], "page up", "page down", "end"]
-        case .moveToWorkspace1, .moveToWorkspace2, .moveToWorkspace3:
-            let n = ["moveToWorkspace1": 1, "moveToWorkspace2": 2, "moveToWorkspace3": 3][rawValue]!
-            return workspace + ["move to", "send", "throw", "carry", "take window", "move window", "workspace \(n)", "\(n)", numbers[n - 1]]
         case .summon: return ["summon", "launcher", "launch", "open app", "open", "search", "find", "spotlight search",
                               "alfred", "raycast", "run", "start", "application", "app", "file", "folder", "web",
                               "google", "website", "url", "new window", "quick open", "command bar", "palette"]
         case .cheatSheet: return ["cheat sheet", "help", "shortcuts", "keys", "keyboard", "list", "reference",
                                   "commands", "hotkeys", "keybindings", "key bindings", "guide", "how", "what", "manual", "?"]
+        default: return []
         }
     }
 }
 
-/// A key combination. The key is either a fixed key code or "Workspace key n",
-/// the n-th of the three keys chosen during setup.
+/// A key combination. The key is either a fixed key code or "Workspace key n", the n-th
+/// of the three keys earlier versions had you choose during setup (still honored in a
+/// shortcut you changed back then).
 public struct KeyBinding: Codable, Hashable, Sendable {
     public enum Key: Codable, Hashable, Sendable {
         case code(Int64)
@@ -179,22 +199,28 @@ public struct Keymap: Equatable, Sendable {
         self.overrides = overrides
     }
 
+    /// The number keys 1 to 9, for Workspaces 1 to 9.
+    public static let numberKeys: [Int64] = [18, 19, 20, 21, 23, 22, 26, 28, 25]
+
+    /// Workspaces are ⌘ and their number, and ⌥⌘ and the number carries the window there
+    /// (⌘⇧3, ⌘⇧4 and ⌘⇧5 are the Mac's screenshots). Left ⌘ only, like every Tessel
+    /// shortcut, so right ⌘ and a number still does what it does in the app in front (a
+    /// browser's tabs, say).
     public static let defaults: [Command: KeyBinding] = {
         let leftCmd = { (code: Int64) in KeyBinding(.code(code), command: true, leftCommandOnly: true) }
         let leftCmdShift = { (code: Int64) in KeyBinding(.code(code), command: true, shift: true, leftCommandOnly: true) }
-        return [
+        var map: [Command: KeyBinding] = [
             .focusLeft: leftCmd(123), .focusRight: leftCmd(124), .focusDown: leftCmd(125), .focusUp: leftCmd(126),
             .moveLeft: leftCmdShift(123), .moveRight: leftCmdShift(124), .moveDown: leftCmdShift(125), .moveUp: leftCmdShift(126),
             .grow: leftCmdShift(24), .shrink: leftCmdShift(27), .focusMode: leftCmdShift(3), .tidy: leftCmdShift(29),
             .hide: leftCmdShift(4), .close: leftCmdShift(51), .cheatSheet: leftCmdShift(49),
             .summon: KeyBinding(.code(49), shift: true, shiftTap: true),
-            .workspace1: KeyBinding(.workspaceKey(0), command: true),
-            .workspace2: KeyBinding(.workspaceKey(1), command: true),
-            .workspace3: KeyBinding(.workspaceKey(2), command: true),
-            .moveToWorkspace1: KeyBinding(.workspaceKey(0), command: true, shift: true),
-            .moveToWorkspace2: KeyBinding(.workspaceKey(1), command: true, shift: true),
-            .moveToWorkspace3: KeyBinding(.workspaceKey(2), command: true, shift: true),
         ]
+        for (space, code) in numberKeys.enumerated() {
+            map[.goTo(space)] = leftCmd(code)
+            map[.moveTo(space)] = KeyBinding(.code(code), command: true, option: true, leftCommandOnly: true)
+        }
+        return map
     }()
 
     public func binding(for command: Command) -> KeyBinding {
@@ -212,9 +238,12 @@ public struct Keymap: Equatable, Sendable {
         }
     }
 
-    /// The command a key press triggers, for normal (held-modifier) bindings.
-    public func command(for code: Int64, flags: CGEventFlags, workspaceKeys: [Int64]) -> Command? {
+    /// The command a key press triggers, for normal (held-modifier) bindings, with `spaces`
+    /// Workspaces.
+    public func command(for code: Int64, flags: CGEventFlags, workspaceKeys: [Int64],
+                        spaces: Int = Command.maxWorkspaces) -> Command? {
         Command.allCases.first { c in
+            guard c.isActive(spaces: spaces) else { return false }
             let b = binding(for: c)
             return !b.shiftTap && Self.code(of: b, workspaceKeys: workspaceKeys) == code && b.matchesModifiers(flags)
         }
@@ -228,11 +257,12 @@ public struct Keymap: Equatable, Sendable {
         }
     }
 
-    /// Another command already using the same keys, if any.
-    public func conflict(with binding: KeyBinding, excluding command: Command, workspaceKeys: [Int64]) -> Command? {
+    /// Another command already using the same keys, if any, with `spaces` Workspaces.
+    public func conflict(with binding: KeyBinding, excluding command: Command, workspaceKeys: [Int64],
+                         spaces: Int = Command.maxWorkspaces) -> Command? {
         let code = Self.code(of: binding, workspaceKeys: workspaceKeys)
         return Command.allCases.first { c in
-            guard c != command else { return false }
+            guard c != command, c.isActive(spaces: spaces) else { return false }
             let other = self.binding(for: c)
             return Self.code(of: other, workspaceKeys: workspaceKeys) == code
                 && other.command == binding.command && other.shift == binding.shift

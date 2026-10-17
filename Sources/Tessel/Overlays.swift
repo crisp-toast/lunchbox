@@ -98,20 +98,27 @@ final class FocusRing {
     }
 }
 
-/// The badge that shows which of the three spaces you're on.
+/// The badge that shows which Workspace you're on, among all of them.
 final class SpaceBadge {
     private var panel: NSPanel?
     private var dots: [NumberDot] = []
+    private var builtFor = 0
     private var caption: NSTextField?
     private var hide: DispatchWorkItem?
 
     func show(space: Int, count: Int, caption text: String? = nil, on display: Display?) {
+        if builtFor != count {
+            // You added or took away a Workspace: a dot each.
+            panel?.orderOut(nil)
+            panel = nil
+            dots = []
+        }
         let panel = self.panel ?? makePanel(count: count)
         for (i, dot) in dots.enumerated() { dot.isActive = i == space }
         caption?.stringValue = text ?? ""
         caption?.isHidden = text == nil
 
-        let size = NSSize(width: 168, height: text == nil ? 64 : 88)
+        let size = NSSize(width: max(168, CGFloat(count) * 42 + 42), height: text == nil ? 64 : 88)
         let screen = display.flatMap { d in
             NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == d.id }
         } ?? NSScreen.main ?? NSScreen.screens.first
@@ -139,6 +146,7 @@ final class SpaceBadge {
     }
 
     private func makePanel(count: Int) -> NSPanel {
+        builtFor = count
         let panel = overlayPanel(frame: NSRect(x: 0, y: 0, width: 168, height: 64))
         panel.alphaValue = 0
         let blur = NSVisualEffectView()

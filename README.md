@@ -2,10 +2,11 @@
 
 A small, fast tiling window manager for macOS that lives in the menu bar.
 
-- One window on a screen sits centered at a comfortable 16:10 size. Two or more tile side by side.
+- One window on a screen sits centered at a comfortable 16:10 size. Two or three tile side by side;
+  the fourth makes a 2×2 grid, unless you've shown Tessel a shape you like better (see Learning).
 - Everything is driven by the **left** ⌘ key, so right ⌘ + arrows still move the text cursor.
 - Windows slide into place. Apps that can't keep up just snap, so Tessel never adds lag.
-- Three Workspaces, switched instantly from the keyboard.
+- Three Workspaces on ⌘1, ⌘2 and ⌘3, switched instantly. Add more (up to nine) from the menu.
 - Dialogs (Open, Save, alerts, password prompts) float, centered on their screen, instead of
   splitting the tiled windows apart.
 - The green button's full screen just works: the rest of the Workspace stays put, and the window
@@ -22,15 +23,18 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + ↑ ↓ | Swap with the window above or below in a stack |
 | Left ⌘ ⇧ + plus / minus | Give the window more or less space (a lone window, or one in Focus, grows or shrinks around the center) |
 | Left ⌘ ⇧ + F | **Focus**: the window alone in the center, the rest of the Workspace on the Shelf. Again, a click on a Shelf card, ⌘ (or ⌘ ⇧) with any arrow, or a file dragged onto a Shelf card ends it |
-| Left ⌘ ⇧ + H | **Hide** the window: it always moves to Workspace 3 |
+| Left ⌘ ⇧ + H | **Hide** the window: it moves to the last Workspace (3, unless you added more) |
 | Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
-| ⌘ + Workspace key 1 / 2 / 3 | Go to that Workspace |
-| ⌘ ⇧ + Workspace key 1 / 2 / 3 | Move the focused window to that Workspace and go there with it |
+| Left ⌘ + 1 / 2 / 3 | Go to that Workspace |
+| Left ⌘ ⌥ + 1 / 2 / 3 | Move the focused window to that Workspace and go there with it |
 | ⇧ Space | **Summon**: open an app, file or website |
 | Left ⌘ ⇧ + Space | The **Cheat Sheet**: every shortcut, with search |
 
-The Workspace keys are whatever three keys you pick on first launch (menu → **Set Up Workspace Keys…**).
-On Tyler's Boop65 they're the three keys on the far right, above the right arrow.
+Workspaces are ⌘ and their number. Moving a window there is ⌥⌘, not ⌘⇧, because ⌘⇧3, ⌘⇧4 and
+⌘⇧5 are the Mac's screenshot keys. Right ⌘ and a number still reaches the app in front (a browser's
+tabs, say), and so does ⌘ and the number of a Workspace you don't have. **Add a Workspace** and
+**Remove Workspace N** are in the menu; a removed Workspace's windows move to the one before it.
+(Earlier versions had you pick three Workspace keys; a shortcut you changed back then keeps them.)
 
 ## Names
 
@@ -40,10 +44,10 @@ On Tyler's Boop65 they're the three keys on the far right, above the right arrow
 | **Focus** | ⌘⇧F: one window centered, the rest on the Shelf |
 | **the Shelf** | The tilted cards beside a Focus window |
 | **Tidy** | ⌘⇧0: even out every split in the space |
-| **Hide** | ⌘⇧H: send the window to Workspace 3 |
+| **Hide** | ⌘⇧H: send the window to the last Workspace |
 | **Cheat Sheet** | ⌘⇧Space: every shortcut, searchable |
 | **Halo** | The blue outline around the focused window |
-| **Workspaces 1–3** | Tessel's own instant Workspaces, on your three **Workspace keys** |
+| **Workspaces 1–3** | Tessel's own instant Workspaces, on ⌘1, ⌘2 and ⌘3 (up to nine if you add them) |
 
 ## Your own shortcuts
 
@@ -178,14 +182,16 @@ on this Mac ([docs/learning.md](docs/learning.md)):
   it out of its tile twice in a row, and the next window like it floats by itself. A full
   document window takes two.
 - **It opens apps in your usual arrangement.** A split you made and kept comes back when one of
-  the apps opens again beside the others, and so does the size you gave a lone window.
+  the apps opens again beside the others, and so does the size you gave a lone window. When a
+  fourth window would make a 2×2 grid, a shape you made instead (say, Claude alone on the left at
+  full height, the rest stacked on the right) comes back whenever that app is one of the four.
 - **It sends new windows to the Workspace they belong in.** Move an app's window to a Workspace
   and keep it there for ten minutes, and its new windows open there. Windows you open from
   Summon or the Dock still come to you.
 
-It only ever decides where a new window lands, never takes focus, and never asks anything. Each
-time it acts, a quiet line at the bottom of the screen says what happened, and ⌘ with the key of
-the Workspace you were in undoes it. Undo the same thing twice and Tessel forgets it.
+It only decides where a new window lands (and, with a fourth window, the grid's shape), never
+takes focus, and never asks anything. Each time it acts, a quiet line at the bottom of the screen
+says what happened, and ⌘ with the number of the Workspace you were in undoes it. Undo the same thing twice and Tessel forgets it.
 **Settings › What Tessel Learned** lists every lesson in words: click one to forget it, or reset
 them all. It keeps everything in `~/Library/Application Support/Tessel/Learning`, out of
 backups, and never sends any of it anywhere.

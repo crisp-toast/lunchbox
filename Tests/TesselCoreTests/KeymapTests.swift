@@ -12,9 +12,31 @@ let workspaceKeys: [Int64] = [116, 121, 119]
         #expect(map.command(for: 124, flags: flags(shift: true), workspaceKeys: workspaceKeys) == .moveRight)
         #expect(map.command(for: 3, flags: flags(shift: true), workspaceKeys: workspaceKeys) == .focusMode)
         #expect(map.command(for: 49, flags: flags(shift: true), workspaceKeys: workspaceKeys) == .cheatSheet)
-        #expect(map.command(for: 116, flags: flags(), workspaceKeys: workspaceKeys) == .workspace1)
-        #expect(map.command(for: 119, flags: flags(leftCommand: false, rightCommand: true, shift: true), workspaceKeys: workspaceKeys) == .moveToWorkspace3)
+        #expect(map.command(for: 18, flags: flags(), workspaceKeys: workspaceKeys) == .workspace1)
+        #expect(map.command(for: 20, flags: flags(option: true), workspaceKeys: workspaceKeys) == .moveToWorkspace3)
         #expect(map.shiftTapCommand(for: 49, workspaceKeys: workspaceKeys) == .summon)
+    }
+
+    @Test func workspacesAreCommandAndTheirNumber() {
+        for space in 0..<Command.maxWorkspaces {
+            #expect(map.command(for: Keymap.numberKeys[space], flags: flags(), workspaceKeys: []) == .goTo(space))
+            #expect(map.command(for: Keymap.numberKeys[space], flags: flags(option: true), workspaceKeys: []) == .moveTo(space))
+            #expect(Command.goTo(space).action == .switchSpace(space) && Command.moveTo(space).action == .sendToSpace(space))
+        }
+        // ⌘⇧3, ⌘⇧4 and ⌘⇧5 stay the Mac's screenshots, and right ⌘ and a number stays the app's.
+        for code in Keymap.numberKeys { #expect(map.command(for: code, flags: flags(shift: true), workspaceKeys: []) == nil) }
+        #expect(map.command(for: 18, flags: flags(leftCommand: false, rightCommand: true), workspaceKeys: []) == nil)
+        #expect(Keymap.keycaps(for: map.binding(for: .workspace2), workspaceKeys: []) == ["Left ⌘", "2"])
+        #expect(Keymap.keycaps(for: map.binding(for: .moveToWorkspace2), workspaceKeys: []) == ["⌥", "Left ⌘", "2"])
+        #expect(Command.workspace7.workspace == 6 && Command.moveToWorkspace7.workspace == 6 && Command.hide.workspace == nil)
+    }
+
+    @Test func workspacesYouDontHaveStayTheApps() {
+        #expect(map.command(for: 21, flags: flags(), workspaceKeys: [], spaces: 3) == nil) // ⌘4, with three
+        #expect(map.command(for: 21, flags: flags(), workspaceKeys: [], spaces: 4) == .workspace4)
+        #expect(map.command(for: 20, flags: flags(), workspaceKeys: [], spaces: 3) == .workspace3)
+        #expect(map.conflict(with: map.binding(for: .workspace5), excluding: .tidy, workspaceKeys: [], spaces: 3) == nil)
+        #expect(map.conflict(with: map.binding(for: .workspace5), excluding: .tidy, workspaceKeys: [], spaces: 5) == .workspace5)
     }
 
     @Test func rightCommandAndPlainKeysPassThrough() {
@@ -50,8 +72,10 @@ let workspaceKeys: [Int64] = [116, 121, 119]
     @Test func keycapLabels() {
         #expect(Keymap.keycaps(for: map.binding(for: .moveLeft), workspaceKeys: workspaceKeys) == ["⇧", "Left ⌘", "←"])
         #expect(Keymap.keycaps(for: map.binding(for: .summon), workspaceKeys: workspaceKeys) == ["⇧", "then", "Space"])
-        #expect(Keymap.keycaps(for: map.binding(for: .workspace2), workspaceKeys: workspaceKeys) == ["⌘", "Page Down"])
-        #expect(Keymap.keycaps(for: map.binding(for: .workspace2), workspaceKeys: []) == ["⌘", "Workspace key 2"])
+        // A shortcut changed back when you chose three Workspace keys still names them.
+        let older = KeyBinding(.workspaceKey(1), command: true)
+        #expect(Keymap.keycaps(for: older, workspaceKeys: workspaceKeys) == ["⌘", "Page Down"])
+        #expect(Keymap.keycaps(for: older, workspaceKeys: []) == ["⌘", "Workspace key 2"])
     }
 
     @Test func workspaceKeyGuidance() {
@@ -93,7 +117,7 @@ let workspaceKeys: [Int64] = [116, 121, 119]
     @Test func symbolsAndAbbreviations() {
         #expect(finds("cmd shift left", "moveLeft"))
         #expect(finds("⌘ ←", "focusLeft"))
-        #expect(finds("page down", "workspace2"))
+        #expect(finds("cmd 2", "workspace2"))
     }
 
     @Test func typosStillWork() {

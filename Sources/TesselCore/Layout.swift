@@ -50,6 +50,15 @@ public struct Layout: Equatable, Sendable {
     /// While set, this window sits alone in the center and the rest wait as
     /// small windows down the left edge (⌘⇧F). Any change to the layout ends it.
     public var spotlight: WindowID?
+    /// While a placeholder that made the 2×2 grid waits for its window: the columns from
+    /// before, so if the app gives up, everything goes back. Not saved, like the placeholder.
+    var beforeGrid: GridUndo?
+
+    struct GridUndo: Equatable, Sendable {
+        var placeholder: WindowID
+        var before: [Column]
+        var grid: [Column]
+    }
 
     public static let defaultSingleScale = 0.6
     public static let singleAspect = 1.6 // 16:10
@@ -86,11 +95,18 @@ public struct Layout: Equatable, Sendable {
     /// Adds a new window. It gets its own column while there is room
     /// (`maxColumns`), placed right after the focused window's column;
     /// after that it stacks into the column with the fewest windows.
+    /// The fourth window makes a 2×2 grid instead (`grid(adding:)`).
     public mutating func insert(_ id: WindowID, near focused: WindowID?, maxColumns: Int) {
         guard !contains(id) else { return }
         spotlight = nil
         guard !columns.isEmpty else {
             columns = [Column(windows: [id])]
+            return
+        }
+        if windowCount == 3 {
+            var grid = grid(adding: id)
+            grid.beforeGrid = Placeholder.isPlaceholder(id) ? GridUndo(placeholder: id, before: columns, grid: grid.columns) : nil
+            self = grid
             return
         }
         let focusedPos = focused.flatMap { position(of: $0) }
@@ -106,6 +122,29 @@ public struct Layout: Equatable, Sendable {
         }
         let row = (focusedPos?.column == target) ? focusedPos!.row + 1 : columns[target].windows.count
         columns[target].insertWindow(id, at: row)
+    }
+
+    /// The 2×2 grid that four windows make: this layout's three and `id`, two columns of two,
+    /// evenly. The windows already there move as little as they can: two columns with a stack
+    /// of two take the newcomer under the lone one; otherwise the first two windows (left to
+    /// right, top to bottom) make the left column and the third sits over the newcomer.
+    public func grid(adding id: WindowID) -> Layout {
+        var grid = self
+        grid.spotlight = nil
+        grid.beforeGrid = nil
+        let counts = columns.map(\.windows.count)
+        if counts == [2, 1] || counts == [1, 2] {
+            let lone = counts[0] == 1 ? 0 : 1
+            grid.columns[lone].windows.append(id)
+        } else {
+            let all = windows
+            grid.columns = [Column(windows: Array(all.prefix(2))), Column(windows: Array(all.dropFirst(2)) + [id])]
+        }
+        for c in grid.columns.indices {
+            grid.columns[c].weight = 1
+            grid.columns[c].weights = Array(repeating: 1, count: grid.columns[c].windows.count)
+        }
+        return grid
     }
 
     /// Adds a window arriving from a neighboring display. Entering from the left
@@ -132,6 +171,15 @@ public struct Layout: Equatable, Sendable {
 
     @discardableResult
     public mutating func remove(_ id: WindowID) -> Bool {
+        // The placeholder that made the grid, and nothing changed since: back to before.
+        if let undo = beforeGrid, undo.placeholder == id {
+            beforeGrid = nil
+            if columns == undo.grid {
+                columns = undo.before
+                spotlight = nil
+                return true
+            }
+        }
         guard let (c, r) = position(of: id) else { return false }
         columns[c].removeWindow(at: r)
         if columns[c].windows.isEmpty { columns.remove(at: c) }

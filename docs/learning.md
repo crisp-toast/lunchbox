@@ -15,7 +15,7 @@ Settings › Learn Where Windows Go. Then:
   tile twice in a row. The next window like it floats by itself.
 - Give two apps an uneven split (⌘⇧ + / −), leave it for half a minute, then quit one app and
   open it again. It comes back in its spot, at its share.
-- Move an app's window to Workspace 2 (⌘⇧ and the Workspace 2 key) and keep it there for ten
+- Move an app's window to Workspace 2 (⌥⌘2) and keep it there for ten
   minutes. New windows of that app now open in Workspace 2.
 
 Each time, a quiet line at the bottom of the screen says what happened, and ⌘ with the key of
@@ -40,8 +40,8 @@ or call, or a dialog. It reads the window's Accessibility traits and its title, 
 about 0.05 ms, plus 1–1.6 ms of Accessibility reads on the app's own queue. The old rules stay
 underneath it as a safety floor.
 
-Held out by app, it gets 87% of windows' behavior right where the rules get 80%, and 96% of
-tile-or-not decisions where the rules get 88%, on a small labeled set of 84 windows. Its call is
+Held out by app, it gets 88% of windows' behavior right where the rules get 81%, and 98% of
+tile-or-not decisions where the rules get 89%, on a small labeled set of 84 windows. Its call is
 the starting point your own corrections adjust. Details, the honest caveats, and how to see it on
 your own windows are in [window-classifier.md](window-classifier.md).
 
@@ -81,7 +81,7 @@ of them have a unit test.
 | **It never takes focus.** | A window placed in another Workspace while you stay is marked `placedForYou`, so its app grabbing focus is ignored (`ForeignFocus` returns `.stay`) and the keyboard goes back to your window. You only go along when you just opened the app yourself, the same as the Dock does. | `NotAnnoying.aWindowPlacedForYouNeverTakesYouThere`, VM run |
 | **No popups, notifications or questions.** | The only thing it shows is the quiet line: a click-through, non-activating pill that's gone after 2.5 s, with a newer line replacing an older one. Nothing ever asks. Reset asks for confirmation, but only because you clicked it. | VM screenshots |
 | **Silent when unsure.** | The rules decide unless you've taught otherwise:<br>• A float needs a correction (two for a document window).<br>• An arrangement needs to have stood 30 s.<br>• A Workspace home needs your move plus 10 minutes of window time, nine tenths of it there.<br>• An app that also has windows elsewhere gets no home placement.<br>Hints alone never override the rules. | `FloatClassifierLearns`, `WorkspaceHomes`, `UsualArrangements` |
-| **Everything automatic is one quiet line, and one key undoes it.** | The key is ⌘ and the key of the Workspace you were in. Today that key does nothing when you're already in that Workspace, so it steals nothing. It works for 10 s, or 3.5 s when Tessel took you to another Workspace (so just going back doesn't also drag the window along). Things done within a second of each other share one line and one undo. | `NotAnnoying.oneQuietLine…`, `…manyThingsAtOnceShareOneLine`, VM run |
+| **Everything automatic is one quiet line, and one key undoes it.** | The key is ⌘ and the number of the Workspace you were in (⌘1 in Workspace 1). Pressed in that Workspace it otherwise only shows the Workspace badge, so it takes nothing new from you. It works for 10 s, or 3.5 s when Tessel took you to another Workspace (so just going back doesn't also drag the window along). Things done within a second of each other share one line and one undo. | `NotAnnoying.oneQuietLine…`, `…manyThingsAtOnceShareOneLine`, VM run |
 | **Two undos in a row, and it forgets that lesson.** It stops until you teach it again. | `UndoLedger`, then `Learning.forget`. Undoing a learned float is itself a correction, so one undo is enough there. | `NotAnnoying.twoUndosInARowAndItStops`, VM run |
 | **Never slower than today.** | Float decisions run on the app's own queue during the window read Tessel already does (about 0.5 µs, plus four or five Accessibility reads once per new window). Usual spots and homes are dictionary lookups when a window is placed. All disk work happens on its own queue. Only the app queues ever wait at startup, for up to 1 s, while lessons load. | `FloatClassifierLearns.decidingTakesAboutAMicrosecond` |
 | **Lessons are visible and forgettable, in words.** | **Settings › What Tessel Learned** lists lessons like "TextEdit: medium document windows float", "Terminal and TextEdit: your usual arrangement", "Mail: new windows open in Workspace 2". Clicking one forgets it, including from the log. **Reset What Tessel Learned…** forgets everything. | `WindowKinds.lessonsInWords`, VM run |
@@ -185,13 +185,26 @@ The trial is 7 days, so something smart has to happen within the first hour, wit
   - A placeholder (Summon, a Dock click) takes the usual spot as well, so the window lands right
     where it belongs.
 - **Undo** puts the window where it would have gone without the lesson.
+- **Four windows:** the fourth window in a Workspace makes a 2×2 grid (`Layout.grid(adding:)`),
+  moving the three already there as little as it can. That's the one moment Tessel reshapes
+  windows already in place, because you asked for a grid there. Instead of the grid, it uses:
+  1. the whole arrangement you kept for exactly these four apps, if there is one;
+  2. otherwise, a shape you made around one of the apps (`AnchoredShape`). For example: Claude
+     alone in the left column at full height, with the other three stacked on the right. It's
+     learned per app and display size, from four-window arrangements you made yourself (not
+     ones Tessel made that you let stand) and kept for 30 s. The latest shape you made wins.
+     Going back to a grid with that app sharing a column, and keeping it, unlearns it.
+
+  Either way, one quiet line ("Claude has the left to itself, like last time · ⌘1 makes a
+  grid"), and the undo key gives the grid instead. Two undos forget it. It's listed under What
+  Tessel Learned as "Claude: the left side to itself, with four windows".
 
 ### 3. Sends new windows to the Workspace they belong in
 
 *Code:* `WorkspaceMemory` ([Workspaces.swift](../Sources/TesselCore/Workspaces.swift)),
 `Tiler.insert`, `placedInHome`, `undoAutomatic`.
 
-- **The lesson:** you move one of an app's windows to a Workspace yourself (⌘⇧ + Workspace key).
+- **The lesson:** you move one of an app's windows to a Workspace yourself (⌥⌘ and its number).
   Hide (⌘⇧H) is putting it away, not a home, so it doesn't count. Once the app's windows have then
   spent 10 minutes of window time there, and nine tenths of their time since the move, that's its
   home. Window time is only counted while you're at the Mac (input within 5 minutes). Moving one
@@ -340,7 +353,7 @@ battery".
 ## Open questions for Tyler
 
 1. Turn learning on by default after you've used it for a few days?
-2. The undo key is ⌘ and the Workspace key you were in, named in every quiet line. Is that
+2. The undo key is ⌘ and the number of the Workspace you were in, named in every quiet line. Is that
    discoverable enough, or should the line also be clickable?
 3. Should a window you launched from Spotlight take you to its app's Workspace (as built, like
    the Dock), or open where you are?

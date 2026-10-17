@@ -71,10 +71,14 @@ helped either.
 
 | | Right behavior (5 classes) | Right tile-or-not |
 |---|---|---|
-| Today's rules | 80% (67/84) | 88% (74/84) |
+| Today's rules | 81% (68/84) | 89% (75/84) |
 | Model alone | 85% (71/84) | 93% (78/84) |
-| **Shipped** (safety floor, model when ≥ 50% sure) | **87% (73/84)** | **96% (81/84)** |
-| Shipped at a more cautious 70% | 85% | 92% |
+| **Shipped** (safety floor, model when ≥ 50% sure) | **88% (74/84)** | **98% (82/84)** |
+| Shipped at a more cautious 70% | 86% | 93% |
+
+(Since 2026-10-17, 1Password is no longer on the always-float list. That list came from
+Tessel's first commit, and the safety floor never tiles an app on it, so its main window used
+to float.)
 
 Recall per class, for the rules, the model alone, and the shipped decision:
 

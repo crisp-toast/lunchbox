@@ -1,5 +1,6 @@
 import AppKit
 import ServiceManagement
+import TesselCore
 
 /// The menu bar item: the current space number, plus a menu.
 final class StatusMenu: NSObject, NSMenuDelegate {
@@ -7,7 +8,6 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private let tiler: Tiler
     var trusted = false
     var onToggle: (() -> Void)?
-    var onTeachKeys: (() -> Void)?
     var onGrantAccess: (() -> Void)?
     var onShowHelp: (() -> Void)?
     var onShowWelcome: (() -> Void)?
@@ -43,12 +43,25 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         } else {
             menu.addItem(action("Tiling", checked: tiler.enabled) { [weak self] in self?.onToggle?() })
             menu.addItem(.separator())
-            for i in 0..<Tiler.spaceCount {
+            for i in 0..<tiler.spaceCount {
                 let entry = action("Workspace \(i + 1)", checked: tiler.enabled && tiler.currentSpace == i) { [weak self] in
                     self?.tiler.switchSpace(to: i, focusing: nil)
                 }
                 entry.isEnabled = tiler.enabled
                 menu.addItem(entry)
+            }
+            let count = tiler.spaceCount
+            if count < Command.maxWorkspaces {
+                let add = action("Add a Workspace") { [weak self] in self?.tiler.setSpaceCount(count + 1) }
+                add.toolTip = "Workspace \(count + 1) gets ⌘\(count + 1)."
+                add.isEnabled = tiler.enabled
+                menu.addItem(add)
+            }
+            if count > Command.defaultWorkspaces {
+                let remove = action("Remove Workspace \(count)") { [weak self] in self?.tiler.setSpaceCount(count - 1) }
+                remove.toolTip = "Its windows move to Workspace \(count - 1)."
+                remove.isEnabled = tiler.enabled
+                menu.addItem(remove)
             }
             menu.addItem(.separator())
             let inFocus = tiler.focusModeIsOn
@@ -98,9 +111,6 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         login.toolTip = "Also brings Tessel back by itself if it ever quits unexpectedly."
         options.addItem(login)
         options.addItem(action("Keyboard Shortcuts…") { [weak self] in self?.onShowShortcuts?() })
-        let teach = action("Set Up Workspace Keys…") { [weak self] in self?.onTeachKeys?() }
-        teach.isEnabled = trusted
-        options.addItem(teach)
         options.addItem(action("Welcome & Setup…") { [weak self] in self?.onShowWelcome?() })
         options.addItem(action("Check for Updates…") { [weak self] in self?.onCheckForUpdates?() })
         options.addItem(.separator())
