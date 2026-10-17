@@ -180,6 +180,55 @@ yes/no questions) and 33 ms (five rotations). Julia 1: 12–30 ms, and 82 ms wit
 zero-shot. The best ones mostly fall back on calling everything a document. Laya's own notes say
 the same: these are bases to fine-tune, not zero-shot engines.
 
+## Round 3: other jobs (text, typed by you)
+
+Windows aren't what these models were built for, so round 3 tried them on two jobs that are
+made of text and start with something you type. That way, 15–20 ms is fast enough:
+
+- **Find a window by describing it.** 15 windows with realistic titles and three queries each:
+  - the title's words ("lunch thursday");
+  - part of them ("lunch email");
+  - a description only ("the message about where to eat").
+- **Plain-English commands.** 12 of Tessel's actions, four phrasings each ("put xcode next to
+  terminal"), plus which app and which Workspace a command names.
+
+The baseline is plain word matching. The probe also tried the sentence and contextual embeddings
+that macOS already ships, which add nothing to the app's size. All test sentences were written
+before any run (`Training/system-one/texttasks.py`, `embedprobe.swift`).
+
+**Finding a window (out of 15)**
+
+| | Title words | Part of them | Description only |
+|---|---|---|---|
+| Word matching | **15** | **12** | 1 |
+| Laya | 5 | 4 | **6** |
+| Julia 1 | 9 | 5 | 5 |
+| macOS sentence embedding | **15** | 9 | 3 |
+| macOS contextual embedding | 11 | 9 | 5 |
+| Words first, then contextual meaning | **15** | **13** | 3 |
+
+**Plain-English commands**
+
+| | Action (of 48) | App (of 23) | Workspace (of 8) |
+|---|---|---|---|
+| Laya | 28 (58%) | 21 | 8 |
+| Julia 1 | 18 (38%) | 19 | 5 |
+| macOS sentence embedding, nearest of 3 examples per action | 22 (46%) | – | – |
+| macOS contextual embedding, same | 25 (52%) | – | – |
+
+**Time per answer:** Laya 17 ms median, Julia 1 19 ms, the macOS embeddings 2–7 ms.
+
+**What it means:**
+- **Descriptions:** finding a window from a description alone needs world knowledge (an
+  "INV-…pdf" is a bill). None of these small encoders has it; the best got 6 of 15.
+- **Words:** for the words people actually type, plain matching wins.
+- **Commands:** the app and the Workspace are easy, and simple matching gets them. The action
+  is the hard part, and at 38–58% right, a typed command would move the wrong windows about
+  half the time.
+- **Verdict:** zero-shot, neither model earns its size in Tessel in these jobs either. A
+  commands feature would need fine-tuning on a few thousand synthetic phrasings (no user data),
+  tested on phrasings written by someone else, with 95% of actions right as the bar.
+
 ## How much space one adds to the app
 
 Tessel.app is **6.7 MB** today. The weights hardly compress (lzfse saves 5–8% on them, but takes

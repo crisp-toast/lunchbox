@@ -174,6 +174,18 @@ for th in thresholds {
     print("  shipped ≥ \(th) behavior", pct(outcomes.filter { shipped($0, threshold: th) == $0.example.label }.count, n),
           " tile-or-not", pct(outcomes.filter { shipped($0, threshold: th).tiles == $0.example.label.tiles }.count, n))
 }
+// What a person sees is one of three things: it tiles, it floats, or it floats centered (panel,
+// transient and media windows all float today).
+func seen(_ b: WindowBehavior) -> Int { b == .document ? 0 : b == .dialog ? 2 : 1 }
+print("\nWhat you'd see (tiles / floats / floats centered):")
+print("  rules        ", pct(outcomes.filter { seen($0.rule) == seen($0.example.label) }.count, n))
+print("  model alone  ", pct(outcomes.filter { seen($0.model) == seen($0.example.label) }.count, n))
+for th in thresholds {
+    print("  shipped ≥ \(th)", pct(outcomes.filter { seen(shipped($0, threshold: th)) == seen($0.example.label) }.count, n))
+}
+for o in outcomes where seen(shipped(o, threshold: 0.5)) != seen(o.example.label) {
+    print("    wrong at 0.5: \(o.example.app.split(separator: ".").last!) '\(o.example.traits.title ?? "")' → \(shipped(o, threshold: 0.5).rawValue), should be \(o.example.label.rawValue)")
+}
 let chosen = thresholds.max { a, b in
     let sa = outcomes.filter { shipped($0, threshold: a) == $0.example.label }.count
     let sb = outcomes.filter { shipped($0, threshold: b) == $0.example.label }.count

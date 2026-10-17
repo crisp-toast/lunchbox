@@ -27,6 +27,9 @@ the Workspace you were in undoes it.
 - turning learning on by default;
 - trying it on Tyler's own Mac, and after a logout and login (where Workspace homes matter most).
 
+How this turns into a reason to pay (a time-back count, the trial-end screen, window search):
+[worth-paying-for.md](worth-paying-for.md).
+
 ---
 
 ## Step one: deciding how each window behaves
