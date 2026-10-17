@@ -16,7 +16,7 @@ because it really saves them time.
 3. **What gets people to pay is seeing their own time come back.** Four things, in order:
    - turn learning on by default;
    - count the time Tessel gives back, honestly, and show it in the menu and on the
-     trial-end screen;
+     trial-end screen (**built**, see [Item 1, as built](#item-1-as-built-2026-10-17));
    - let Summon jump to any window by a word in its title;
    - sell "you never set it up" against the free tiling managers, which make you write rules.
 
@@ -110,6 +110,9 @@ person's own.
 
 ### 2. Count the time Tessel gives back, and show it
 
+**Built on 2026-10-17.** What it counts, where, and what it says are in
+[Item 1, as built](#item-1-as-built-2026-10-17).
+
 **A small ledger of things you'd otherwise do by hand on a plain Mac.** Each is counted at a
 conservative number of seconds, and the screen shows how it was counted, so nobody has to take
 it on trust.
@@ -139,7 +142,9 @@ make, nothing more.
 
 ### 3. Make the trial-end screen about their week
 
-Today it says "Your free trial has ended." Instead (proposed wording):
+**Built on 2026-10-17**, in these words; see [Item 1, as built](#item-1-as-built-2026-10-17).
+
+It used to say only "Your free trial has ended." Instead (proposed wording):
 
 > **This week, Tessel gave you back 26 minutes.**
 > It placed 412 windows, put 9 apps back the way you like them, sent 41 windows to their
@@ -181,7 +186,7 @@ copy, not published (site copy stays yours):
 
 | # | What | Why first | Size |
 |---|---|---|---|
-| 1 | The time-back ledger, its menu line and the trial-end screen | The biggest effect on paying | About a day: a `TimeBack` type in TesselCore with tests, plus Learning, StatusMenu and LicenseWindow |
+| 1 | The time-back ledger, its menu line and the trial-end screen | The biggest effect on paying | **Built 2026-10-17** (below) |
 | 2 | Learning on by default | Without it, a trial user never sees any of this | One line, plus a few days on your Mac |
 | 3 | Window search in Summon | The power-tool feel, and it feeds the ledger | About a day: Launcher, plus the titles Tiler already reads |
 | 4 | The onboarding step that shows learning once | Value in the first five minutes | Already proposed as a follow-up |
@@ -194,5 +199,99 @@ copy, not published (site copy stays yours):
 2. **Settings windows** that macOS marks as dialogs: center them (as today), or leave them where
    the app put them?
 3. **The seconds per action** in the ledger: are the proposals above conservative enough?
+   Built as proposed. Three of them lean generous; see "Where the count leans generous" below.
 4. **The headline:** "The tiling window manager you never set up", or keep "Tiling that learns
    where your windows go"?
+
+## Item 1, as built (2026-10-17)
+
+Built on branch `claude/keen-agnesi-7eeb29`, on top of the learning branch
+(`claude/bold-villani-c70383`). `swift test`: 171 pass.
+
+### The count
+
+`TimeBack` ([TimeBack.swift](../Sources/TesselCore/TimeBack.swift)) keeps how many times a day
+Tessel did each thing. The seconds are constants on `TimeBackAction`, in that file and nowhere
+else, and the menu's "how it's counted" line is made from them, so it can't drift.
+
+| Counted | Seconds | Where |
+|---|---|---|
+| A new window tiled into place | 2 | `Tiler.insert` (a window that opened under 10 s ago), and `takePlaceholder` (a window filling the tile Summon or a Dock click held for it) |
+| An app opening into its usual spot and share | 2 | The same two places, when the usual spot (or a lone window's shape) was used |
+| A new window sent to its Workspace | 3 | `Learning.placed`, from `placedInHome` |
+| A window put back | 2 | `welcomeBackDisplays`, when a display really comes back (plugged in, or awake again), and `insert`, for windows back in their Workspace and spot after Tessel starts again |
+| A jump to a window from Summon | 1 | `goToWindow` (only Summon calls it), when it took you somewhere: another window, another Workspace, or out of the Dock |
+| A correction or an undo | −3 | `Learning.corrected` (Float/Tile This Window, the double drag) and `Learning.undone` (the undo key) |
+
+- **Each window counts once,** as the most specific thing: a window sent home isn't also
+  counted as tiled.
+- **Undoing costs more than it gave:** an undone placement keeps its +2 or +3 but adds −3.
+- **A week** is today and the six days before.
+- **Minutes** are whole minutes, rounded down, after corrections, and never below zero.
+- **"Windows placed"** is tiled + usual spot + sent + put back.
+- **Not counted:**
+  - windows Tessel tiles when it first starts (they were already open);
+  - learned floats (a plain Mac floats every window);
+  - windows back from full screen (macOS puts those back itself);
+  - your own moves, sends, Focus and Tidy;
+  - windows put back after you pause and resume tiling (that only undoes the pause);
+  - turning Use All Displays back on.
+- **It counts whether or not learning is on,** because most of it is plain tiling. With
+  learning off, there are no usual spots, homes or corrections to count.
+
+### Kept on the Mac
+
+- **The file:** `timeback.json` in `~/Library/Application Support/Tessel/Learning/`, written by
+  `TimeBackLedger` ([TimeBackLedger.swift](../Sources/Tessel/TimeBackLedger.swift)) on its own
+  queue, a couple of seconds after things settle, and replaced in one step.
+- **The same rules as the event logs:**
+  - the file is 0600, and the folder is 0700 and out of backups (`TimeBackFile`, through the same
+    `PrivateFolder` helper as `EventLog`);
+  - days older than 90 are pruned when Tessel starts and on every write;
+  - Reset What Tessel Learned clears it.
+- **Only dates and numbers,** like `{"days":{"2026-10-17":{"sent":2,"tiled":31}}}`. There are no
+  app names and no titles, and the test `onlyNumbersAndDatesAreKept` checks it.
+- **Nothing leaves the Mac:** `NothingLeavesThisMac` still passes.
+
+### Where it shows (and never as a notification)
+
+- **The menu:** "This week: 23 minutes back · 412 windows placed", above the trial lines, once
+  anything has been counted. Its tooltip shows the working: each count times its seconds.
+- **What Tessel Learned:** the same line, then a short grey note: "Counted at 2 s a window placed,
+  3 s one sent to its Workspace, 1 s a Summon jump, and −3 s a correction or undo."
+- **The trial line, in the last two days:** "Free trial: 2 days left · 21 minutes back so far".
+  It only does this from the first whole minute.
+- **The trial-end screen** (`LicenseWindow`):
+  - a small "Your free trial has ended" line above the heading;
+  - the heading, like "This week, Tessel gave you back 26 minutes.";
+  - what it did and learned: "It placed 412 windows, put 9 apps back the way you like them, sent
+    41 windows to their Workspace, and put everything back the 6 times your display came back.
+    It learned 14 things about how you work.";
+  - then **Keep Tessel: $9.99, once.** What it learned stays on your Mac either way.
+
+  Parts with nothing to count are left out. Under a minute, the heading stays "Your free trial
+  has ended". With nothing learned, the last line says "Your windows stay right where they are
+  either way."
+- **The trial week, whenever you look:** the screen counts the trial's own days, from its first
+  day through its last, so the numbers don't shrink if you open it days later.
+- **No new popups:** the window still opens only when the trial ends, as before.
+
+### Trying it
+
+- `timeback-add:<action>:<count>[:<days ago>]` counts as if Tessel had done it. The actions are
+  `tiled`, `arranged`, `sent`, `restored`, `summoned`, `corrected` and `displayReturned`.
+- `dump` shows `timeBack`: the week's line, its seconds and its breakdown, and the daily counts.
+- `license:snapshot:<png>:ended` draws the trial-end screen.
+
+### Where the count leans generous
+
+Everything above is set low, except three things, worth deciding on (decision 3):
+- **Put back after Tessel restarts** counts windows a plain Mac would never have moved, since
+  there's no Tessel to restart. It's in because the proposal lists "after a restart". Dropping
+  it is one line in `Tiler.insert`.
+- **At login,** the windows macOS reopens after Tessel's first look count as new windows
+  tiled, though a plain Mac reopens them where they were.
+- **When a display comes back,** macOS puts some windows back on it by itself.
+
+The rest is set low on purpose: 3 s to switch Workspace, find a window and move it, and 2 s for a
+drag and a resize.
