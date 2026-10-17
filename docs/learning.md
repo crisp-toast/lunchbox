@@ -29,6 +29,19 @@ the Workspace you were in undoes it.
 
 ---
 
+## Step one: deciding how each window behaves
+
+The first piece of the smart layer is a **window classifier**. The moment a window appears, it
+decides whether the window is a document (tiles), a tool panel, a here-and-gone window, a video
+or call, or a dialog. It reads the window's Accessibility traits and its title, and decides in
+about 0.05 ms, plus 1–1.6 ms of Accessibility reads on the app's own queue. The old rules stay
+underneath it as a safety floor.
+
+Held out by app, it gets 87% of windows' behavior right where the rules get 80%, and 96% of
+tile-or-not decisions where the rules get 88%, on a small labeled set of 84 windows. Its call is
+the starting point your own corrections adjust. Details, the honest caveats, and how to see it on
+your own windows are in [window-classifier.md](window-classifier.md).
+
 ## One promise, three proofs
 
 **Tessel learns where your windows go.** That's the sentence people should repeat. Three things

@@ -170,6 +170,10 @@ Logs (`/usr/bin/log`, since zsh has its own `log` builtin):
 **Settings › Learn Where Windows Go** turns it on. Tessel then learns from what you do, entirely
 on this Mac ([docs/learning.md](docs/learning.md)):
 
+- **It knows what kind of window it's looking at.** A window classifier decides, as each window
+  appears, whether it's a document (tiles), a tool panel, a here-and-gone window, a video or call,
+  or a dialog the rules missed, in well under a millisecond. **What Tessel Learned › How Tessel
+  Sees Your Windows** shows its call for every open window ([docs/window-classifier.md](docs/window-classifier.md)).
 - **It floats what you'd float.** Float a window from the menu (**Float This Window**), or drag
   it out of its tile twice in a row, and the next window like it floats by itself. A full
   document window takes two.
@@ -186,7 +190,9 @@ the Workspace you were in undoes it. Undo the same thing twice and Tessel forget
 them all. It keeps everything in `~/Library/Application Support/Tessel/Learning`, out of
 backups, and never sends any of it anywhere.
 
-Commands: `learning-on`, `learning-off`, `float` (float or tile the focused window),
+Commands: `learning-on`, `learning-off`, `classes` / `classify` (the window classifier's calls),
+`snapshot:<path>` (every window with its traits, for building the labeled set in the test VMs),
+`float` (float or tile the focused window),
 `learning-reset`, and `learning-lived:<seconds>` (counts that much window time at once, to try
 Workspace homes without waiting). `dump` adds a `learning` section.
 
