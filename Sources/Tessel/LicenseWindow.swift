@@ -6,7 +6,9 @@ import TesselCore
 final class LicenseWindow: NSObject, NSWindowDelegate {
     private let licensing: Licensing
     private var window: NSWindow?
-    private let heading = NSTextField(labelWithString: "")
+    /// Above the heading, when the heading is about your week: why the window opened.
+    private let eyebrow = NSTextField(labelWithString: "")
+    private let heading = NSTextField(wrappingLabelWithString: "")
     private let detail = NSTextField(wrappingLabelWithString: "")
     private let field = NSTextField()
     private let message = NSTextField(wrappingLabelWithString: "")
@@ -43,17 +45,23 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
         let window = self.window ?? makeWindow()
         self.window = window
         let ended = (licensing.trial == .ended || trialEnded) && licensing.license == nil
+        eyebrow.isHidden = true
         if let license = licensing.license {
             heading.stringValue = "Tessel is licensed"
-            detail.stringValue = "Licensed to \(license.email). Paste a different key below to replace it."
+            setDetail("Licensed to \(license.email). Paste a different key below to replace it.")
         } else if ended {
-            heading.stringValue = "Your free trial has ended"
-            detail.stringValue = "Buy Tessel to keep your windows tiled. It's a one-time $9.99, with every future version included. Your windows stay right where they are."
+            // Your week, in numbers Tessel counted on this Mac (docs/worth-paying-for.md), and
+            // what it learned, which stays either way.
+            let words = TimeBackWords.trialEnded(week: trialWeek(), lessons: Learning.shared.lessons().count)
+            eyebrow.stringValue = words.eyebrow ?? ""
+            eyebrow.isHidden = words.eyebrow == nil
+            heading.stringValue = words.heading
+            setDetail(words.summary, keep: words.keep, then: words.stays)
         } else {
             heading.stringValue = "Enter your license"
             let day: String
             if case .active(let left) = licensing.trial { day = " Your free trial has \(left) day\(left == 1 ? "" : "s") left." } else { day = "" }
-            detail.stringValue = "Paste the license key from your email, or click the activation link in it." + day
+            setDetail("Paste the license key from your email, or click the activation link in it." + day)
         }
         message.stringValue = error ?? activated.map { "Activated. Thanks for buying Tessel, \($0.email)!" } ?? ""
         message.textColor = activated == nil ? .systemRed : .systemGreen
@@ -69,6 +77,34 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
         return window
     }
 
+    /// The trial's week: what was counted from its first day through its last (or today).
+    private func trialWeek() -> TimeBack.Tally {
+        let start = licensing.trialStart ?? Date()
+        let end = min(Date(), start.addingTimeInterval(Double(Trial.days) * 86_400))
+        return TimeBackLedger.shared.tally(since: start, through: end)
+    }
+
+    private static let detailFont = NSFont.systemFont(ofSize: 13)
+
+    /// The text under the heading: `text`, then a paragraph with `keep` in bold, then `then`.
+    private func setDetail(_ text: String?, keep: String? = nil, then: String? = nil) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.paragraphSpacing = 8
+        let plain: [NSAttributedString.Key: Any] = [.font: Self.detailFont, .foregroundColor: NSColor.secondaryLabelColor,
+                                                    .paragraphStyle: paragraph]
+        let body = NSMutableAttributedString()
+        if let text { body.append(NSAttributedString(string: text, attributes: plain)) }
+        if let keep {
+            if body.length > 0 { body.append(NSAttributedString(string: "\n", attributes: plain)) }
+            var bold = plain
+            bold[.font] = NSFont.systemFont(ofSize: 13, weight: .semibold)
+            bold[.foregroundColor] = NSColor.labelColor
+            body.append(NSAttributedString(string: keep, attributes: bold))
+        }
+        if let then { body.append(NSAttributedString(string: " " + then, attributes: plain)) }
+        detail.attributedStringValue = body
+    }
+
     private func makeWindow() -> NSWindow {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 300),
                               styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -81,10 +117,15 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
         icon.translatesAutoresizingMaskIntoConstraints = false
         icon.widthAnchor.constraint(equalToConstant: 56).isActive = true
         icon.heightAnchor.constraint(equalToConstant: 56).isActive = true
+        eyebrow.font = .systemFont(ofSize: 12, weight: .medium)
+        eyebrow.textColor = .secondaryLabelColor
         heading.font = .systemFont(ofSize: 19, weight: .semibold)
+        heading.isSelectable = false
+        // The text column: 460 points, less the margins and the icon.
+        heading.preferredMaxLayoutWidth = 346
         detail.font = .systemFont(ofSize: 13)
         detail.textColor = .secondaryLabelColor
-        detail.preferredMaxLayoutWidth = 360
+        detail.preferredMaxLayoutWidth = 346
         field.placeholderString = "tessel1.…"
         field.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         field.lineBreakMode = .byTruncatingMiddle
@@ -102,7 +143,7 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
         lost.isBordered = false
         lost.contentTintColor = .linkColor
 
-        let text = NSStackView(views: [heading, detail])
+        let text = NSStackView(views: [eyebrow, heading, detail])
         text.orientation = .vertical
         text.alignment = .leading
         text.spacing = 4
