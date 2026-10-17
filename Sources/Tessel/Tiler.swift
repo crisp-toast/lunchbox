@@ -15,6 +15,8 @@ final class ManagedWindow {
     var minimized = false
     /// A normal document window (not a panel, sheet or helper window).
     var standard = false
+    /// How many tabs its native tab bar shows (0 without one).
+    var tabs = 0
     /// When Tessel first saw it.
     let seenAt = CACurrentMediaTime()
 
@@ -35,7 +37,7 @@ private struct WindowInfo {
     let minimized: Bool
     let standard: Bool
     /// A full window in all but name: resizable, with close, minimize and zoom
-    /// buttons, but not marked standard (Little Arc says it's a system dialog).
+    /// buttons, but not marked standard.
     let windowLike: Bool
     /// An alert, prompt, or Open or Save panel: it floats, centered, never tiled.
     let dialog: Bool
@@ -98,6 +100,7 @@ final class Tiler {
     private var draggedByUser = Set<CGWindowID>()
     private var mouseDown: CGPoint?
     private var notificationTokens: [NSObjectProtocol] = []
+    private var launchWatch: NSKeyValueObservation?
     private var mouseMonitors: [Any] = []
     /// A slow safety net for windows that vanish without any event at all.
     private var ghostTimer: Timer?
@@ -159,6 +162,12 @@ final class Tiler {
         on(NSWorkspace.didLaunchApplicationNotification) { [weak self] n in
             if let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication { self?.track(app) }
         }
+        // An app is listed here as soon as it starts, well before it says it has finished
+        // launching (by then its first windows are often up): watch it from the start.
+        launchWatch = NSWorkspace.shared.observe(\.runningApplications, options: [.new]) { [weak self] _, change in
+            let started = change.newValue ?? []
+            DispatchQueue.main.async { for app in started { self?.track(app) } }
+        }
         on(NSWorkspace.didTerminateApplicationNotification) { [weak self] n in
             // When an app quits, even a helper with no windows, macOS activates whichever app
             // was before it, maybe one in another space. That isn't a request to go there.
@@ -219,6 +228,7 @@ final class Tiler {
             DistributedNotificationCenter.default().removeObserver($0)
         }
         notificationTokens = []
+        launchWatch = nil
         mouseMonitors.forEach { NSEvent.removeMonitor($0) }
         expected.forEach { $0.tile.dismiss(animated: false) }
         expected = []
@@ -264,7 +274,7 @@ final class Tiler {
         // An app Tessel is holding a tile for has started: from now on it's this process.
         for e in expected where e.pid == nil && e.bundleID == running.bundleIdentifier { e.pid = pid }
         attachObserver(app)
-        if scan { scheduleScan(app, after: [0.1, 0.5, 1.5]) }
+        if scan { scheduleScan(app, after: [0.05, 0.15, 0.3, 0.5, 1.0, 1.5]) }
     }
 
     private func attachObserver(_ app: AppHandle) {
@@ -274,10 +284,10 @@ final class Tiler {
         let names = [kAXWindowCreatedNotification, kAXFocusedWindowChangedNotification,
                      kAXApplicationHiddenNotification, kAXApplicationShownNotification]
         let results = names.map { AXObserverAddNotification(observer, app.element, $0 as CFString, refcon) }
-        if results.contains(.cannotComplete), app.observerAttempts < 6 {
-            // The app is still starting up; try again shortly.
+        if results.contains(.cannotComplete), app.observerAttempts < 40 {
+            // The app is still starting up; try again shortly (often, at first).
             app.observerAttempts += 1
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self, weak app] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + (app.observerAttempts < 20 ? 0.05 : 0.5)) { [weak self, weak app] in
                 guard let self, let app, self.apps[app.pid] === app else { return }
                 self.attachObserver(app)
             }
@@ -285,6 +295,8 @@ final class Tiler {
         }
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .defaultMode)
         app.observer = observer
+        // Windows it made while Tessel couldn't listen yet won't be announced.
+        if app.observerAttempts > 0 { scheduleScan(app, after: [0]) }
     }
 
     private func detach(_ app: AppHandle) {
@@ -336,26 +348,36 @@ final class Tiler {
 
     /// Runs on the app's queue.
     private static func readWindows(of app: AppHandle) -> [WindowInfo] {
-        app.element.elements(kAXWindowsAttribute).compactMap { element in
-            guard let id = element.windowID, let frame = element.frame else { return nil }
-            let standard = element.role == kAXWindowRole && element.subrole == kAXStandardWindowSubrole
-            let minimized = element.isMinimized
-            let dialog = Dialogs.isDialog(subrole: element.subrole, identifier: element.string(kAXIdentifierAttribute),
-                                          hasDefaultButton: element.element(kAXDefaultButtonAttribute) != nil,
-                                          hasCancelButton: element.element(kAXCancelButtonAttribute) != nil,
-                                          modal: element.bool(kAXModalAttribute))
-            let fullScreen = element.isFullScreen
-            let usable = !minimized && !fullScreen && element.isResizable && !dialog
-            let tileable = standard && usable
-            let windowLike = tileable || (usable && element.role == kAXWindowRole
-                && element.element(kAXCloseButtonAttribute) != nil
-                && element.element(kAXMinimizeButtonAttribute) != nil
-                && element.element(kAXZoomButtonAttribute) != nil)
-            return WindowInfo(id: id, element: element, frame: frame, tileable: tileable, minimized: minimized,
-                              standard: standard, windowLike: windowLike, dialog: dialog, fullScreen: fullScreen,
-                              tabs: element.elements(kAXChildrenAttribute)
-                                .first { $0.role == "AXTabGroup" }.map { $0.elements(kAXTabsAttribute).count } ?? 0)
+        app.element.elements(kAXWindowsAttribute).compactMap(readWindow)
+    }
+
+    /// Runs on the app's queue.
+    private static func readWindow(_ element: AXUIElement) -> WindowInfo? {
+        guard let id = element.windowID, let frame = element.frame else { return nil }
+        let role = element.role, subrole = element.subrole
+        let resizable = element.isResizable
+        func hasWindowButtons() -> Bool {
+            element.element(kAXCloseButtonAttribute) != nil && element.element(kAXMinimizeButtonAttribute) != nil
+                && element.element(kAXZoomButtonAttribute) != nil
         }
+        // Only a window macOS calls a dialog needs a closer look at its title bar.
+        let dialogSubrole = subrole.map(Dialogs.subroles.contains) ?? false
+        let looksLikeWindow = dialogSubrole && resizable && hasWindowButtons()
+        let dialog = Dialogs.isDialog(subrole: subrole, identifier: element.string(kAXIdentifierAttribute),
+                                      hasDefaultButton: element.element(kAXDefaultButtonAttribute) != nil,
+                                      hasCancelButton: element.element(kAXCancelButtonAttribute) != nil,
+                                      modal: element.bool(kAXModalAttribute), looksLikeWindow: looksLikeWindow)
+        // A "dialog" that turned out to be a window (Little Arc) tiles like one.
+        let standard = role == kAXWindowRole && (subrole == kAXStandardWindowSubrole || (dialogSubrole && !dialog))
+        let minimized = element.isMinimized
+        let fullScreen = element.isFullScreen
+        let usable = !minimized && !fullScreen && resizable && !dialog
+        let tileable = standard && usable
+        let windowLike = tileable || (usable && role == kAXWindowRole && hasWindowButtons())
+        return WindowInfo(id: id, element: element, frame: frame, tileable: tileable, minimized: minimized,
+                          standard: standard, windowLike: windowLike, dialog: dialog, fullScreen: fullScreen,
+                          tabs: element.elements(kAXChildrenAttribute)
+                            .first { $0.role == "AXTabGroup" }.map { $0.elements(kAXTabsAttribute).count } ?? 0)
     }
 
     /// Reads every app at once at startup so existing windows can be laid out
@@ -487,6 +509,7 @@ final class Tiler {
         if !window.hidden { window.frame = info.frame }
         window.minimized = info.minimized
         window.standard = info.standard
+        window.tabs = info.tabs
         let appHidden = NSRunningApplication(processIdentifier: app.pid)?.isHidden ?? false
         let wantsTile = (info.tileable || (adopted.contains(info.id) && info.windowLike))
             && !offDisplay.contains(info.id)
@@ -519,7 +542,11 @@ final class Tiler {
                 return true
             }
             insert(window)
-            if initialScanDone { confirmPlacement(of: info.id) }
+            if initialScanDone {
+                // New to Tessel: straight into its tile, not on a glide from wherever its app put it.
+                if CACurrentMediaTime() - window.seenAt < 2 { arriving.insert(info.id) }
+                confirmPlacement(of: info.id)
+            }
             return true
         }
         // A tiled window that only went out of view (a tab sent back, a window on its way to
@@ -581,10 +608,7 @@ final class Tiler {
         if returnFromFullScreen(window) { return }
         let saved = savedPlacement.removeValue(forKey: window.id)
         if saved == nil, initialScanDone, takePlaceholder(for: window) { return }
-        let display = saved.flatMap { s in activeDisplays.first { $0.uuid == s.display } }
-            ?? activeDisplays.first { $0.frame.contains(window.frame.center) }
-            ?? activeDisplays.first { $0.isMain }
-            ?? activeDisplays.first
+        let display = saved.flatMap { s in activeDisplays.first { $0.uuid == s.display } } ?? arrivalDisplay(for: window.frame)
         guard let display else { return }
         let space = saved?.space ?? currentSpace
         var layout = spaces[space][display.uuid] ?? Layout()
@@ -596,6 +620,75 @@ final class Tiler {
         }
         spaces[space][display.uuid] = layout
         log.notice("tiling window \(window.id) (\(window.handle.app.bundleID ?? "?")) in space \(space + 1)")
+    }
+
+    /// The display a new window joins: the one it opened on, else the main one.
+    private func arrivalDisplay(for frame: CGRect) -> Display? {
+        activeDisplays.first { $0.frame.contains(frame.center) } ?? activeDisplays.first { $0.isMain } ?? activeDisplays.first
+    }
+
+    /// Windows that just joined a layout for the first time: they snap into their tiles
+    /// instead of gliding there from wherever their app opened them.
+    private var arriving: Set<CGWindowID> = []
+
+    /// A window was just made. Put it where it's going before it shows (`prePlace`), then
+    /// lay it out the moment it's on screen instead of on the next routine scan.
+    private func windowCreated(_ element: AXUIElement, app: AppHandle) {
+        app.queue.async { [weak self] in
+            let info = Self.readWindow(element)
+            DispatchQueue.main.async {
+                guard let self, self.enabled, self.apps[app.pid] === app else { return }
+                guard let info else {
+                    self.scheduleScan(app, after: [0.03, 0.3])
+                    return
+                }
+                self.prePlace(info, app: app)
+                self.scheduleScan(app, after: [0, 0.4])
+                if !isOnScreen(info.id) { self.scanWhenOnScreen(info.id, app: app, until: CACurrentMediaTime() + 2) }
+            }
+        }
+    }
+
+    /// Looks every few milliseconds until a window that was just made is on screen.
+    private func scanWhenOnScreen(_ id: CGWindowID, app: AppHandle, until deadline: CFTimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.008) { [weak self, weak app] in
+            guard let self, let app, self.enabled, self.apps[app.pid] === app else { return }
+            if isOnScreen(id) { self.scheduleScan(app, after: [0]); return }
+            guard CACurrentMediaTime() < deadline else { return }
+            self.scanWhenOnScreen(id, app: app, until: deadline)
+        }
+    }
+
+    /// Moves a window that was just made straight into the tile it's about to get. Apps often
+    /// make a window a moment before showing it, so it shows up where it belongs instead of
+    /// where its app put it; the rest of the layout makes room once it's on screen.
+    private func prePlace(_ info: WindowInfo, app: AppHandle) {
+        guard initialScanDone, windows[info.id] == nil, info.tileable, info.tabs < 2,
+              savedPlacement[info.id] == nil, fullScreenSpots[info.id] == nil,
+              !leftAloneApps.contains(app.bundleID ?? ""), !Self.floatingApps.contains(app.bundleID ?? ""),
+              NSRunningApplication(processIdentifier: app.pid)?.isHidden != true,
+              !isOnUnmanagedDisplay(info.frame),
+              // It may be about to become a tab, which would drag its whole tab group along.
+              !windows.values.contains(where: { $0.pid == app.pid && $0.tabs >= 2 }),
+              // A tab being dragged out into a window of its own follows the mouse.
+              NSEvent.pressedMouseButtons & 1 == 0,
+              let target = plannedFrame(for: info, app: app), !info.frame.isClose(to: target, tolerance: 1) else { return }
+        let element = info.element
+        app.queue.async { element.setFrame(target) }
+    }
+
+    /// Where a window on its way will tile, worked out without changing anything.
+    private func plannedFrame(for info: WindowInfo, app: AppHandle) -> CGRect? {
+        let probe = ManagedWindow(handle: WindowHandle(id: info.id, element: info.element, app: app), frame: info.frame)
+        if let e = expected.first(where: { $0.matches(probe) }), let (s, uuid) = place(of: e.id), s == currentSpace,
+           let d = activeDisplays.first(where: { $0.uuid == uuid }) {
+            return spaces[s][uuid]?.frames(in: d.visible, gap: Self.gap)[e.id] // the tile held for it
+        }
+        guard let display = arrivalDisplay(for: info.frame) else { return nil }
+        var layout = spaces[currentSpace][display.uuid] ?? Layout()
+        let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
+        layout.insert(info.id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
+        return layout.frames(in: display.visible, gap: Self.gap)[info.id]
     }
 
     /// Where each window in full screen was tiled: its Workspace, display, the layout
@@ -640,6 +733,7 @@ final class Tiler {
         offDisplay.remove(id)
         centeredDialogs.remove(id)
         dialogsAwaitingScreen.remove(id)
+        preCentered.remove(id)
         settlingUntil[id] = nil
         lastReassert[id] = nil
         pendingReassert.removeValue(forKey: id)?.cancel()
@@ -665,7 +759,7 @@ final class Tiler {
         guard enabled, apps[app.pid] === app else { return }
         switch notification {
         case kAXWindowCreatedNotification:
-            scheduleScan(app, after: [0.03, 0.3])
+            windowCreated(element, app: app)
         case kAXUIElementDestroyedNotification:
             if let id = app.windowIDs[element] {
                 quietFocus()
@@ -984,6 +1078,8 @@ final class Tiler {
     private var centeredDialogs: Set<CGWindowID> = []
 
     private var dialogsAwaitingScreen: Set<CGWindowID> = []
+    /// Dialogs already moved to the middle while still out of sight.
+    private var preCentered: Set<CGWindowID> = []
 
     private func center(_ info: WindowInfo, app: AppHandle) {
         center(info.element, frame: info.frame, app: app)
@@ -1000,8 +1096,12 @@ final class Tiler {
     /// and nothing more happens after that. Look again until it's up.
     private func centerOnceShown(_ info: WindowInfo, app: AppHandle) {
         guard dialogsAwaitingScreen.insert(info.id).inserted else { return }
+        // Center it now, while it's out of sight, so it shows up in the middle (once: some
+        // apps keep a dialog around hidden). The app may still place it itself as it shows
+        // it, so look again once it's up.
+        if preCentered.insert(info.id).inserted { center(info, app: app) }
         let element = info.element
-        for delay in [0.1, 0.25, 0.5, 1.0, 2.0] {
+        for delay in [0.02, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0] {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let self, self.windows[info.id] != nil, !self.centeredDialogs.contains(info.id),
                       isDialogShowing(info.id, pid: app.pid, frame: info.frame) else { return }
@@ -1016,26 +1116,34 @@ final class Tiler {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.1) { [weak self] in self?.dialogsAwaitingScreen.remove(info.id) }
     }
 
-    /// Some apps reposition a window they just opened, after Tessel has placed it
-    /// (Little Arc animates itself to the middle of the screen). Look again once
-    /// it has settled and put it back in its tile.
-    private func confirmPlacement(of id: CGWindowID, after delays: [Double] = [0.8, 1.6]) {
-        for delay in delays {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                guard let self, let w = self.windows[id], !w.hidden, w.target != nil else { return }
-                let element = w.handle.element
-                w.handle.app.queue.async {
-                    let actual = element.frame
-                    DispatchQueue.main.async {
-                        guard let actual, let w = self.windows[id], let target = w.target, !w.hidden,
-                              !self.draggedByUser.contains(id), NSEvent.pressedMouseButtons & 1 == 0,
-                              !actual.isClose(to: target, tolerance: 2) else { return }
+    /// Some apps move a window they just opened after Tessel has placed it (Little Arc
+    /// animates itself to the middle of the screen). Watch it for its first moments and,
+    /// as soon as it holds still anywhere but its tile, put it straight back.
+    private func confirmPlacement(of id: CGWindowID, poll: Int = 0, last: CGRect? = nil, corrected: CGRect? = nil) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            guard let self, let w = self.windows[id], !w.hidden, w.target != nil else { return }
+            let element = w.handle.element
+            w.handle.app.queue.async {
+                let actual = element.frame
+                DispatchQueue.main.async {
+                    guard let actual, let w = self.windows[id], let target = w.target, !w.hidden else { return }
+                    var corrected = corrected
+                    if !actual.isClose(to: target, tolerance: 2), last.map({ actual.isClose(to: $0, tolerance: 1) }) == true,
+                       CACurrentMediaTime() > self.settlingUntil[id] ?? 0,
+                       !self.draggedByUser.contains(id), NSEvent.pressedMouseButtons & 1 == 0 {
+                        // Back where it was before the last correction: the app insists (a window with a
+                        // minimum size, say). No tug of war.
+                        if let corrected, actual.isClose(to: corrected, tolerance: 2) { return }
                         // Placed, then moved to the display agents test on: leave it there.
                         if self.isOnUnmanagedDisplay(actual), !self.isOnUnmanagedDisplay(target) { self.leaveAlone(id); return }
                         w.frame = actual
                         w.target = nil
+                        self.arriving.insert(id)
                         self.relayout(animated: true)
+                        corrected = actual
                     }
+                    guard poll < 32 else { return } // about 1.6 s
+                    self.confirmPlacement(of: id, poll: poll + 1, last: actual, corrected: corrected)
                 }
             }
         }
@@ -1299,10 +1407,12 @@ final class Tiler {
                         }
                         if !w.hidden, let t = w.target, t.isClose(to: frame, tolerance: 0.5) { continue }
                         let from = w.hidden ? frame : (w.target ?? w.frame)
-                        let kind: Animator.Kind = animated && animationsAllowed && !w.hidden ? .animate : .snap
+                        let new = arriving.contains(id)
+                        let kind: Animator.Kind = animated && animationsAllowed && !w.hidden && !new ? .animate : .snap
                         w.target = frame
                         w.hidden = false
-                        settlingUntil[id] = now + Animator.duration + 0.3
+                        // A snap lands in one go, so a new window's own moves count again almost at once.
+                        settlingUntil[id] = now + (new ? 0.15 : Animator.duration + 0.3)
                         moves.append((w.handle, from, frame, kind))
                     }
                 } else {
@@ -1312,6 +1422,7 @@ final class Tiler {
                 }
             }
         }
+        arriving.removeAll()
         animator.run(moves)
         updateShelf()
         onChange?()

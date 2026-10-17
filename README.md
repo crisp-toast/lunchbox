@@ -5,9 +5,13 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 - One window on a screen sits centered at a comfortable 16:10 size. Two or more tile side by side.
 - Everything is driven by the **left** ⌘ key, so right ⌘ + arrows still move the text cursor.
 - Windows slide into place. Apps that can't keep up just snap, so Tessel never adds lag.
+- A new window goes straight into its tile, within a frame or two of appearing, instead of
+  showing up where its app put it and gliding over. Tessel moves it the moment the app makes it,
+  often before it's even on screen.
 - Three Workspaces, switched instantly from the keyboard.
 - Dialogs (Open, Save, alerts, password prompts) float, centered on their screen, instead of
-  splitting the tiled windows apart.
+  splitting the tiled windows apart. A "dialog" with every title-bar button that you can resize,
+  like Little Arc, is a window in all but name and tiles like one.
 - The green button's full screen just works: the rest of the Workspace stays put, and the window
   goes back to the same spot when it leaves full screen (into Focus again, if it was in Focus).
 

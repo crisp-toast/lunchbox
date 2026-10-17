@@ -149,6 +149,15 @@ func isDialogShowing(_ id: CGWindowID, pid: pid_t, frame: CGRect) -> Bool {
     return false
 }
 
+/// Whether the window server is showing a window right now: far cheaper than the
+/// whole window list, so it can be asked every few milliseconds.
+func isOnScreen(_ id: CGWindowID) -> Bool {
+    var raw = UnsafeRawPointer(bitPattern: UInt(id))
+    guard let array = CFArrayCreate(nil, &raw, 1, nil),
+          let info = (CGWindowListCreateDescriptionFromArray(array) as? [[String: Any]])?.first else { return false }
+    return info[kCGWindowIsOnscreen as String] as? Bool ?? false
+}
+
 /// Where each on-screen window is, by window number.
 func onScreenWindowBounds() -> [CGWindowID: CGRect] {
     var out: [CGWindowID: CGRect] = [:]
