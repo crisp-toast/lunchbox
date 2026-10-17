@@ -283,6 +283,35 @@ else, and the menu's "how it's counted" line is made from them, so it can't drif
 - `dump` shows `timeBack`: the week's line, its seconds and its breakdown, and the daily counts.
 - `license:snapshot:<png>:ended` draws the trial-end screen.
 
+### Tested in the VM (tessel-vm, macOS 27, 2026-10-17)
+
+- **Real actions, counted live:**
+  - **Relaunch:** installing the build relaunched Tessel, and the 11 open windows went back to
+    their Workspaces and spots: 11 put back.
+  - **Pause and resume:** added nothing.
+  - **Summon:** three Summon opens of running apps counted 3 jumps.
+  - **A new window:** a new TextEdit window (⌘N) counted 1 new window tiled. Tiling Terminal
+    again after floating it didn't count, because it wasn't new.
+  - **Corrections:** Float This Window and back counted 2 corrections (−6 s).
+- **The file:** `timeback.json` was 0600 in a 0700 folder, and `tmutil isexcluded` says
+  `[Excluded]`. Its whole content was `{"days":{"2026-10-17":{"restored":11,"summoned":3,"tiled":1}}}`.
+- **Reset:** `learning-reset` emptied the count and deleted the folder.
+- **Screenshots:** on Master Storage in `Projects/tessel/screenshots/2026-10-17_time-back-*`.
+  - **The data:** a week seeded with `timeback-add` (412 windows placed, 150 Summon jumps, 6
+    corrections), with the trial start set to 5.4 days ago.
+  - **Two real lessons,** for the trial-end screen: Terminal's lone size, and Terminal's home in
+    Workspace 1.
+  - **What they show:** the menu line, the trial line ("Free trial: 2 days left · 16 minutes back
+    so far"), What Tessel Learned, and the trial-end screen. The guest was put back afterwards:
+    trial start restored, learning reset and off.
+
+### The example's numbers don't add up
+
+At these seconds, the proposal's "412 windows placed" is 14 to 16 minutes, not 26. Getting to
+26 would take about 650 Summon jumps on top. The VM screenshots use a week that does add up:
+412 windows and 150 jumps make 16 minutes. Any site copy or demo should use numbers that do the
+same.
+
 ### Where the count leans generous
 
 Everything above is set low, except three things, worth deciding on (decision 3):
