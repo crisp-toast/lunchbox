@@ -41,6 +41,10 @@ public enum Fuzzy {
         return max(1, 4_000 - gaps * 100 - lengthPenalty)
     }
 
+    /// The score says the name itself matched: the whole of it, its start, the start of a
+    /// word, or the initials. Below this, the query only appears inside the name somewhere.
+    public static func matchesName(_ score: Int) -> Bool { score > 6_000 }
+
     /// Lowercased words, split on spaces, punctuation, and camelCase humps
     /// ("PhotoCraft" -> photo, craft).
     static func words(in name: String) -> [String] {
