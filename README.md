@@ -80,6 +80,9 @@ Apps you open often rise to the top.
   word; among those, the Desktop, Documents and Downloads (on this Mac or in iCloud Drive) come
   before deeper folders, then the most recently used. iCloud Drive and cloud storage folders
   (Dropbox, Google Drive) are searched; the rest of Library, hidden files and apps aren't.
+  macOS hides files in Desktop, Documents and Downloads from apps it hasn't let into those
+  folders, Spotlight's answers included, so Summon lists them only once Tessel has that access
+  (for now, Full Disk Access in Privacy & Security). Tessel never asks for it on its own.
 - Opening an app that isn't running yet (or is running with no windows), or a **New … window**,
   makes room right away, so a slow launch never looks like nothing happened: the windows here glide
   aside and a frosted **placeholder** with the app's icon, gently pulsing, holds the exact spot and
