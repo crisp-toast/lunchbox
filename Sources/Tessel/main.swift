@@ -261,6 +261,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             tiler.expectWindow(from: String(command.dropFirst(7)), another: true)
             return
         }
+        // snapshot:<path> appends every window of every app (with titles) to a JSON Lines file,
+        // to build the window classifier's labeled set in the test VMs.
+        if command.hasPrefix("snapshot:") {
+            WindowCensus.write(to: String(command.dropFirst(9)), screens: Display.current().map(\.visible))
+            return
+        }
         // learning-lived:<seconds> counts that much window time at once (trying Workspace homes).
         if command.hasPrefix("learning-lived:") {
             tiler.countLivedForTesting(Double(command.dropFirst(15)) ?? 0)
