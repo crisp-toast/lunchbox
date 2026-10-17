@@ -71,6 +71,13 @@ public struct TimeBack: Codable, Equatable, Sendable {
         days[Self.day(of: date, in: calendar), default: [:]][action.rawValue, default: 0] += times
     }
 
+    /// Adds everything another count holds (what was counted while this one was read from disk).
+    public mutating func add(_ other: TimeBack) {
+        for (day, counts) in other.days {
+            for (name, n) in counts { days[day, default: [:]][name, default: 0] += n }
+        }
+    }
+
     /// Everything counted from the day of `start` through the day of `end`.
     public func tally(from start: Date, through end: Date, in calendar: Calendar = .current) -> Tally {
         let first = Self.day(of: start, in: calendar), last = Self.day(of: end, in: calendar)

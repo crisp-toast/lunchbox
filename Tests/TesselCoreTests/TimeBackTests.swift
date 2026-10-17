@@ -87,6 +87,20 @@ private func tally(_ counts: [TimeBackAction: Int]) -> TimeBack.Tally {
         #expect(t.days.keys.sorted() == [TimeBack.day(of: daysAgo(TimeBack.keptDays - 1), in: utc), "2027-01-15"])
     }
 
+    @Test func countsMadeWhileReadingAreAddedOnTop() {
+        var stored = TimeBack()
+        stored.count(.tiled, times: 3, at: daysAgo(1), in: utc)
+        stored.count(.sent, at: now, in: utc)
+        var meanwhile = TimeBack()
+        meanwhile.count(.sent, times: 2, at: now, in: utc)
+        meanwhile.count(.summoned, at: now, in: utc)
+        stored.add(meanwhile)
+        let week = stored.week(endingAt: now, in: utc)
+        #expect(week[.tiled] == 3)
+        #expect(week[.sent] == 3)
+        #expect(week[.summoned] == 1)
+    }
+
     @Test func whatANewerTesselCountedIsKeptButNotAdded() throws {
         let json = #"{"days":{"2027-01-15":{"tiled":3,"zoomed":7}}}"#
         var t = try JSONDecoder().decode(TimeBack.self, from: Data(json.utf8))

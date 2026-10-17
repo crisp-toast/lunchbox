@@ -97,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         tiler.revealHiddenWindows()
         Learning.shared.saveNow()
+        TimeBackLedger.shared.saveNow()
     }
 
     private func begin() {
@@ -198,7 +199,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Lets scripts drive Tessel without the keyboard, e.g.
     /// `osascript -l JavaScript -e '…postNotificationName("com.tyleryouens.tessel.command", "focus-left")…'`.
     /// Commands: focus-/move-left|right|up|down, grow, shrink, space-1…3, send-1…3,
-    /// balance, retile, pause, resume, dump (writes the state to ~/Library/Application Support/Tessel/state.json).
+    /// balance, retile, pause, resume, dump (writes the state to ~/Library/Application Support/Tessel/state.json),
+    /// timeback-add:<action>:<count>[:<days ago>].
     private func listenForCommands() {
         DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name("com.tyleryouens.tessel.command"), object: nil, queue: .main
@@ -276,6 +278,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // learning-lived:<seconds> counts that much window time at once (trying Workspace homes).
         if command.hasPrefix("learning-lived:") {
             tiler.countLivedForTesting(Double(command.dropFirst(15)) ?? 0)
+            return
+        }
+        // timeback-add:<action>:<count>[:<days ago>] counts time back as if Tessel had done it
+        // (tiled, arranged, sent, restored, summoned, corrected, displayReturned), to try the
+        // menu line and the trial-end screen without a week of windows.
+        if command.hasPrefix("timeback-add:") {
+            let bits = command.dropFirst(13).split(separator: ":").map(String.init)
+            guard let action = bits.first.flatMap(TimeBackAction.init(rawValue:)) else { return }
+            let times = bits.count > 1 ? Int(bits[1]) ?? 1 : 1
+            let ago = bits.count > 2 ? Int(bits[2]) ?? 0 : 0
+            TimeBackLedger.shared.count(action, times: times, at: Date().addingTimeInterval(-Double(ago) * 86_400))
             return
         }
         if command.hasPrefix("help:") {
@@ -387,6 +400,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state["launcher"] = launcher.stateDescription
         state["help"] = help.stateDescription
         state["learning"] = Learning.shared.stateDescription
+        state["timeBack"] = TimeBackLedger.shared.stateDescription
         if let data = try? JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: dir.appendingPathComponent("state.json"))
         }
