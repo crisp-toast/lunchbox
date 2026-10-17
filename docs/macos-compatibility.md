@@ -3,9 +3,10 @@
 Tessel promises macOS 14 or later. Until 2026-10-16 it had only run on the Mac mini's macOS 27 beta.
 This is what happened when it ran on macOS 14, 15 and 26 in virtual machines.
 
-**Verdict: keep "macOS 14 or later".** Sonoma and Sequoia pass every feature tested. Sequoia
-found one real bug, which is fixed (below). Tahoe launches and everything that works before
-Accessibility is granted passes, but its tiling run is still owed.
+**Verdict: keep "macOS 14 or later".** Sonoma, Sequoia and Tahoe pass every feature tested.
+Two real bugs turned up along the way, and both are fixed (below): Sequoia found the first (macOS window
+tiling), and Tahoe found the second (focus after a dialog closes). Neither is specific to the
+version it was found on.
 
 ## How it was tested
 
@@ -18,7 +19,7 @@ Accessibility is granted passes, but its tiling run is still owed.
 - The VMs' VNC keyboard can't send Page Up or Page Down, so the Workspace keys were pressed with
   Tessel's `press:<keycode>:cmd[:shift]` command instead. That goes through the same event tap a
   real keyboard does.
-- Test apps: TextEdit (documents, the Open panel, native tabs) and Finder.
+- Test apps: TextEdit (documents, the Open panel, native tabs), Finder, and on Tahoe Terminal.
 
 ## Results
 
@@ -29,28 +30,29 @@ Accessibility is granted passes, but its tiling run is still owed.
 | Launches (no missing symbols), menu bar icon | ✓ | ✓ | ✓ |
 | Onboarding, Accessibility prompt and Settings link | ✓ | ✓ | ✓ |
 | Screen Recording prompt and Settings link | ✓ | ✓ | ✓ |
-| Open at Login (SMAppService agent; "Background Items Added") | ✓ | ✓ | – |
-| Opening the app by hand hands off to the agent | ✓ | ✓ | – |
-| Basic tiling: lone window centered 16:10, columns and stacks, 8 pt gaps | ✓ | ✓ | – |
-| Focus and move shortcuts (left ⌘), Halo | ✓ | ✓ | – |
-| Three Workspaces, windows parked off the corner | ✓ | ✓ | – |
-| Focus and the Shelf; a card click ends Focus | ✓ with live previews | ✓ (previews denied, so app icons) | – |
-| Dialogs float centered (TextEdit Open panel), tiles untouched | ✓ | ✓ | – |
-| Native tabs share one tile (Merge All Windows, ⌃Tab) | ✓ | ✓ | – |
-| Full screen and back to the same tile | ✓ (also Split View) | ✓ | – |
-| Show Desktop (F11) and back | ✓ | ✓ | – |
-| Sonoma's click-wallpaper-to-show-desktop | ✓ | n/a | – |
-| macOS window tiling (Window › Fill, drag to the top edge) | n/a | ✗ → fixed ✓ | – (same code path as 15) |
-| Crash relaunch (SIGSEGV under the agent), parked windows kept | ✓ | ✓ | – |
-| Trial ends: tiling pauses, license window; restored from the Keychain copy | ✓ | ✓ | – |
+| Open at Login (SMAppService agent; "Background Items Added") | ✓ | ✓ | ✓ ("App Background Activity") |
+| Opening the app by hand hands off to the agent | ✓ | ✓ | ✓ |
+| Basic tiling: lone window centered 16:10, columns and stacks, 8 pt gaps | ✓ | ✓ | ✓ |
+| Focus and move shortcuts (left ⌘), Halo | ✓ | ✓ | ✓ |
+| Three Workspaces, windows parked off the corner | ✓ | ✓ | ✓ (a 1 pt sliver shows, below) |
+| Focus and the Shelf; a card click ends Focus | ✓ with live previews | ✓ (previews denied, so app icons) | ✓ with live previews |
+| Dialogs float centered (TextEdit Open panel), tiles untouched | ✓ | ✓ | ✓ |
+| Closing a dialog gives focus back to the window that opened it | – (same code) | – (same code) | ✗ → fixed ✓ |
+| Native tabs share one tile (Merge All Windows, ⌃Tab) | ✓ | ✓ | ✓ |
+| Full screen and back to the same tile | ✓ (also Split View) | ✓ | ✓ |
+| Show Desktop (F11) and back | ✓ | ✓ | ✓ |
+| Sonoma's click-wallpaper-to-show-desktop | ✓ | n/a | ✓ (off by default; turned on to test) |
+| macOS window tiling (Window › Fill, drag to the top edge) | n/a | ✗ → fixed ✓ | ✓ (with the fix) |
+| Crash relaunch (SIGSEGV under the agent), parked windows kept | ✓ | ✓ | ✓ |
+| Trial ends: tiling pauses, license window; restored from the Keychain copy | ✓ | ✓ | ✓ |
 | License window, invalid key, trial-ended view | ✓ | ✓ | ✓ |
 | Sparkle "Check for Updates…" window | ✓ | ✓ | ✓ |
-| Summon and the Cheat Sheet | ✓ | ✓ | – |
+| Summon and the Cheat Sheet | ✓ | ✓ | ✓ |
 
 Sparkle's check itself can't finish anywhere yet: `tessel.sentientdonut.com` isn't live
 (launch checklist item 11).
 
-## The bug: macOS window tiling left a window over its neighbour (fixed)
+## Bug 1: macOS window tiling left a window over its neighbour (fixed)
 
 On macOS 15 and later, **Window › Fill** (and dragging a window to the top edge of the screen)
 made the window cover the whole screen, on top of the window beside it, and Tessel never put it back.
@@ -73,10 +75,50 @@ Verified in the Sequoia VM:
 `swift test` passes (91). The bug and the fix aren't specific to 15: macOS 26 and 27 have the
 same Fill command.
 
+Verified again in the Tahoe VM: Fill on a TextEdit tab group fills, then glides back within about
+0.7 s. A drag to the top edge fills when let go, and glides back about 0.5 s after the animation.
+A drag to the left edge tiles the window to the left half, then it glides back to its own tile, as
+on Sequoia.
+
+## Bug 2: closing a dialog sent focus to a different window (fixed)
+
+Found on Tahoe; the code isn't version-specific, so 14, 15 and 27 had it too. With Terminal and
+two TextEdit windows tiled, ⌘O in TextEdit and then Cancel left Terminal in front, so typing went
+there. With Tessel paused, macOS hands focus back to the TextEdit window.
+
+Why: when the focused window closes, Tessel focuses the tile nearest to where it was, so macOS
+can't hand focus to a window of the same app parked in another Workspace. That's right for a
+tile. A dialog sits in the middle of the screen, though, so "nearest" was whichever tile happened
+to be closest to the middle.
+
+Fix (`Tiler`): when a floating window (a dialog, a panel, an app that floats) closes or is
+minimized while focused, focus goes back to the tile focused before it, if that tile is still in
+view. Otherwise focus goes to the nearest tile, as before. `focusChanged` now notes that tile at
+the moment a floating window takes focus. It used to miss a window that got focus before Tessel
+had tiled it, such as a brand-new document.
+
+Verified in the Tahoe VM: Cancel in the Open panel goes back to the TextEdit window that opened
+it, with Terminal nearer the middle and with a document opened just before. Closing a tiled window
+still focuses its nearest neighbour. `swift test` passes (91).
+
 ## Worth knowing
 
 - **Parking:** older macOS clamps how low a window may go, so a parked window sits at
-  y ≈ 943–967 instead of the corner, but only 1 pt of it is on screen. Nothing showed in screenshots.
+  y ≈ 943–967 instead of the corner, but only 1 pt of it is on screen. Nothing showed in
+  screenshots on 14 and 15. On Tahoe (clamped to y = 958) a parked light window's left edge does
+  show: a pure white line 1 pt wide down the screen's right edge, from y ≈ 972 to the bottom
+  (about 110 pt). It's easy to miss, but it's there in screenshots. On 27 there's no clamp, so at
+  most 1 pt in the corner shows.
+- **Tahoe's capture prompt:** the first time Focus captured Shelf previews after Screen Recording
+  was granted, macOS showed its own alert: "Tessel" is requesting to bypass the system private
+  window picker and directly access your screen and audio (Allow / Open System Settings). The
+  previews were already live behind it. macOS shows this to apps that capture windows without the
+  system picker, and may ask again from time to time; the support pages could mention it.
+- **Tahoe's Screen Recording switch** restarts Tessel by itself (no "Quit & Reopen" prompt).
+  Harmless: it came straight back.
+- **Tahoe's drag to the top edge** only fills if the pointer rests at the edge for about a second
+  before letting go. A quick flick just moves the window, and Tessel puts it back. (`vm.sh drag`
+  rests for 150 ms, so the Tahoe run used a copy of its VNC client that rests for 1.2 s.)
 - **First launch** on a fresh Mac takes a few seconds longer before the menu bar icon and welcome
   window appear (the system checks the new app). Expected.
 - **Native tabs:** Tessel notices a ⌃Tab switch about a second later. Nothing moves meanwhile.
@@ -94,7 +136,5 @@ same Fill command.
 
 ## Still owed
 
-- **Tahoe 26:** the tiling run. The VM `tessel-tahoe` is set up with Tessel installed; it needs
-  one admin password in its System Settings for Accessibility, then the same run as Sonoma.
 - Not tested on any version: multiple displays (the VMs have one), Picture in Picture, a real
   Sparkle update, and Gatekeeper/notarization (the Cirrus images turn Gatekeeper off).
