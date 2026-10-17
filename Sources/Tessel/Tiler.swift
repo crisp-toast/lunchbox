@@ -90,6 +90,11 @@ final class Tiler {
     private var savedLayouts: [String: Layout] = [:]
     private var settlingUntil: [CGWindowID: CFTimeInterval] = [:]
     private var lastReassert: [CGWindowID: CFTimeInterval] = [:]
+    /// Windows that moved on their own, waiting to hold still before they go back.
+    private var pendingReassert: [CGWindowID: DispatchWorkItem] = [:]
+    /// When the user last let go of a dragged window. Dropped at a screen edge, macOS 15 and
+    /// later animates it into a tile of its own right after Tessel sends it back.
+    private var droppedAt: [CGWindowID: CFTimeInterval] = [:]
     private var draggedByUser = Set<CGWindowID>()
     private var mouseDown: CGPoint?
     private var notificationTokens: [NSObjectProtocol] = []
@@ -637,6 +642,8 @@ final class Tiler {
         dialogsAwaitingScreen.remove(id)
         settlingUntil[id] = nil
         lastReassert[id] = nil
+        pendingReassert.removeValue(forKey: id)?.cancel()
+        droppedAt[id] = nil
     }
 
     private func removeFromLayouts(_ id: CGWindowID) {
@@ -1047,17 +1054,26 @@ final class Tiler {
             return
         }
         let now = CACurrentMediaTime()
-        guard now > settlingUntil[id] ?? 0, let w = windows[id], !w.hidden, w.target != nil else { return }
+        // Moves just after a drop count even while Tessel's own glide back settles: the check
+        // below waits for the window to hold still and acts only on a real difference.
+        let justDropped = now - (droppedAt[id] ?? 0) < 1.5
+        guard now > settlingUntil[id] ?? 0 || justDropped, let w = windows[id], !w.hidden, w.target != nil else { return }
         if NSEvent.pressedMouseButtons & 1 != 0 {
             draggedByUser.insert(id)
             return
         }
-        // The app moved itself (some do when opening). Put it back, but never
-        // wrestle with an app that insists: once every two seconds at most.
-        guard now - (lastReassert[id] ?? 0) > 2 else { return }
-        lastReassert[id] = now
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            guard let self, let w = self.windows[id], !w.hidden else { return }
+        // The app moved itself (some do when opening), or macOS did: Window › Fill and the
+        // other window tiling commands (macOS 15 and later) animate for about half a second,
+        // and a move back mid-way is lost under the rest of it. So wait until the window
+        // holds still, then put it back, but never wrestle with an app that insists: once
+        // every two seconds at most.
+        pendingReassert[id]?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.pendingReassert[id] = nil
+            let now = CACurrentMediaTime()
+            guard now - (self.lastReassert[id] ?? 0) > 2, let w = self.windows[id], !w.hidden else { return }
+            self.lastReassert[id] = now
             let element = w.handle.element
             w.handle.app.queue.async {
                 let actual = element.frame
@@ -1074,6 +1090,8 @@ final class Tiler {
                 }
             }
         }
+        pendingReassert[id] = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
     }
 
     private func mouseUp() {
@@ -1093,6 +1111,7 @@ final class Tiler {
         guard enabled, let down, !dragged.isEmpty else { return }
         for id in dragged {
             guard let w = windows[id], let target = w.target, target.insetBy(dx: -12, dy: -12).contains(down) else { continue }
+            droppedAt[id] = CACurrentMediaTime()
             let element = w.handle.element
             w.handle.app.queue.async { [weak self] in
                 let frame = element.frame
