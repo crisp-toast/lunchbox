@@ -1,701 +1,334 @@
-# Learning: the window manager you never configure
+# Tessel learns where your windows go
 
-Design, 2026-10-16. Tessel's pitch is that it learns how you work: no account, and everything it
-learns stays on your Mac. This doc covers how that works and in what order to build it. It is
-grounded in the code as of `b554a7d`. Item 1 (float or tile) is prototyped in this branch behind a
-default that is off. Everything else here is a plan.
+Design and status, 2026-10-16. Tessel's headline: **a smart window manager that's never
+annoying about it.** It learns from what you do, on your Mac, with no account and no setup,
+and it never moves anything you're looking at.
 
-**The short version**
+**Status.** Built on branch `claude/bold-villani-c70383` behind **Settings › Learn Where Windows
+Go**, off by default until Tyler has lived with it. All three proofs below work on real windows
+in the test VM (macOS 27), including undo, "undo twice and it forgets", relaunch and Forget.
+`swift test`: 143 tests pass.
 
-- Tessel's rules stay in charge. Small models, trained on this Mac from Tessel's own window events,
-  adjust the rules only where you've shown it they're wrong.
-- Every model starts as counting statistics. Bandits and small classifiers come next. A JEPA-style
-  embedding predictor under 1 MB comes last, and only if it beats counting on your own history.
-- Apple's Foundation Models framework is an optional extra for language only (names, topics,
-  typed commands) on macOS 26 and later. It can't learn from you, it needs Apple Intelligence, and
-  it's far too slow for per-window decisions.
-- Learning adds no network calls. A unit test (`NothingLeavesThisMac`) fails if any Swift file
-  besides `Licensing.swift` starts talking to the network.
+**Try it:** build and install from the branch (`./scripts/build.sh --install`), then turn on
+Settings › Learn Where Windows Go. Then:
+- Float a small tool window from the menu (**Float This Window**), or drag a window out of its
+  tile twice in a row. The next window like it floats by itself.
+- Give two apps an uneven split (⌘⇧ + / −), leave it for half a minute, then quit one app and
+  open it again. It comes back in its spot, at its share.
+- Move an app's window to Workspace 2 (⌘⇧ and the Workspace 2 key) and keep it there for ten
+  minutes. New windows of that app now open in Workspace 2.
 
-Build order: **1 float or tile → 2 layout memory → 3 Auto Workspaces (the headline) → 4 Predictive
-Summon → 5 Autopilot (opt-in)**. Items 1 and 2 are about retention: Tessel stops doing the thing
-that annoys you. Item 3 is what makes people talk about it.
+Each time, a quiet line at the bottom of the screen says what happened, and ⌘ with the key of
+the Workspace you were in undoes it.
+
+**Not built yet:**
+- the onboarding moment that shows Tessel learning once, live (designed below);
+- a shortcut for Float/Tile (only the menu, the `float` command and the double drag for now);
+- turning learning on by default;
+- trying it on Tyler's own Mac, and after a logout and login (where Workspace homes matter most).
 
 ---
 
-## What Tessel decides today, and what it already remembers
+## One promise, three proofs
 
-Every decision is a hand-written rule:
+**Tessel learns where your windows go.** That's the sentence people should repeat. Three things
+prove it, and each pays off the first time you repeat yourself:
 
-| Decision | Where | Rule today |
+1. **It floats what you'd float.** Float a window once (twice for a full document window), and
+   the next window like it floats by itself.
+2. **It opens apps in your usual arrangement.** Arrange apps once and leave them that way. The
+   next time one of them opens next to the others, it takes its spot and its share.
+3. **It sends new windows to the Workspace they belong in.** Keep an app in Workspace 2, and its
+   new windows open there. That includes after a restart, when today everything piles into
+   Workspace 1.
+
+These are decision models, not chat:
+- counting statistics with backoff (kind of window → app → Tessel's rules);
+- dwell time for arrangements;
+- "moved there and kept there" for Workspaces;
+- an undo ledger that makes Tessel back off.
+
+Each runs in microseconds, learns from your own corrections, and stays on your Mac. That's
+literally true, and it's what the marketing can say. Predictive Summon, Autopilot, the
+JEPA-style predictor and Foundation Models are later extras (see the end of this doc). They're
+not part of the promise.
+
+## Not annoying, as hard rules
+
+Annoyance is the failure that would sink this, so it's treated like a crash. These rules are in
+`Etiquette` ([Etiquette.swift](../Sources/TesselCore/Etiquette.swift)) and enforced in code. Most
+of them have a unit test.
+
+| Rule | How it holds | Checked by |
 |---|---|---|
-| Tile or float | `Tiler.readWindows` and `consider` ([Tiler.swift:338](../Sources/Tessel/Tiler.swift:338), [:498](../Sources/Tessel/Tiler.swift:498)) | A window tiles if it's `AXStandardWindow`, resizable, not minimized, not full screen, and not a dialog (`Dialogs.isDialog`). Eight apps always float (`floatingApps`, [Tiler.swift:65](../Sources/Tessel/Tiler.swift:65)). A non-standard window that answers a Summon open is "adopted" and tiles. `userFloating` ([Tiler.swift:86](../Sources/Tessel/Tiler.swift:86)) is checked but nothing ever adds to it, so there is no way to float a window yourself. |
-| Where a new window goes | `Tiler.insert` ([Tiler.swift:637](../Sources/Tessel/Tiler.swift:637)) → `Layout.insert(near:maxColumns:)` ([Layout.swift:89](../Sources/TesselCore/Layout.swift:89)) | The Workspace you're viewing (`saved?.space ?? currentSpace`, [Tiler.swift:646](../Sources/Tessel/Tiler.swift:646)). It gets its own column right of the focused window until `maxColumns` (width / 800, at most 4), then stacks into the column with the fewest windows, at an average share. |
-| A lone window's size | `Layout.singleScale` / `singleHeight` / `singleOwner` ([Layout.swift:42](../Sources/TesselCore/Layout.swift:42)) | Centered at 16:10, 0.6 of the screen width. A shape you drag to is kept only for that one window (`singleOwner`). App-chosen sizes were removed on purpose in e9d3bac (`tileSizes` and `appSizes` are deleted at startup). |
-| Summon's order | `Launcher.update` ([Launcher.swift:182](../Sources/Tessel/Launcher.swift:182)) | `launcherUses` counts opens per path. With an empty query: apps by count. With a query: `Fuzzy.score + min(uses, 40) × 25`. This is frequency, not frecency: counts never decay and ignore context (time, Workspace, what's open). |
-| Workspace for a focused window elsewhere | `ForeignFocus.decide` ([Activation.swift](../Sources/TesselCore/Activation.swift), called at [Tiler.swift:948](../Sources/Tessel/Tiler.swift:948)) | Summon brings it here, a Dock click goes there, and a focus macOS hands over by itself while settling stays put. |
+| **It only decides where a *new* window lands.** It never rearranges what you're looking at. | Learned placement only applies to windows Tessel first saw under 10 s ago (`ManagedWindow.isNew`), never to windows back from a relaunch, minimize or full screen. A usual spot is applied with `Layout.restore`, which places the newcomer without reordering the windows already there. A window's float or tile choice is decided once, and a tiled window stays tiled (`tiles`). | `UsualArrangements.windowsAlreadyThereNeverChangeOrder`, VM run |
+| **It never takes focus.** | A window placed in another Workspace while you stay is marked `placedForYou`, so its app grabbing focus is ignored (`ForeignFocus` returns `.stay`) and the keyboard goes back to your window. You only go along when you just opened the app yourself, the same as the Dock does. | `NotAnnoying.aWindowPlacedForYouNeverTakesYouThere`, VM run |
+| **No popups, notifications or questions.** | The only thing it shows is the quiet line: a click-through, non-activating pill that's gone after 2.5 s, with a newer line replacing an older one. Nothing ever asks. Reset asks for confirmation, but only because you clicked it. | VM screenshots |
+| **Silent when unsure.** | The rules decide unless you've taught otherwise:<br>• A float needs a correction (two for a document window).<br>• An arrangement needs to have stood 30 s.<br>• A Workspace home needs your move plus 10 minutes of window time, nine tenths of it there.<br>• An app that also has windows elsewhere gets no home placement.<br>Hints alone never override the rules. | `FloatClassifierLearns`, `WorkspaceHomes`, `UsualArrangements` |
+| **Everything automatic is one quiet line, and one key undoes it.** | The key is ⌘ and the key of the Workspace you were in. Today that key does nothing when you're already in that Workspace, so it steals nothing. It works for 10 s, or 3.5 s when Tessel took you to another Workspace (so just going back doesn't also drag the window along). Things done within a second of each other share one line and one undo. | `NotAnnoying.oneQuietLine…`, `…manyThingsAtOnceShareOneLine`, VM run |
+| **Two undos in a row, and it forgets that lesson.** It stops until you teach it again. | `UndoLedger`, then `Learning.forget`. Undoing a learned float is itself a correction, so one undo is enough there. | `NotAnnoying.twoUndosInARowAndItStops`, VM run |
+| **Never slower than today.** | Float decisions run on the app's own queue during the window read Tessel already does (about 0.5 µs, plus four or five Accessibility reads once per new window). Usual spots and homes are dictionary lookups when a window is placed. All disk work happens on its own queue. Only the app queues ever wait at startup, for up to 1 s, while lessons load. | `FloatClassifierLearns.decidingTakesAboutAMicrosecond` |
+| **Lessons are visible and forgettable, in words.** | **Settings › What Tessel Learned** lists lessons like "TextEdit: medium document windows float", "Terminal and TextEdit: your usual arrangement", "Mail: new windows open in Workspace 2". Clicking one forgets it, including from the log. **Reset What Tessel Learned…** forgets everything. | `WindowKinds.lessonsInWords`, VM run |
 
-What's saved in `UserDefaults` (`com.tyleryouens.tessel`) today, all on this Mac:
+## Day one (the cold start)
 
-| Key | What | Learned? |
+The trial is 7 days, so something smart has to happen within the first hour, without guessing.
+
+- **Minutes in: floats.** The first time you float a small tool window (from the menu, or by
+  dragging it out of its tile twice, which is what people already do when a tiling manager
+  fights them), the next one floats. A full document window needs it twice, because floating one
+  document is often a one-off.
+- **The first time you reopen an app: arrangements.** Arrange two apps (⌘⇧ + / − or a drag),
+  leave them 30 s, and the next time one opens beside the other it takes its usual spot and
+  share. A lone window you resized comes back at that size straight away.
+- **Within the hour: Workspaces.** Move an app's window to a Workspace and keep it there for 10
+  minutes. From then on its new windows go there. The big moment is the first restart, when every
+  window that comes back goes to its Workspace instead of all piling into Workspace 1.
+- **Onboarding (to build): show it once, live.** Add a step to the practice screen
+  (`Playground`):
+  1. A pretend "Colors" palette opens and tiles.
+  2. The step asks you to drag it out of its tile twice.
+  3. It floats where you dropped it.
+  4. A second "Colors" opens and floats by itself, with the real quiet line: "Colors floats, like
+     the last one".
+
+  That's one sentence of reading and five seconds of doing. Then the finish step lists the three
+  proofs in a line each.
+
+## How each proof works
+
+### 1. Floats what you'd float
+
+*Code:* `FloatClassifier` ([FloatLearning.swift](../Sources/TesselCore/FloatLearning.swift)),
+`Learning.decide` ([Learning.swift](../Sources/Tessel/Learning.swift)), `Tiler.tiles` and
+`toggleFloating`.
+
+- **You teach it** with **Float This Window** / **Tile This Window** (the menu, or the `float`
+  command). You can also drag a tiled window out of its tile twice within 10 s: the first drop
+  glides back as always, the second floats it where you dropped it.
+- **What it looks at**, once, the first time a window that could tile appears:
+  - bundle ID, subrole, title-bar buttons;
+  - size, and its share of the screen (small, medium or large);
+  - the *kind* of title: empty, the app's name, a tool word like "Settings" or "Inspector", or
+    anything else. The title itself is never stored.
+  - native tabs;
+  - whether it refused its tile size: macOS has no attribute for minimum or maximum size, so
+    `Animator.onSettled` notices instead.
+
+  The window's **kind** is app, subrole, buttons, size class and title kind.
+- **How it decides:** decayed counts per kind and per app (half-life 180 days), backing off to
+  the rules. It goes against a rule only in the direction of your latest correction:
+
+  ```
+  prior = 0.9 if the rule says float, else 0.1
+  p_app = (float_app  + 2.0 × prior) / (total_app + 2.0)
+  p     = (float_kind + s × p_app)   / (total_kind + s)     s = 1.5 for a document window, else 0.5
+  float if rule = tile  and p ≥ 0.75 and your latest correction says float
+  tile  if rule = float and p ≤ 0.25 and your latest correction says tile
+  ```
+
+  - Evidence: a correction counts 1. A learned choice you lived with for over a minute counts
+    0.25, which keeps a lesson fresh. A tiled window that closed within 3 s counts as a 0.25 hint
+    toward floating, but only for windows that opened while Tessel ran and didn't close because
+    their app quit.
+  - Windows you simply left as the rules placed them don't count, so someone who finds the Float
+    command after a year of tiling doesn't have to repeat themselves.
+  - What can never be learned stays hard-coded: dialogs, sheets, Open and Save panels;
+    minimized, full-screen and non-resizable windows; Tessel's own windows; and apps an agent has
+    `leave-app`'d.
+- **When it floats a window,** whether learned or by your hand, the window goes back to the size
+  it opened at. That's centered where its tile was, or with its corner where you dropped it, and
+  kept on screen.
+- **It survives a relaunch:** each open window's kind and choice are kept in `memory.json`, so
+  your floats stay floating and kinds stay stable.
+
+### 2. Opens apps in your usual arrangement
+
+*Code:* `Arrangement`, `ArrangementMemory` ([Arrangements.swift](../Sources/TesselCore/Arrangements.swift)),
+`Tiler.usualPlace` and `noteArranged`.
+
+- **Recording:**
+  - After you change a layout (move, resize, swap, drag, send, Tidy), Tessel remembers that
+    arrangement for as long as it stays the same. An arrangement it applied for you counts too,
+    if you leave it be.
+  - It's stored without window numbers: which app's window is in which column and stack, and
+    the shares.
+  - It's keyed by display size (`1920x1080`) and the set of apps.
+  - The time it stood is counted on each change and every ten minutes. Up to 3 variants are kept
+    per context, and the one that stood longest (half-life 30 days) wins once it has stood 30 s
+    in total.
+- **Lone windows:** resizing a window that's alone (or Tidying it) records its shape for that app
+  and display. Only *your* resize counts, never the app's own size, which keeps e9d3bac's
+  decision that Tessel ignores app-chosen sizes.
+- **Applying:**
+  - When a new window opens, Tessel looks up the arrangement for "these apps plus this one".
+  - It builds a stand-in `Layout` from it and calls the existing, permutation-tested
+    `Layout.restore`. The newcomer goes beside, or into the stack of, the same windows it had
+    before, and the windows already there never change order.
+  - If everything then matches the arrangement exactly, the shares become the arrangement's too.
+  - A placeholder (Summon, a Dock click) takes the usual spot as well, so the window lands right
+    where it belongs.
+- **Undo** puts the window where it would have gone without the lesson.
+
+### 3. Sends new windows to the Workspace they belong in
+
+*Code:* `WorkspaceMemory` ([Workspaces.swift](../Sources/TesselCore/Workspaces.swift)),
+`Tiler.insert`, `placedInHome`, `undoAutomatic`.
+
+- **The lesson:** you move one of an app's windows to a Workspace yourself (⌘⇧ + Workspace key).
+  Hide (⌘⇧H) is putting it away, not a home, so it doesn't count. Once the app's windows have then
+  spent 10 minutes of window time there, and nine tenths of their time since the move, that's its
+  home. Window time is only counted while you're at the Mac (input within 5 minutes). Moving one
+  of its windows elsewhere starts over.
+- **Which windows go home:**
+  - Only new windows you didn't open from Tessel: Summon, the Dock and the Dock's New Window
+    still bring windows to you.
+  - Never if the app also has a window somewhere other than its home.
+  - Never if you're already there.
+- **You stay or you go.** If you just opened the app yourself (it launched within 1.5 s of a key
+  press or click, or it's in front within 2 s of one), you go with it, exactly like a Dock click
+  takes you to an app's window today. If the window opened by itself (a login item, a document
+  opened by a script, an app's own pop-up), you stay where you are and keep the keyboard.
+- **Undo** brings the window to the Workspace you were in. Pressed twice in a row for the same
+  app, Tessel forgets that home.
+- **Known interaction:** activating an app whose windows are all in another Workspace already
+  takes you there today (`ForeignFocus.goThere`). So `open -a Mail` with a Mail window in
+  Workspace 2 switches to Workspace 2 before any new window appears. That's existing behavior, and
+  consistent with this feature.
+
+## Storage and privacy
+
+Everything lives in `~/Library/Application Support/Tessel/Learning/`. The folder is mode 0700 and
+the files 0600, and the folder is excluded from Time Machine (`isExcludedFromBackup`), so "stays
+on your Mac" is literally true. Logs are JSON Lines anyone can read in TextEdit
+(`EventLog`, [EventLog.swift](../Sources/TesselCore/EventLog.swift)). Each log holds at most two
+files of its cap, and anything older than 90 days is pruned at start.
+
+| File | What | Cap |
 |---|---|---|
-| `layouts` | Each Workspace's `Layout` as JSON, keyed `"space|displayUUID"`, written by `persist()` ([Tiler.swift:1380](../Sources/Tessel/Tiler.swift:1380)) | No: it's where your windows are now, keyed by window number, which dies with the window |
-| `placement` | window number → `"space|displayUUID"` | No: current state |
-| `adopted` | window numbers tiled because they answered Summon | No |
-| `launcherUses` | path → open count (apps and files) | Yes, frequency only |
-| `currentSpace`, `useAllDisplays`, `spaceKeys`, `keymap`, `loginItemConfigured` | settings | No |
-| `license`, `trialStarted` (also in the Keychain), `revocationChecked` | licensing | No |
+| `float.jsonl` | your float/tile corrections, and closes that count as evidence | 2 × 1 MB |
+| `arrange.jsonl` | arrangements and how long they stood, lone shapes, forgotten lessons | 2 × 1 MB |
+| `workspace.jsonl` | moves, placements, undos, forgotten homes (the story; the numbers are in memory.json) | 2 × 512 KB |
+| `memory.json` | Workspace homes and their window time, the undo ledger, each open window's kind and choice | small (KB) |
 
-So the "layout memory" Tessel has today is relaunch memory: `Layout.restore(_:from:)` puts a
-window that's still open back exactly where it was. Once a window closes, Tessel forgets everything
-about it. Learning means remembering things about kinds of windows, apps and situations instead of
-window numbers.
+A typical day writes a few kilobytes. Events hold bundle IDs, kinds of window, sizes, Workspace
+numbers, display sizes and times. **Never** window titles, file names, URLs, typed text or key
+codes.
 
----
+### Every network call Tessel makes, and learning adds none
 
-## Principles (all five items)
-
-1. **The rules are the cold start.** With nothing learned, Tessel behaves exactly as it does today.
-   Every model's output is "the rule, unless there's enough evidence otherwise".
-2. **Learn from what you do, not from what you put up with.** A correction (floating a window,
-   sending it back, undoing a move) is strong evidence. A window you left where the rules put it
-   is not: most people never find the command that would have changed it.
-3. **A guess never moves a window that's already in place.** Learned behavior applies to windows
-   as they arrive, and to arrangements as they form. The one exception is Autopilot, which is
-   opt-in.
-4. **Everything automatic says what it did, and one key undoes it.** The undo is also the label.
-5. **Decide fast and off the main thread.** A decision is under 1 ms. It runs where Tessel already
-   reads the window: the app's own serial queue (`AppHandle.queue`), or a learning queue that
-   precomputes the answer before the main thread asks. Training runs only when the Mac is idle.
-6. **Local, inspectable, erasable.** Plain JSON Lines files in one folder, readable only by you and
-   left out of backups. Window titles, keystrokes and file names are never written down. Settings
-   has "Reset What Tessel Learned".
-
-## Shared machinery
-
-**Storage.** Everything lives in `~/Library/Application Support/Tessel/Learning/` (next to
-`state.json`, which `dump` writes). The folder is created `0700`, files are `0600`, and the folder
-is marked `isExcludedFromBackup`. That keeps "stays on this Mac" literally true: it isn't in Time
-Machine, and Application Support never goes to iCloud. The cost is that a new Mac starts learning
-from scratch, which is fine.
-
-**Event logs.** `EventLog<Event>` ([EventLog.swift](../Sources/TesselCore/EventLog.swift), built
-in the prototype) writes one JSON object per line, so anyone can open the file in TextEdit and read
-every word. When the current file would pass `maxBytes`, it becomes `name.1.jsonl` and the older
-`.1` is dropped, so a stream never takes more than two files. Events older than `maxAge` are left
-out when read and erased by `prune()` at startup. A line cut off mid-write is skipped. The log is
-synchronous and not thread-safe: `Learning` calls it from one utility-QoS serial queue.
-
-| Stream | Item | Written when | Expected volume | Cap | Retention |
-|---|---|---|---|---|---|
-| `float.jsonl` | 1 | a correction, or a close that counts as evidence | a few KB/day | 2 × 1 MB | 90 days |
-| `arrange.jsonl` | 2 | an arrangement you made and then kept for 30 s | ~5–20 KB/day | 2 × 1 MB | 90 days |
-| `focus.jsonl` | 3, 4 | focus leaves a window after at least 2 s | ~50–100 KB/day | 2 × 2 MB | 30 days |
-| `place.jsonl` | 3 | an Auto Workspace suggestion or move, and what you did about it | a few KB/day | 2 × 512 KB | 90 days |
-| `summon.jsonl` | 4 | Summon opens an app (apps only: no files, no web, no query text) | a few KB/day | 2 × 512 KB | 90 days |
-| `autopilot.jsonl` | 5 | Autopilot acts, and whether you undid it | a few KB/day | 2 × 512 KB | 90 days |
-| `models/` | all | snapshots of counts, bandit posteriors and weights | — | 2 MB total, embeddings < 1 MB | until reset |
-
-That's at most about 13 MB, and typically under 1 MB. Logs are the training set. Models are
-rebuilt from them at startup (the prototype does this: `FloatClassifier.replay`) or loaded from a
-snapshot once replay gets slow (above about 50 ms).
-
-**What an event may contain:** bundle IDs, Accessibility roles and subroles, which title-bar buttons
-a window has, its size in points and as a share of the screen, the *kind* of title (empty, the app's
-name, a utility word, anything else; see `TitleKind`), Workspace index, a display class (size in
-points, not its name or serial), times rounded to 0.1 s, and Tessel's own choices.
-**What it never contains:** window titles, file paths, URLs, typed text, key codes, screenshots,
-user names, or anything that could identify the Mac.
-
-**The `Learning` object** ([Learning.swift](../Sources/Tessel/Learning.swift), in the prototype)
-owns the models behind an `OSAllocatedUnfairLock`, the IO queue, and the per-window decisions.
-`Tiler.start()` and `stop()` start and stop it. Reads take the lock for well under a microsecond.
-Anything slow (disk, replay, training) runs on its queue.
-
-**Idle-time training** (from item 2 on; the counting models need none). Tessel trains only when all
-of these hold:
-- no keyboard or mouse input for 2 minutes (`CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .null)`, the same idle clock the mac-mini skill reads as `HIDIdleTime`);
-- on AC power (`IOPSCopyPowerSourcesInfo`) and not in Low Power Mode;
-- `ProcessInfo.thermalState == .nominal`;
-- at `.background` QoS, with at most 30 s of CPU a day and a 50 MB peak.
-
-Training stops the moment input arrives. Nothing trains while the Mac is asleep, and nothing is
-scheduled with launchd.
-
-**The model ladder.** Each item starts at step 1 and moves up only when an on-device evaluation
-says it should:
-1. **Counting statistics**: decayed counts with empirical-Bayes backoff (kind → app → rule). These
-   are explainable in a sentence and correct from the first event.
-2. **Bandits and small classifiers**: Thompson sampling where Tessel has to choose whether to act,
-   and logistic regression over hashed features (4,096 weights, 16 KB) where kinds of window need
-   to generalize across apps.
-3. **A JEPA-style embedding predictor** (its own section below), < 1 MB, trained in idle time.
-   It's for cold start (new apps, new situations) and for Auto Workspaces.
-
-**Evaluation stays on the Mac too.** Before a model level replaces the one below it, Tessel replays
-the last 14 days of the log through both and compares how often each would have agreed with what you
-did, such as your corrections and undos. It switches only on a clear win (5 points or more). The
-numbers can be shown in the "What Tessel Learned" window. They are never sent anywhere.
-
----
-
-## 1. Float or tile (prototyped)
-
-The most common complaint about tiling window managers is "it tiled a window that should
-float". Tessel's answer today is a hard-coded list of eight apps plus the dialog rules, and the
-launch checklist lists per-app rules as a known gap. Instead of adding a rules UI, Tessel learns
-them from the moment you correct it.
-
-### How you correct it (the labels)
-
-| Gesture | Label | Status |
+| What | When | Sends |
 |---|---|---|
-| **Float / Tile** on the focused window: the `float` command, and the menu's "Float This Window" / "Tile This Window" | strong, either way | prototyped |
-| **Drag a tiled window out of its tile twice within 10 s.** The first drop glides back as always. The second time Tessel stops fighting you: the window floats where you dropped it. | strong, toward float | prototyped (`userDropped`, [Tiler.swift:1170](../Sources/Tessel/Tiler.swift:1170)) |
-| A shortcut for Float / Tile (left ⌘⇧T, free in `Keymap`) | strong | to do: needs a `Command`, a Cheat Sheet line and an onboarding mention |
-| Dragging a floating window onto a tile, so it takes that spot | strong, toward tile | to do |
-| A tiled window that closes within 3 s of appearing (splash screens, progress windows, quick pop-ups) | weak hint toward float (0.25) | prototyped |
-| A window placed by what was learned, then left that way for over a minute | weak confirmation (0.25): the lesson stays fresh | prototyped |
-| A window the rules placed that you left alone | **nothing**: tolerating isn't consent | by design |
-
-### Features (`FloatFeatures`, [FloatLearning.swift](../Sources/TesselCore/FloatLearning.swift))
-
-These are read once, the first time a window that could tile shows up, on its app's queue,
-inside the same `readWindows` pass Tessel already makes:
-
-- bundle ID; Accessibility subrole; resizable;
-- title-bar buttons: close, minimize, zoom, full screen (`kAXFullScreenButtonAttribute`);
-- size in points, and its share of the display's usable area (small under 12%, medium under
-  40%, large otherwise);
-- `TitleKind`: empty / the app's name / a utility word ("Settings", "Inspector", "Downloads",
-  "Picture in Picture", …) / anything else. The title is classified in memory and never written
-  down. The word list is English only for now; Foundation Models can do this in any language
-  later.
-- native tabs;
-- **min/max size.** macOS has no Accessibility attribute for a window's minimum or maximum size
-  (`AXMinValue` / `AXMaxValue` are for sliders), so Tessel finds out by asking. When
-  `Animator.onSettled` reports a frame that doesn't match the tile, the window has a limit, and
-  `sizeLimited` is set ([Tiler.swift:2078](../Sources/Tessel/Tiler.swift:2078)). It's only known
-  after the first tile, so it's logged for the step-2 model but isn't part of the step-1 kind.
-- **lifetime**, taken at close, which is a label rather than a feature.
-
-A window's **kind** is `app | subrole (or "std") | buttons | size class | title kind`, for example
-`com.apple.finder|std|15|l|document`. It is coarse on purpose, so a lesson carries over to the
-next window like it.
-
-### Event log schema (`float.jsonl`)
-
-```json
-{"choice":"float","features":{"app":"com.apple.finder","buttons":1,"height":420,"resizable":true,"screenShare":0.048,"sizeLimited":false,"subrole":"AXStandardWindow","tabs":false,"title":"utility","width":300},"gesture":"toggle","kind":"corrected","time":1792195200.1}
-{"choice":"float","features":{…},"kind":"closed","lifetime":412.3,"source":"learned","time":1792195612.4}
-```
-
-Only events that carry evidence are written (`FloatClassifier.evidence(in:)`): corrections,
-fleeting tiled windows, and learned choices you lived with. A close the rules decided and you
-ignored isn't kept. That keeps the log to a few KB a day, so a lesson isn't rotated out of the
-2 MB cap long before 90 days.
-
-### Step 1, as built: counting with backoff (`FloatClassifier`)
-
-For each kind and each app, Tessel keeps decayed evidence for float and for tile (half-life 180
-days), plus the direction and time of your latest correction. A new window gets:
-
-```
-prior   = 0.9 if the rule says float, else 0.1
-p_app   = (float_app  + 2.0 × prior) / (total_app  + 2.0)
-p       = (float_kind + 0.5 × p_app) / (total_kind + 0.5)
-
-float  if rule = tile  and p ≥ 0.75 and your latest correction (of the kind, else the app) = float
-tile   if rule = float and p ≤ 0.25 and your latest correction (of the kind, else the app) = tile
-else   the rule
-```
-
-How it behaves (each line is a unit test in
-[FloatLearningTests.swift](../Tests/TesselCoreTests/FloatLearningTests.swift)):
-
-- With nothing learned, the rules decide.
-- One correction of a new kind is enough: the next window of that kind follows (p = 0.8).
-- Other kinds in the same app, and other apps, are left alone (p = 0.4).
-- Float eight different kinds in one app and new kinds of that app float too: an app-wide rule
-  you never had to write.
-- It never goes against your latest correction. After five floats and then one tile, it tiles,
-  even though p is still above 0.75.
-- If you change your mind back and forth, it falls back to the rules.
-- Windows the rules float (QuickTime, Simulator, System Settings, …) can be taught to tile.
-- Hints alone never override the rules, even 200 of them.
-- Thirty windows you left tiled don't hold back a correction.
-- A lesson you never use fades after about two months. One you live with stays.
-- A decision is two dictionary lookups and some arithmetic: about 0.5 µs. The test allows 10 µs.
-
-What can never be learned (hard rules, unchanged): dialogs, sheets, Open/Save panels (`Dialogs`);
-minimized, full screen, and non-resizable windows; hidden apps; windows on an unmanaged display;
-apps an agent has `leave-app`'d; Tessel's own windows.
-
-### Step 2: logistic regression over hashed features
-
-Once there are 20 or more corrections across 3 or more apps, add an online logistic regression
-over hashed features: subrole, buttons, size class × title kind, `sizeLimited`, tabs, and bigrams of
-those. It has 4,096 weights (16 KB), trained by SGD with L2 regularization on each correction and
-replayed at startup. Its output replaces the fixed `prior`, so "small, non-zoomable windows titled
-'Info' float" carries over to an app you've never corrected. The latest-correction gate still
-applies, now at the "similar kinds" level. Ship it only if the replay evaluation says so.
-
-### Step 3: embeddings for cold start
-
-An app you've never used tiled or floated borrows from the nearest apps in the JEPA embedding
-space (below). This affects `prior` only, never the gate.
-
-### Budgets
-
-- **Decision:** about 0.5 µs, on the app's queue, inside `readWindows`, once per window. It's cached
-  in `Learning` for the window's life, so a window never flips while it's open. Reading the extra
-  features costs four or five more Accessibility calls once per new window, also on the app's queue.
-- **Main thread:** one lock read per window per scan in `consider` (`tiles`,
-  [Tiler.swift:589](../Sources/Tessel/Tiler.swift:589)).
-- **Memory:** about 200 bytes per kind, so under 100 KB for a heavy user. The log is at most 2 MB.
-- **Startup:** a full 2 MB log (about 7,000 events, far more than a typical one) reads in about
-  50 ms and replays in 4 ms on the learning queue, measured in a debug build. Window decisions wait
-  for it (`DispatchGroup`, up to 1 s, on app queues only), so a window taught to float doesn't tile
-  after a relaunch.
-
-### Failing safe
-
-- Off (the default) means no files, no logging, no extra Accessibility reads, and behavior
-  identical to today's. `tiles` returns the rule untouched.
-- A guess never moves a window that's already tiled. A window that was tiled before a relaunch or
-  a pause stays tiled, and a window answering a Summon open follows the rules
-  (`Learning.overrule`).
-- Your own choice for a window survives a pause and resume.
-- If the log can't be read or written, Tessel decides by the rules and says so in the log (subsystem
-  `com.tyleryouens.tessel`, category `learning`).
-- Floating never moves anything: the window stays exactly where it is and the tiles close the gap.
-
-### Trying the prototype
-
-```bash
-defaults write com.tyleryouens.tessel learnFloating -bool YES
-```
-
-Then pause and resume tiling (the setting is read when tiling starts). Float a window from the menu
-(**Float This Window**), or post the `float` command, or drag it out of its tile twice. `dump`
-writes a `learning` section into `state.json` with every window's kind and choice and the lessons
-so far. `learning-reset` (or **Settings › Reset What Tessel Learned**) forgets everything. The
-log is `~/Library/Application Support/Tessel/Learning/float.jsonl`.
-
-**Not yet tested live.** The prototype builds and its unit tests pass (`swift test`: 116 tests).
-It hasn't been run against real windows. That should happen in the Tart VM (`vm.sh install-tessel`)
-once nothing else is using the VM's 4 GB.
-
----
-
-## 2. Layout memory
-
-**Today.** Tessel remembers each layout as window numbers (`layouts`) and restores windows that
-are still open (`Layout.restore`). When a window closes, its slot is gone. A new window always
-lands right of the focused one at an average share, and a lone window always starts at 16:10.
-People rebuild the same arrangement every morning: Xcode wide on the left with Simulator narrow on
-the right, or Mail stacked over Messages.
-
-**Remember arrangements per context.**
-- **Context key:** the display class (usable size in points, like `2560x1415`; the display UUID
-  is a tie-breaker), the set of apps in the layout (sorted bundle IDs, up to 8), and the
-  Workspace. Lookups back off from `space+display+apps` to `display+apps` to `class+apps`.
-- **Template:** the layout with window numbers replaced by slots (`bundleID#n`, where n numbers the
-  app's windows in column order), keeping column order, stacks, column weights and stack weights.
-- **Lone-window shape:** `singleScale` and `singleHeight` per `bundleID × display class`, learned
-  only from your own `adopt` (drag), grow and shrink, never from the app's own size. That keeps
-  e9d3bac's decision (Tessel ignores app-chosen sizes) intact.
-
-**Recording.** After a change you make (move, grow or shrink, drag-resize, swap, Tidy), once the
-layout has stayed the same for 30 s. Tidy (⌘⇧0) is recorded too: even shares become the preference
-for that context. Each context keeps up to 3 variants with their total dwell time. The model is
-the variant with the most decayed dwell (half-life 30 days), which is counting statistics again.
-
-`arrange.jsonl`:
-`{"time":…,"space":0,"display":"2560x1415","apps":["com.apple.dt.Xcode","com.apple.iphonesimulator"],"columns":[{"slots":["com.apple.dt.Xcode#0"],"weight":0.68,"weights":[1]},{"slots":["com.apple.iphonesimulator#0"],"weight":0.32,"weights":[1]}],"dwell":1800}`
-
-**Applying it, using the existing restore.** When a window arrives in `Tiler.insert`, the learning
-queue has already worked out the template for "this layout plus one window of app X". It
-precomputes the likely next arrivals each time `persist()` runs, so `insert` does a single
-dictionary read. Tessel builds a synthetic `saved: Layout` by mapping template slots to the windows
-actually there (same bundle ID; among equals, the most recently focused), then calls
-`layout.restore(newID, from: synthetic)`. That's the same `Layout.restore` that already has
-permutation tests: the arriving window takes its remembered stack, position and shares. The other
-windows keep their order. If every slot maps exactly, the column weights come from the template.
-If the mapping is ambiguous, `Layout.insert` runs as today.
-
-**Cold start.** No template, so today's insert. **Budget:** precompute about 50 µs on the learning
-queue per change; the main thread does one dictionary read. **Memory:** at most 500 contexts × 3
-variants, about 150 KB. **Failing safe:** it only places an arriving window and never reshuffles
-existing ones. Tidy and the arrow keys work as always. A variant you undo within 30 s (by moving
-the new window again) loses its dwell.
-
----
-
-## 3. Auto Workspaces (the headline)
-
-**Today.** A new window lands in the Workspace you're viewing ([Tiler.swift:646](../Sources/Tessel/Tiler.swift:646)).
-Summon and Dock clicks deliberately bring windows here (`prepareForOpening`, `expectWindow`). If
-you keep Mail and Messages in Workspace 2, every new Mail window still opens in Workspace 1 and you
-send it over with ⌘⇧ + the Workspace 2 key.
-
-**The goal:** a NEW window that Tessel didn't open for you goes to the Workspace it belongs in,
-learned from which apps you use together where.
-
-**Which windows qualify.** Only new windows. That means not open at launch, not in
-`savedPlacement`, not a tab taking over a tile, not filling a placeholder, not answering Summon or
-a Dock click (`summonedArrival`, `expectedArrival`, `dockClick`), and not on an unmanaged display.
-Existing windows are never moved. Summon stays "the one that brings things to you".
-
-**Signals** (`focus.jsonl`, one line when focus leaves a window after at least 2 s):
-`{"time":…,"app":"com.apple.mail","space":1,"display":"2560x1415","dwell":340}`. These come from
-`focusChanged` ([Tiler.swift:932](../Sources/Tessel/Tiler.swift:932)), which already maintains
-`lastFocused[space]`. Dwell stops counting after 60 s with no input, so leaving Mail focused
-overnight doesn't count as 8 hours of Mail. Strong labels come from what you do with new windows:
-sending one with ⌘⇧ + Workspace key within 30 s of it opening, or undoing an automatic move.
-
-**Model, step 1: counting.**
-- `P(space | app)`: Dirichlet-smoothed, decayed focus dwell (half-life 14 days, because what a
-  Workspace is for drifts).
-- Co-occurrence: a PMI score between the app and the apps currently in each Workspace, counted over
-  "Workspace sessions" (the time between switches).
-- `score(s) = log P(s | app) + 0.5 × Σ PMI(app, b) over apps b in s`, then softmax.
-
-**Step 2: a bandit decides when to act**, per app, with three actions: nothing, suggest, move.
-Thompson sampling on Beta(kept, undone) for moves, and Beta(accepted, ignored) for suggestions.
-Exploration happens only through suggestions, which cost you nothing, never through moves.
-
-**The tiers, matching the brief:**
-- **Not sure:** today's behavior.
-- **Low confidence: a placeholder first, nothing moves.** The window opens here as it always has.
-  The Workspace badge shows the frosted placeholder card (the `PlaceholderTile` look, with the
-  app's icon) over Workspace 2: "Mail goes in Workspace 2? ⌘⇧2". Pressing the existing send key
-  moves it and counts as a yes; ignoring it counts as a weak no. Tessel needs p ≥ 0.6 and 30
-  minutes of dwell for the app.
-- **Confident: it goes there directly.** This needs p ≥ 0.9 and a moves-kept rate of 0.9 or
-  better, earned through accepted suggestions. The window is placed in Workspace 2 (parked, like
-  any window there). The badge says "Mail opened in Workspace 2". **One key undoes it:** ⌘⇧ + the
-  key of the Workspace you're in, which today is a no-op (`send` ignores the current Workspace),
-  brings the window here next to the focused one, and counts as a strong no.
-
-**One trap to handle.** The app usually focuses its new window. That goes through
-`ForeignFocus.decide` with the window in another Workspace, and today's answer is `.goThere`,
-which would switch you to Workspace 2 and defeat the point. `ForeignFocus.decide` needs a
-`placedForYou` input that returns `.stay` for a few seconds. It's a pure function in TesselCore,
-so that gets a unit test like the others.
-
-`place.jsonl`: `{"time":…,"app":"com.apple.mail","from":0,"to":1,"p":0.93,"action":"move","outcome":"kept"}`
-
-**Cold start.** Nothing at all until there are 2 hours of focus dwell across at least 2 Workspaces,
-then suggestions only, for 3 days. Step 3 (embeddings) helps a brand-new app by borrowing the
-Workspace of apps that play the same role.
-
-**Budget.** Scores are recomputed on the learning queue on each focus change (3 Workspaces × about
-30 apps: microseconds). `insert` reads a cached `[bundleID: (space, p, action)]`.
-
-**Failing safe.**
-- It never touches existing windows.
-- It never acts on a window you asked for.
-- It never moves a window into a Workspace you can't reach (Workspace keys not set up).
-- It never acts while you're dragging.
-- Two undos in a row for an app pause that app's moves for a week.
-- A global "Place New Windows for Me" switch sits in Settings, on by default once item 3 ships.
-
-**Foundation Models helps** here by grouping windows by what their titles are about (see that
-section): all the windows of one project together.
-
----
-
-## 4. Predictive Summon
-
-**Today.** `launcherUses[path] += 1` on every open ([Launcher.swift:275](../Sources/Tessel/Launcher.swift:275)).
-The empty-query list is sorted by that count, and typed queries add `min(uses, 40) × 25` to the
-fuzzy score ([Launcher.swift:190](../Sources/Tessel/Launcher.swift:190)). The counts never decay
-and ignore context. The keys are file paths too, so opened files' paths sit in the preferences
-plist; that's local, but worth knowing.
-
-**Context-aware ranking.** The context is:
-- the Workspace and the apps in it;
-- the focused app;
-- the hour (6 buckets) and weekday or weekend;
-- the display setup (a laptop alone, or docked);
-- whether the app is running;
-- how long since you last opened it.
-
-The step-1 model is naive Bayes over decayed counts (half-life 30 days):
-`log P(app) + Σ log P(context feature | app)` with Laplace smoothing. Its output replaces the
-`min(uses, 40) × 25` term with a bonus capped at the same 1,000, so a typed match always beats a
-prediction, exactly as today. `launcherUses` seeds the counts once, so nobody's list changes order
-overnight.
-
-**Signals** (`summon.jsonl`): `{"time":…,"picked":"com.apple.dt.Xcode","rank":2,"shown":["…","…","…"],"queryLength":2,"space":0,"focused":"com.apple.Terminal","hour":3}`.
-These are apps only. Files, web searches and the query text are never logged. Rows shown above the
-pick are mild negatives (a cascade click model).
-
-**The bandit, step 2,** only reorders the empty-query list (⇧Space then nothing typed, where
-prediction matters most): Thompson sampling among the top 5 when their scores are close. The top
-row is never chosen by exploration.
-
-**Pre-launch, in two tiers:**
-- **Warm, on by default with item 4.** When Summon opens with an empty query and the top prediction
-  has p ≥ 0.6 and isn't running, Tessel reads that app's main executable and frameworks into the
-  file cache (`fcntl(F_RDADVISE)` on a background queue). No process starts, there are no side
-  effects, and a cold launch becomes a warm one.
-- **Launch, opt-in per app.** Start the predicted app hidden (`NSWorkspace.OpenConfiguration`:
-  `activates = false`, `hides = true`). This needs p ≥ 0.9 and 20 or more picks in that context,
-  with one app at a time and never on battery. `expectWindow` ([Tiler.swift:1858](../Sources/Tessel/Tiler.swift:1858))
-  currently refuses a hidden app ("nothing new is coming"), so a pick must unhide it and then hold
-  the placeholder. On a 16 GB Mac a pre-launched app costs 100 MB to 1 GB, so this stays off by
-  default.
-
-**Budget.** Context scores are precomputed on the learning queue on each focus or Workspace change.
-`Launcher.update` reads a `[path: bonus]` dictionary. **Cold start:** today's counts. **Failing
-safe:** a fuzzy match dominates, the bonus is capped, nothing is ever hidden, and pre-launch never
-starts an app you haven't opened yourself at least 20 times.
-
----
-
-## 5. Autopilot (opt-in)
-
-This is a Settings switch, off by default. It's the only item that moves windows that are already
-in place, so it says so every time and backs off when you undo it.
-
-**Grow the window you're typing in.**
-- **Signal:** `HotkeyTap` already sees every keyDown on its own high-priority thread
-  ([HotkeyTap.swift:57](../Sources/Tessel/HotkeyTap.swift:57)). It adds one to a counter for each
-  key pressed without ⌘ or ⌃. It never records which key: no key codes, no text.
-- **"Typing":** 40 or more keys in the last 20 s in the same window.
-- **Action:** at the next pause of 1.2 s with no keys, `Layout.resize(id, by: 0.08)` (the same
-  step as ⌘⇧+), up to 0.6 of the width or the share you settled on for that app. It happens at most
-  once every 2 minutes, never in Focus or for a lone window, and never with a mouse button down.
-- **Undo and label:** ⌘⇧− or Tidy within 60 s counts as a no.
-- **Model:** per-app Thompson sampling on Beta(kept, undone) for "grow or not", plus a decayed
-  average of the share you leave it at.
-
-**Drift stale windows to Workspace 3.**
-- **Signal:** time since each window was last focused, which Tessel can track from `focusChanged`.
-- **Action:** a window unfocused for longer than its app's threshold goes to Workspace 3 through the
-  existing Hide path (`send(toSpace: 2, follow: false)`, [Tiler.swift:1549](../Sources/Tessel/Tiler.swift:1549)).
-  The threshold starts at 8 h and is learned per app from {2 h, 4 h, 8 h, 24 h, never}.
-- **Only when you aren't looking:** in a Workspace not in view, or after 5 minutes of no input. It
-  never drifts:
-  - the last window in a Workspace;
-  - the focused window;
-  - a window you brought back from Workspace 3 before;
-  - windows of apps marked "never".
-- **Telling you:** on your return the badge says "2 windows rested in Workspace 3", with a key that
-  brings them back.
-- **Model:** a bandit over the thresholds. Bringing a window back within a day moves that app one
-  arm longer, and closing it from Workspace 3 confirms the threshold.
-- **Don't oversell it:** parked windows still draw (the battery note in
-  [launch-checklist.md](launch-checklist.md)), so drifting tidies up but doesn't save power.
-
-`autopilot.jsonl`: `{"time":…,"app":"com.apple.TextEdit","action":"grow","share":0.58,"outcome":"kept"}`
-
-**Failing safe:** off by default, at most one action every 2 minutes, every action says what it
-did, every undo counts, and two undos in a row turn that behavior off for that app for a week.
-
----
-
-## The JEPA-style predictor (step 3, shared)
-
-This is the same idea as Meta's JEPA (predict in representation space, with an EMA target encoder)
-at a tiny scale, trained only on this Mac's own window events. It is **not** V-JEPA's
-300M-parameter video model.
-
-- **Input tokens for a "situation":** hashed bundle IDs per Workspace, the focused app, window
-  kinds (item 1's signature), the display class, hour and weekday as sin/cos, and the Workspace
-  index.
-- **Context encoder** `f_θ`: token embeddings (1,024 hashed buckets × 32 dims), mean-pooled per
-  Workspace, then an MLP 32→64→32, giving `z`.
-- **Target encoder** `f_ξ`: an EMA of θ (τ = 0.99) with stop-gradient, applied to the situation a
-  few minutes later or after the next window event.
-- **Predictor** `g_φ(z, action)`: an MLP (32 + 16-dim action) → 64 → 32, where the action is a
-  window opening, a focus change or a Workspace switch.
-- **Loss:** `smooth-L1(g(z, a), sg(f_ξ(y)))` plus a VICReg-style variance and covariance term on
-  `z`. With this little data, EMA alone can collapse.
-- **Size:** about 41k parameters, roughly 165 KB in fp32 or 80 KB in fp16, plus the target copy.
-  The file is `models/jepa.bin`, under 1 MB with room to grow 4×.
-- **Training:** idle time only (the conditions above). It's hand-written forward and backward
-  passes over Accelerate (`cblas_sgemm`, vDSP): 10k situations × 20 epochs is about 2·10¹⁰ FLOPs,
-  a few seconds on an M-series CPU. MLX Swift would work too, but it adds a dependency and Metal
-  for no gain at this size. Use it only if the model grows tenfold.
-- **Inference:** one encoder pass, about 50k multiply-adds or 10–20 µs, on the learning queue at
-  each context change, with the result cached.
-
-**Uses:**
-1. Cold start for an app Tessel has never seen: its nearest known apps in embedding space lend
-   their priors for float or tile (item 1), Workspace (item 3) and Summon (item 4).
-2. Auto Workspaces: the predicted embedding of "after this window opens" against each Workspace's
-   current embedding gives a second opinion next to the counts.
-3. Summon: rank candidate apps by how close their token is to the predicted next situation.
-
-**Gate:** each use ships only if the on-device replay evaluation beats the counting model by 5
-points or more on held-out recent days. If it doesn't, counting stays. That's a real possibility
-with one person's data, and a fine outcome.
-
----
-
-## Apple Foundation Models (optional, language only)
-
-These are extras for Macs that have the on-device model. Tessel never depends on them, and none
-of them is part of the learning core. The model can't learn from you (there's no per-user
-fine-tuning), needs Apple Intelligence turned on and an eligible Mac, takes about 0.3–2 s per
-answer, and only exists on macOS 26, while Tessel supports macOS 14.
-
-**Gating:**
-
-```swift
-#if canImport(FoundationModels)
-import FoundationModels
-#endif
-
-func languageModelAvailable() -> Bool {
-    #if canImport(FoundationModels)
-    if #available(macOS 26, *) {
-        if case .available = SystemLanguageModel.default.availability { return true }
-        // .unavailable(.deviceNotEligible / .appleIntelligenceNotEnabled / .modelNotReady):
-        // the feature just doesn't appear. No prompts, no nagging.
-    }
-    #endif
-    return false
-}
-```
-
-The package stays at `.macOS(.v14)`. FoundationModels has to be weak-linked so Tessel still
-launches on macOS 14 and 15. Add `-weak_framework FoundationModels` to the Tessel target's
-linker flags, then check `otool -l` for `LC_LOAD_WEAK_DYLIB`. Each request uses a fresh
-`LanguageModelSession`, with `prewarm()` when Summon opens. Results are cached in memory, and
-nothing generated is written to disk except a Workspace name you keep.
-
-**1. Naming Workspaces.** The input is the app names and window titles in the Workspace. The output
-is a `@Generable struct WorkspaceName { @Guide(description: "one or two words") var name: String }`,
-shown in the badge and the menu instead of "Workspace 2". It's regenerated when more than half the
-Workspace changes. A name you edit is never overwritten.
-
-**2. Grouping by what titles mean.** For each new window, a `@Generable struct Topic { var project: String }`
-from its title ("tessel" from an Xcode project, a Terminal path, a Safari tab), batched, at most one
-call per new window, and skipped on battery. The topic becomes one more token in Auto Workspaces'
-co-occurrence counts, so windows about the same project end up together. The title and the topic
-stay in memory only. The topic token is hashed before it reaches `focus.jsonl`.
-
-**3. Plain-English commands in Summon.** When a query matches no app and reads like a sentence
-("put Safari and Xcode side by side", "move everything about tessel to 2"), the model fills a
-`@Generable struct WindowCommand { var action: Action; var apps: [String]; var workspace: Int? }`.
-`Action` is an enum of Tessel's own verbs: move, side by side, focus, hide, float. Apps are
-constrained to running apps. Summon shows a preview row ("↩ Put Safari and Xcode side by side")
-above the web-search row, and nothing runs until you press Return. There's no close or quit verb.
-
----
-
-## Privacy
-
-### Every network call Tessel makes today
-
-| What | When | Sends | Code |
-|---|---|---|---|
-| Sparkle update check: `GET https://tessel.sentientdonut.com/appcast.xml` | Once a day (`SUEnableAutomaticChecks`, `SUScheduledCheckInterval` 86400), or **Check for Updates…** | An ordinary request with Sparkle's User-Agent (app name and version). System profiling is off (`SUEnableSystemProfiling` isn't set). | [Info.plist](../Resources/Info.plist), [Updater.swift](../Sources/Tessel/Updater.swift) |
-| Sparkle download of an update | Only after you agree to install | Nothing beyond the request | Sparkle |
-| Refund check: `GET https://tessel.sentientdonut.com/api/revoked` | Licensed copies only, at most every 6.5 days (looked at on launch, every 30 minutes and on wake) | Nothing: no body, an ephemeral session, no identifiers. The list is compared on the Mac. | [Licensing.swift:70](../Sources/Tessel/Licensing.swift:70), [main.swift:104](../Sources/Tessel/main.swift:104) |
-| Summon's web search or typed address | When you choose it | **Tessel itself sends nothing.** It builds the URL from macOS's chosen search engine and hands it to your default browser over Apple Events, or `NSWorkspace.open`. The browser makes the request. | [Launcher.swift](../Sources/Tessel/Launcher.swift), [Browsers.swift](../Sources/Tessel/Browsers.swift) |
-| Buy, Lost License | When you choose them | Opens the website in your browser | [LicenseWindow.swift](../Sources/Tessel/LicenseWindow.swift), [main.swift](../Sources/Tessel/main.swift) |
-
-These aren't network calls, for completeness: license activation (an Ed25519 signature checked
-offline, `License.parse`), the `tessel://activate` link (handled locally), Spotlight file search
-(`NSMetadataQuery` on the local index), and `state.json`.
-
-### What learning adds: nothing
-
-No new requests, no telemetry, no crash reports, no "anonymous statistics", and no model downloads:
-models are trained here from your events, and Tessel ships with rules only. This is enforced by
-`NothingLeavesThisMac.onlyTheLicenseCheckGoesOnline`
-([EventLogTests.swift](../Tests/TesselCoreTests/EventLogTests.swift)). It scans every Swift file
-under `Sources/` for networking APIs (`URLSession`, `URLRequest`, `NWConnection`, `import Network`,
-sockets, WebSockets…) and fails if any file other than `Licensing.swift` has one. Foundation Models
-runs Apple's on-device model, and Tessel never asks a server model anything.
-
-### Controls
-
-- **Settings › Reset What Tessel Learned** (prototyped, shown while learning is on; `learning-reset`
-  for scripts). It deletes the `Learning` folder (every log, model and embedding) and the in-memory
-  models. Once item 4 ships it also clears `launcherUses` and learned lone-window shapes. Windows
-  open right now stay where they are. It keeps your license, trial, shortcuts, Workspace keys,
-  and current `layouts`/`placement`, because that's where your windows are, not something learned.
-  The shipping version asks first: "Forget everything Tessel learned about how you work? Your
-  windows stay where they are."
-- **Settings › What Tessel Learned…** (to do). A list of lessons in words, from
-  `FloatClassifier.lessons()` and friends, such as "Finder: small utility windows float (you floated
-  2)". Each has **Forget**, along with the on-device evaluation numbers and a **Show Log in Finder**
-  button.
-- **Settings › Learn From How I Work** (to do). A global switch: when it's off, nothing is logged and
-  only the rules decide. There's also a switch per feature (Auto Workspaces, Predictive Summon,
-  Autopilot).
-
-### Loose ends found while writing this (not changed here)
-
+| Sparkle update check, `GET tessel.sentientdonut.com/appcast.xml` | daily, or **Check for Updates…** | Sparkle's User-Agent (app name and version); system profiling is off |
+| Sparkle download | only after you agree to an update | the request |
+| Refund list, `GET tessel.sentientdonut.com/api/revoked` | licensed copies, at most every 6.5 days | nothing: no body, an ephemeral session, compared on the Mac |
+| Summon's web search, Buy, Lost License | when you choose them | nothing from Tessel: the URL opens in your browser |
+
+`NothingLeavesThisMac.onlyTheLicenseCheckGoesOnline` fails if any Swift file other than
+`Licensing.swift` uses networking APIs, so a learning feature that phones home breaks the build.
+Tessel ships with no pretrained model and no shared data: everything it knows, it learned from
+you.
+
+**Loose ends found along the way (not changed here):**
 - `privacy.html` says the daily update check can be turned off, but there's no switch for it in
-  Tessel's menu. Sparkle honors `defaults write com.tyleryouens.tessel SUEnableAutomaticChecks -bool NO`.
-  Either add an "Automatically Check for Updates" item or change the sentence.
-- Summon's file search always adds `/Volumes/Master Storage` to its scopes
-  ([Launcher.swift:242](../Sources/Tessel/Launcher.swift:242)). That's harmless elsewhere, but it's
-  specific to Tyler's Mac.
-- `userFloating` was never written to before this branch. The prototype leaves it alone and keeps
-  its own per-window choice in `Learning`.
-- When learning ships, `privacy.html` needs one more sentence, along the lines of: "To learn how you
-  arrange windows, Tessel keeps a log of app names, kinds of windows and times (never titles,
-  keystrokes or file names) in your Library on this Mac. It's never sent anywhere, and Settings ›
-  Reset What Tessel Learned deletes it."
+  Tessel. Sparkle honors `defaults write com.tyleryouens.tessel SUEnableAutomaticChecks -bool NO`.
+- Summon's file search always includes `/Volumes/Master Storage`, which only exists on Tyler's
+  Mac.
+- When learning ships, `privacy.html` needs a sentence like: "To learn where your windows go,
+  Tessel keeps a log of app names, kinds of windows and times (never titles, keystrokes or file
+  names) in your Library on this Mac. It's never sent anywhere, and Settings › What Tessel Learned
+  › Reset deletes it."
 
----
+## Tested
 
-## Marketing copy that stays literally true
+- **Unit tests** (`swift test`, 143 in all). New suites: `FloatClassifierLearns`, `WindowKinds`,
+  `UsualArrangements`, `WorkspaceHomes`, `NotAnnoying`, `EventLogStaysSmallAndLocal`,
+  `NothingLeavesThisMac`.
+- **Live, in the test VM (tessel-vm, macOS 27), 2026-10-16,** with TextEdit and Terminal:
+  - **Floats:** a document floated once still tiles next time. Floated twice, the next one floats
+    by itself at its natural size, with the quiet line. The undo key tiles it, and the next one
+    tiles.
+  - **Relaunch:** your floats and learned floats survive it.
+  - **Drag out twice:** floats the window where it's dropped.
+  - **Arrangements:** after a ⅔ / ⅓ split stood 35 s, a reopened TextEdit came back at ⅓ on the
+    right. Undo gave 50/50. Two undos forgot the arrangement.
+  - **Lone shape:** it came back.
+  - **Workspaces:** after moving TextEdit to Workspace 2 and counting 700 s there, a document
+    opened from a script went to Workspace 2 while Terminal kept the keyboard in Workspace 1.
+    Launched from Spotlight, it went to Workspace 2 and took me with it. The undo key brought it
+    back, and two undos forgot the home.
+  - **Lessons:** listed in words, and a click forgets one.
+- **Bugs found live and fixed:**
+  - Floating a document window once floated every document of that app. Now it takes two.
+  - Floats didn't survive a relaunch. Fixed with `memory.json`.
+  - A floated window kept its tall tile size. It now goes back to the size it opened at.
+  - Killing an app looked like "these windows should float".
+  - Moving windows recorded fake lone-window shapes.
+- **Not tested yet:**
+  - Tyler's real apps and displays;
+  - a logout and login (homes at startup);
+  - more than one display;
+  - Mail, Messages or Slack opening windows on their own;
+  - macOS 14 to 26 (the VMs exist: `VM_NAME=tessel-sonoma` etc.).
 
-Use:
-- "No account. Everything it learns stays on your Mac."
-- "Learns how you work, on your Mac." *(true from item 1; "the window manager you never configure"
-  is fair once items 1–3 ship)*
-- "Float a window once, and the next one like it floats too."
-- "It only changes what it does after you've shown it what you want." *(item 1; item 3's moves are
-  earned through suggestions you accepted)*
-- "Every automatic move says what it did, and one key undoes it."
-- "Forget everything it learned with one click."
-- "Works offline. Learning never needs the internet." *(update checks and the refund list just
-  wait)*
-- "No titles, keystrokes or file names are ever written down."
-- With Foundation Models: "On Macs with Apple Intelligence, it can name your Workspaces, using
-  Apple's on-device model."
+## Later, and only behind the same rules
 
-Avoid:
-- "No backend server" or "never connects to the internet": Sparkle and the refund list use
-  tessel.sentientdonut.com.
-- "100% private AI", "AI-powered" or anything that implies a cloud model.
-- "Learns from millions of users", or shipping any prior trained on other people's data. If that
-  ever changes, "learns from you" has to change with it.
-- "Saves battery" for Autopilot's drifting: parked windows still draw.
-- "Never sends anything": it fetches update and refund lists. "Never sends what it learns" is the
-  true version.
+- **Predictive Summon.** Rank Summon's empty-query list by context (Workspace, the app in front,
+  time of day) with decayed counts, capped so a typed match always wins. Optionally warm the
+  predicted app's files into the disk cache. Today's `launcherUses` is frequency only and never
+  decays.
+- **Autopilot (opt-in).** Grow the window you're typing in, or let windows you haven't touched for
+  hours drift to Workspace 3. It's the only thing that would move windows already in place, which
+  is why it's opt-in and last.
+- **A JEPA-style predictor**: a tiny (about 41k parameters, under 1 MB) embedding model trained
+  when the Mac is idle, with Accelerate, on the same events. It's for cold start (a new app
+  borrows from similar apps), and ships only if it beats the counting models on your own history
+  by 5 points or more.
+- **Apple Foundation Models**, behind `#available(macOS 26, *)`, `canImport(FoundationModels)`,
+  `SystemLanguageModel.default.availability == .available` and a weak link. It's for language
+  only: naming Workspaces, grouping windows by what their titles mean, and plain-English commands
+  in Summon that always show a preview row before running. It can't learn from you and is far too
+  slow for per-window decisions, so it's never part of the core.
 
----
+## Proposed site copy (for Tyler; not on the site)
 
-## Milestones
+This is written to be literally true of the branch as built. The day it ships, learning must be
+**on by default** for the hero to be honest. Until then, use the feature section only, with
+"Turn on Learn Where Windows Go".
 
-1. **Float or tile**: the prototype in this branch. Next: live testing in the VM, the ⌘⇧T
-   shortcut, the "What Tessel Learned" list, the global switch, and the reset confirmation. Then
-   turn it on by default.
-2. **Layout memory**: the template store and the synthetic `Layout.restore`, with tests built from
-   the existing permutation fixtures.
-3. **Auto Workspaces**: `focus.jsonl`, counts, suggestions, then moves, `ForeignFocus` gaining
-   `placedForYou`, and the undo key.
-4. **Predictive Summon**: naive Bayes ranking and warm pre-launch.
-5. **Autopilot**: opt-in, last.
-6. **The JEPA predictor**: once items 1–3 have a month of logs to evaluate against.
-7. **Foundation Models extras**: any time after item 3, since they're independent.
+**Hero**
+- Headline: **Tiling that learns where your windows go.**
+- Sub: *Float a window once and the next one floats. Arrange your apps once and they open that
+  way. Keep Mail in Workspace 2 and it opens there. No settings, no account, and everything it
+  learns stays on your Mac.*
 
-## Open questions
+Alternatives: "The window manager that learns your habits, not your secrets." / "Smart about
+your windows. Never annoying about it."
 
-- Should Float/Tile get a default shortcut (left ⌘⇧T) at launch, or stay in the menu until item 1
-  is on by default?
-- Auto Workspaces' undo key reuses ⌘⇧ + the current Workspace key. Is that discoverable enough, or
-  should the badge be clickable?
-- Should the learning folder be in backups after all? Leaving it out makes "stays on this Mac"
-  airtight, but a new Mac starts from zero.
+**Feature section: "It learns. Quietly."**
+- **Floats what you'd float.** Pull a window out of the tiles and Tessel stops tiling windows
+  like it.
+- **Opens apps the way you arranged them.** Your split, your sizes, every time.
+- **Sends new windows where they belong.** Each app opens in its Workspace, even after a
+  restart.
+- **Never in your way.** It only decides where *new* windows go. It never moves what you're
+  looking at, never steals focus, and never asks. One quiet line says what it did, and one key
+  undoes it.
+- **Yours, and only yours.** No account, no cloud, nothing sent anywhere. See every lesson in
+  words, and forget any of them with a click.
+
+**Avoid:** "AI-powered", "no backend server" (Sparkle and the refund list are served from
+tessel.sentientdonut.com), "never goes online", "learns from millions of users", and "saves
+battery".
+
+## Open questions for Tyler
+
+1. Turn learning on by default after you've used it for a few days?
+2. The undo key is ⌘ and the Workspace key you were in, named in every quiet line. Is that
+   discoverable enough, or should the line also be clickable?
+3. Should a window you launched from Spotlight take you to its app's Workspace (as built, like
+   the Dock), or open where you are?
+4. Should Float/Tile get a default shortcut? Every free combination clashes with something:
+   ⌘⇧T reopens closed tabs in browsers, and ⌘⇧↩ inserts a line in editors.
+5. Should the learning folder stay out of backups? That keeps "stays on this Mac" literal, but a
+   new Mac starts from zero.

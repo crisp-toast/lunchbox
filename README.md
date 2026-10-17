@@ -143,7 +143,7 @@ Commands: `welcome`, `welcome-<step 0…4>`, `welcomeclose`, `find:<text>` (open
 `balance`, `retile`, `displays-all`, `displays-main`, `pause`, `resume`, `expect:<bundle id>` (holds a
 placeholder for a window of that app, without opening anything, to try placeholders), `leave-app:<bundle id>` and
 `manage-app:<bundle id>` (stop and resume tiling one app's windows, for agents testing it on a
-dummy-plug display), `float` and `learning-reset` (see Learning below), and `dump`, which writes the
+dummy-plug display), the learning commands (see below), and `dump`, which writes the
 current state to `~/Library/Application Support/Tessel/state.json`.
 
 `pause` and `resume` do what the menu's **Tiling** item does. Pausing brings back windows parked in
@@ -165,15 +165,30 @@ Logs (`/usr/bin/log`, since zsh has its own `log` builtin):
 /usr/bin/log stream --predicate 'subsystem == "com.tyleryouens.tessel"' --info
 ```
 
-## Learning (prototype, off by default)
+## Learning where your windows go (off by default for now)
 
-Tessel can learn which windows you want floating instead of tiled, from your corrections, entirely
-on this Mac ([docs/learning.md](docs/learning.md) has the whole plan). Turn it on with
-`defaults write com.tyleryouens.tessel learnFloating -bool YES`, then pause and resume tiling. The
-menu gains **Float This Window** / **Tile This Window** (also the `float` command), and dragging a
-tiled window out of its tile twice in a row floats it where you drop it. The next window of the same
-kind follows. **Settings › Reset What Tessel Learned** (or `learning-reset`) forgets it all. The log
-is `~/Library/Application Support/Tessel/Learning/float.jsonl`, and `dump` adds a `learning` section.
+**Settings › Learn Where Windows Go** turns it on. Tessel then learns from what you do, entirely
+on this Mac ([docs/learning.md](docs/learning.md)):
+
+- **It floats what you'd float.** Float a window from the menu (**Float This Window**), or drag
+  it out of its tile twice in a row, and the next window like it floats by itself. A full
+  document window takes two.
+- **It opens apps in your usual arrangement.** A split you made and kept comes back when one of
+  the apps opens again beside the others, and so does the size you gave a lone window.
+- **It sends new windows to the Workspace they belong in.** Move an app's window to a Workspace
+  and keep it there for ten minutes, and its new windows open there. Windows you open from
+  Summon or the Dock still come to you.
+
+It only ever decides where a new window lands, never takes focus, and never asks anything. Each
+time it acts, a quiet line at the bottom of the screen says what happened, and ⌘ with the key of
+the Workspace you were in undoes it. Undo the same thing twice and Tessel forgets it.
+**Settings › What Tessel Learned** lists every lesson in words: click one to forget it, or reset
+them all. It keeps everything in `~/Library/Application Support/Tessel/Learning`, out of
+backups, and never sends any of it anywhere.
+
+Commands: `learning-on`, `learning-off`, `float` (float or tile the focused window),
+`learning-reset`, and `learning-lived:<seconds>` (counts that much window time at once, to try
+Workspace homes without waiting). `dump` adds a `learning` section.
 
 ## Website
 
