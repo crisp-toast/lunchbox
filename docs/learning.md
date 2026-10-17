@@ -62,9 +62,9 @@ These are decision models, not chat:
 - an undo ledger that makes Tessel back off.
 
 Each runs in microseconds, learns from your own corrections, and stays on your Mac. That's
-literally true, and it's what the marketing can say. Predictive Summon, Autopilot, the
-JEPA-style predictor and Foundation Models are later extras (see the end of this doc). They're
-not part of the promise.
+literally true, and it's what the marketing can say. Predictive Summon, Autopilot, a
+fine-tuned open System One model and Foundation Models are later extras (see the end of this
+doc). They're not part of the promise.
 
 ## Not annoying, as hard rules
 
@@ -293,10 +293,10 @@ you.
 - **Autopilot (opt-in).** Grow the window you're typing in, or let windows you haven't touched for
   hours drift to Workspace 3. It's the only thing that would move windows already in place, which
   is why it's opt-in and last.
-- **A JEPA-style predictor**: a tiny (about 41k parameters, under 1 MB) embedding model trained
-  when the Mac is idle, with Accelerate, on the same events. It's for cold start (a new app
-  borrows from similar apps), and ships only if it beats the counting models on your own history
-  by 5 points or more.
+- **An open System One decision model** (Laya, Julia 1), fine-tuned on labeled windows once there
+  are several hundred. Zero-shot they lose to the rules on windows
+  ([system-one-research.md](system-one-research.md)). One ships only if it beats the small window
+  classifier on held-out apps, and fits Tessel's memory and size budget.
 - **Apple Foundation Models**, behind `#available(macOS 26, *)`, `canImport(FoundationModels)`,
   `SystemLanguageModel.default.availability == .available` and a weak link. It's for language
   only: naming Workspaces, grouping windows by what their titles mean, and plain-English commands

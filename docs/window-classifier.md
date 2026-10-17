@@ -31,7 +31,8 @@ is off by default.
   name), and Apple's on-device word vectors (`NLEmbedding`, about 0.02 ms a word). Those are
   projected down to 6 numbers.
 - **Model:** a softmax head over both views (`BehaviorModel`, weights in
-  `Sources/TesselCore/BehaviorModelWeights.swift`, 47 KB).
+  `Sources/TesselCore/BehaviorModelWeights.swift`, 45 KB). It's shaped like a System One model:
+  the window's state in, one probability per behavior out, nothing generated.
 - **Safety floor** (`BehaviorDecision.combine`):
   - a dialog by the old rules is always a dialog;
   - the model only counts when it's at least 50% sure;
@@ -40,21 +41,19 @@ is off by default.
 - **Your corrections** on top: Float/Tile and the double drag still teach `FloatClassifier`, and
   the classifier's call is the starting point those lessons adjust.
 
-### The JEPA-style part, honestly
+### Open System One models, tried in its place
 
-The trainer includes a JEPA-style encoder: two linear encoders, one per view. Each learns to
-predict the other view's embedding against a slowly-moving target copy, with VICReg-style
-variance and covariance terms so it can't collapse. With 84 labeled windows it **doesn't help**:
+Tyler's direction was an open, on-device System One decision model like Jev. The two that fit
+on a Mac were benchmarked on the same 84 windows: Laya-multilingual on the Neural Engine, and
+Julia 1. Results are in [system-one-research.md](system-one-research.md).
 
-- feeding only that embedding to the head scores 58–61%;
-- adding it next to the views scores no better than the views alone, and is noisier.
+- **Zero-shot,** they get 38–52% of windows right, against the rules' 80%.
+- **Fed to this head as extra inputs,** they add nothing.
+- **Cost:** they are 100–400× slower and use about a gigabyte.
 
-So the shipped head reads the two views directly (the encoder is off in the shipped weights).
-
-JEPA's real strength is learning *without labels*, and every Mac has plenty of unlabeled
-windows. The next experiment is to train the encoder on each Mac's own windows, privately and
-in idle time, and to use its embedding for your corrections: "float this inspector" would then
-carry over to inspectors in other apps. It ships only if it beats this head on held-out apps.
+So this small classifier keeps their shape (a typed choice with calibrated probabilities and a
+confidence gate) without their weight. An earlier JEPA-style encoder was removed: it never
+helped either.
 
 ## How well it does
 
@@ -73,7 +72,7 @@ carry over to inspectors in other apps. It ships only if it beats this head on h
 | | Right behavior (5 classes) | Right tile-or-not |
 |---|---|---|
 | Today's rules | 80% (67/84) | 88% (74/84) |
-| Model alone (plain head, any seed) | 85% (71/84) | 92–93% |
+| Model alone | 85% (71/84) | 93% (78/84) |
 | **Shipped** (safety floor, model when ≥ 50% sure) | **87% (73/84)** | **96% (81/84)** |
 | Shipped at a more cautious 70% | 85% | 92% |
 
@@ -99,8 +98,7 @@ Recall per class, for the rules, the model alone, and the shipped decision:
 
 **Read these numbers with care:**
 - 84 windows is small. A difference of 5 points is about 4 windows, so it's promising, not proven.
-- The 50% threshold and the plain-versus-JEPA choice were picked on these same results, which
-  flatters them a little.
+- The 50% threshold was picked on these same results, which flatters it a little.
 - There are too few transient and media windows to learn anything from: the model barely
   recognizes them, and the safety floor keeps the rules there.
 - Every window came from one macOS version. The VMs for 14, 15 and 26 exist and run the same
@@ -142,6 +140,6 @@ Voice Memos documents tiled. Under the old rules all of these would have tiled.
    numbers.
 2. **Media and transient:** capture Picture in Picture from browsers, call windows, and copy and
    install progress on slower disks.
-3. **JEPA on unlabeled windows,** trained on each Mac in idle time as described above, plus
-   few-shot corrections in its embedding.
+3. **A System One model again,** fine-tuned on windows rather than zero-shot, once there are
+   several hundred labeled windows: see system-one-research.md.
 4. **Tyler's own windows:** use the panel for a few days and note every ◆ that's wrong.

@@ -44,8 +44,7 @@ one of these projects is less than six weeks old.
 ## How it would work in Tessel
 
 The `WindowTraits` reader, the safety floor of the old rules, the panel and the labeled windows
-all stay. The JEPA-style encoder and the home-made softmax head go. In their place, on the
-window's app queue, at first sight:
+all stay. A System One model would answer, on the window's app queue, at first sight:
 
 - **state:** one short line built from the traits. For example: `Finder window "doc.pdf Info":
   standard, resizable, close/minimize/zoom, 265×565 (8% of screen), normal level`. The title is
@@ -81,13 +80,73 @@ Two notes on the format:
   and tokenize with a Swift tokenizer (Hugging Face's swift-transformers reads `tokenizer.json`,
   Apache-2.0).
 
-## Next step
+## Results: both models, on this Mac
 
-Benchmark both front-runners zero-shot on this Mac (an M4) against the 84 labeled windows in
-`Training/windows.jsonl`. Measure accuracy against the old rules, latency on the Neural Engine
-and CPU, and memory. Then build the winner into Tessel through Core ML. That needs downloading:
-- `aac6fef/laya-multilingual-coreml-ane` (Apache-2.0, a few hundred MB) and the `laya-coreml`
-  Python package, for the benchmark only;
-- `SupersonicLabs/Julia-1` (Apache-2.0, about 550 MiB) and its Python runtime with PyTorch CPU.
+Run 2026-10-16 on the M4 Mac mini (macOS 27.2):
+- **Data:** the 84 hand-labeled windows in `Training/windows.jsonl` (52 apps).
+- **Scripts:** `Training/system-one/bench.py` and `hybrid.py`.
+- **Downloads:** the models are in `/Volumes/Master Storage/AI-Models/system-one`, and the
+  Python environment is in `/Volumes/Master Storage/Dev.noindex/venvs/system-one`.
+- **Prompt:** each window became a one-line state, like `Finder "doc.pdf Info": StandardWindow,
+  265x565, 8% screen, close minimize zoom`, with one `choice` question, "What kind of window is
+  this?", over five short options. The prompt was written once, before any result, and kept short
+  to fit Laya's 96-token Neural Engine window (at most 42 state tokens; nothing was cut).
+- **Training:** nothing was trained on the windows (zero-shot).
 
-Both would go in `/Volumes/Master Storage/AI-Models/`.
+**Zero-shot** (right behavior / right tile-or-not):
+
+| | Behavior | Tile-or-not | Notes |
+|---|---|---|---|
+| Today's rules | 80% | 88% | |
+| Laya-multilingual, Core ML on the Neural Engine | 38% | 45% | calls 51 of 84 windows "tool panel" |
+| Julia 1, CPU, short prompt | 51% | 54% | calls 70 of 84 windows "document" |
+| Julia 1, CPU, longer prompt | 52% | 54% | |
+| Laya + safety floor, acting only when ≥ 90% sure | 79% | 87% | |
+| Julia 1 + safety floor, ≥ 90% sure | 76% | 85% | |
+| **Tessel's own small classifier** (held out by app) | **85%** | **93%** | **87% / 96% shipped** |
+
+**Speed and size,** measured in the Python runtimes:
+
+| | Per decision | Load | Peak memory (Python process) | Download |
+|---|---|---|---|---|
+| Laya-multilingual Core ML, Neural Engine | **5.5 ms** median, 5.6 ms p95 | 19 s (Core ML compiles on first load) | 1.57 GB | 648 MiB |
+| Julia 1, PyTorch CPU | 13.7 ms (short prompt), 18.8 ms (longer) | 2.4 s | 1.05 GB | 584 MiB |
+| Tessel's own classifier, in Swift | 0.04 ms | none (45 KB of weights) | about 5 MB, for Apple's word vectors | none |
+
+Python overstates memory. Natively, Laya's 375 MiB embedding table could be memory-mapped, so
+only the rows a title uses would be resident. That's not measured.
+
+**As helpers rather than deciders:** each model's five probabilities were added as extra inputs
+to Tessel's small head, again held out by app.
+
+| Head reads | Behavior | Tile-or-not |
+|---|---|---|
+| Tessel's features | 85% | 92% |
+| Tessel's features + Laya | 85% | 92% |
+| Tessel's features + Julia 1 | 85–86% | 92% |
+| Window structure + Laya, instead of Tessel's title features | 85% | 92% |
+| A model's answer alone, recalibrated on the labels | 43–54% | 63–68% |
+
+**What this says:**
+1. Out of the box, these System One models don't understand windows. They were trained on
+   tickets, intents and emotions, and a window's subrole, buttons and size mean nothing to them.
+   Laya's own notes say the same: out-of-domain cases are fixed only with labels and refitting.
+2. With Tessel's labels, they add nothing the small classifier doesn't already know. Laya's
+   answer can replace Tessel's hand-made title features at equal accuracy, the one place it
+   does real work (reading titles), but no better.
+3. They cost 100–400× the time per decision, about a gigabyte of memory in these runtimes,
+   0.6 GB of download, and macOS 15 for the Neural Engine path.
+
+## What would make a System One model worth it
+
+- **Fine-tune one on windows,** not zero-shot. Laya supports fine-tuning on your own decisions
+  and re-exporting to Core ML. That needs several hundred labeled windows, which is the
+  follow-up that grows the set to 300+.
+- **Shrink it first.** Most of Laya's size is a 256k-token multilingual vocabulary. Julia 1
+  (144M) converted to Core ML would likely run in a few milliseconds on the Neural Engine, but
+  that's unmeasured.
+- **Ship it only if** it beats the small classifier on held-out apps, and fits a menu-bar app's
+  memory and download budget.
+
+Until then, Tessel's classifier keeps the System One shape (a typed choice with calibrated
+probabilities, a confidence gate and the rules as a floor) at 0.04 ms and 45 KB.

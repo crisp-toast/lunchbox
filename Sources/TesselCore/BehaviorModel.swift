@@ -2,8 +2,7 @@ import Foundation
 import NaturalLanguage
 
 /// Turns a window into numbers, in two views: how it's built (Accessibility role, buttons,
-/// window level, size, app) and what its title says. The views are what the JEPA-style
-/// encoder learns to tie together (`BehaviorModel`).
+/// window level, size, app) and what its title says (`BehaviorModel` reads both).
 public enum BehaviorFeatures {
     // MARK: Structure
 
@@ -129,19 +128,13 @@ public final class TitleMeaning: @unchecked Sendable {
     }
 }
 
-/// The window classifier: a JEPA-style encoder that maps a window's two views into one small
-/// embedding, and a softmax head that reads its behavior off that embedding.
+/// The window classifier, shaped like a System One decision model (Jev's typed `choice`): a
+/// window's state goes in, one probability per behavior comes out, and nothing is generated.
+/// It reads the window's two views (`BehaviorFeatures`), standardized, with a softmax head.
 ///
-/// - Encoder: the structure view goes through `structure` to `z`; the title view (its words
-///   and its meaning, `TitleMeaning` projected by `meaning`) goes through `title` to `y`.
-///   Trained so that `predictor` applied to `z` predicts `y` (predicting the other view's
-///   embedding, not its raw form, which is the JEPA idea), on every window, labeled or not.
-///   A window with no useful title still gets an idea of what it means from how it's built.
-/// - Head: softmax regression on [z, y, predictor(z)].
-/// - Your corrections: nearest neighbors in that embedding (`Prototype`), so floating one
-///   inspector carries over to inspectors in other apps.
-///
-/// Small on purpose (a few thousand numbers): a decision takes well under a millisecond.
+/// Small on purpose (a few thousand numbers): a decision takes about 0.05 ms. The open System One
+/// models (Laya, Julia 1) were tried in its place and did worse on windows; see
+/// docs/system-one-research.md.
 public struct BehaviorModel: Codable, Sendable {
     public var structureMean: [Double]
     public var structureScale: [Double]
@@ -149,37 +142,22 @@ public struct BehaviorModel: Codable, Sendable {
     public var titleScale: [Double]
     /// Projects Apple's word vectors (`TitleMeaning`) to a few dimensions; empty without them.
     public var meaning: [[Double]]
-    public var structure: [[Double]]
-    public var title: [[Double]]
-    public var predictor: [[Double]]
-    /// Standardizes the embedding before the head.
-    public var embeddingMean: [Double]
-    public var embeddingScale: [Double]
-    /// Rows by `classes`, over the embedding plus a bias.
+    /// Rows by `classes`, over both views plus a bias.
     public var head: [[Double]]
     public var classes: [WindowBehavior]
-    /// What the head reads: the JEPA embedding alone, or the two views as well.
-    public var headReadsViews: Bool
     /// Below this probability, the rules decide.
     public var threshold: Double
     public var trainedOn: Int
     public var note: String
 
     public init(structureMean: [Double], structureScale: [Double], titleMean: [Double], titleScale: [Double],
-                meaning: [[Double]], structure: [[Double]], title: [[Double]], predictor: [[Double]],
-                embeddingMean: [Double], embeddingScale: [Double], head: [[Double]], classes: [WindowBehavior],
-                headReadsViews: Bool, threshold: Double, trainedOn: Int, note: String) {
-        self.headReadsViews = headReadsViews
+                meaning: [[Double]], head: [[Double]], classes: [WindowBehavior], threshold: Double,
+                trainedOn: Int, note: String) {
         self.structureMean = structureMean
         self.structureScale = structureScale
         self.titleMean = titleMean
         self.titleScale = titleScale
         self.meaning = meaning
-        self.structure = structure
-        self.title = title
-        self.predictor = predictor
-        self.embeddingMean = embeddingMean
-        self.embeddingScale = embeddingScale
         self.head = head
         self.classes = classes
         self.threshold = threshold
@@ -187,23 +165,20 @@ public struct BehaviorModel: Codable, Sendable {
         self.note = note
     }
 
-    /// A window's embedding. `meaning` is its title's word vectors (`TitleMeaning`), or empty.
-    public func embed(_ t: WindowTraits, meaning words: [Double]) -> [Double] {
+    /// What the head reads: both views, standardized. `meaning` is the title's word vectors
+    /// (`TitleMeaning`), or empty.
+    public func inputs(_ t: WindowTraits, meaning words: [Double]) -> [Double] {
         let s = zip(BehaviorFeatures.structure(t), zip(structureMean, structureScale)).map { ($0 - $1.0) / $1.1 }
         var titleView = BehaviorFeatures.title(t)
         if !meaning.isEmpty {
             titleView += words.count == meaning.first?.count ? Self.apply(meaning, words) : [Double](repeating: 0, count: meaning.count)
         }
-        let tv = zip(titleView, zip(titleMean, titleScale)).map { ($0 - $1.0) / $1.1 }
-        let z = Self.apply(structure, s)
-        let y = Self.apply(title, tv)
-        let p = Self.apply(predictor, z)
-        return (headReadsViews ? s + tv : []) + z + y + p
+        return s + zip(titleView, zip(titleMean, titleScale)).map { ($0 - $1.0) / $1.1 }
     }
 
     /// Probabilities for each of `classes`.
-    public func probabilities(of embedding: [Double]) -> [Double] {
-        let x = zip(embedding, zip(embeddingMean, embeddingScale)).map { ($0 - $1.0) / $1.1 } + [1]
+    public func probabilities(_ t: WindowTraits, meaning: [Double]) -> [Double] {
+        let x = inputs(t, meaning: meaning) + [1]
         let logits = head.map { row in zip(row, x).reduce(0) { $0 + $1.0 * $1.1 } }
         let m = logits.max() ?? 0
         let e = logits.map { exp($0 - m) }
@@ -213,7 +188,7 @@ public struct BehaviorModel: Codable, Sendable {
 
     /// The behavior it would give a window, and how sure it is.
     public func classify(_ t: WindowTraits, meaning: [Double]) -> (behavior: WindowBehavior, confidence: Double) {
-        let p = probabilities(of: embed(t, meaning: meaning))
+        let p = probabilities(t, meaning: meaning)
         let best = p.indices.max { p[$0] < p[$1] } ?? 0
         return (classes[best], p[best])
     }
