@@ -10,6 +10,12 @@
 	<string>Tessel</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Tessel asks your browser to open Summon's web searches in its own window, as a new tab or a new tiled window, instead of a pop-up.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>Summon lists the files on your Desktop whose names match what you type.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Summon lists the files in Documents whose names match what you type.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Summon lists the files in Downloads whose names match what you type.</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
