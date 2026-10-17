@@ -302,9 +302,9 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     private func searchFiles(_ terms: [String]) {
         guard !terms.isEmpty else { return }
         let q = NSMetadataQuery()
-        q.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: terms.map {
-            NSPredicate(format: "%K LIKE[cd] %@", NSMetadataItemFSNameKey, "*\($0)*")
-        })
+        let parts = terms.map { NSPredicate(format: "%K LIKE[cd] %@", NSMetadataItemFSNameKey, "*\($0)*") }
+        // NSMetadataQuery throws on an AND of just one predicate.
+        q.predicate = parts.count == 1 ? parts[0] : NSCompoundPredicate(andPredicateWithSubpredicates: parts)
         q.searchScopes = [NSMetadataQueryUserHomeScope, URL(fileURLWithPath: "/Volumes/Master Storage")]
         q.sortDescriptors = [NSSortDescriptor(key: "kMDItemLastUsedDate", ascending: false)]
         NotificationCenter.default.addObserver(self, selector: #selector(filesFound(_:)), name: .NSMetadataQueryDidFinishGathering, object: q)
