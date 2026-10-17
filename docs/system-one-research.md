@@ -137,14 +137,86 @@ to Tessel's small head, again held out by app.
 3. They cost 100–400× the time per decision, about a gigabyte of memory in these runtimes,
    0.6 GB of download, and macOS 15 for the Neural Engine path.
 
+## Round 2: getting the most out of them
+
+Researched the documented ways to get better answers, then tested each one on both models. All
+variants were written down before any was run (`Training/system-one/bench2.py`).
+
+What the sources say:
+- **Laya:**
+  - stay under 20 options;
+  - option order changes answers, and averaging over rotations cut that from 16% to 6%;
+  - a yes/no ("noul") question needs explicit true/false criteria;
+  - `score` is the weakest question type;
+  - split hard label sets into coarse then fine;
+  - shipped confidences are over-confident;
+  - base checkpoints are "near chance zero-shot" on typed decisions (36%), and fine-tuning took
+    them to 77% ([repo](https://github.com/NandhaKishorM/laya)).
+- **Julia 1:** describe options clearly and distinctly, and give yes/no questions descriptive
+  criteria (483 vs 391 of 600 on its benchmark) ([card](https://huggingface.co/SupersonicLabs/Julia-1)).
+- **TypeSafe on Jev:** make questions atomic and combine them in code.
+- **Zhao et al., [Calibrate Before Use](https://arxiv.org/pdf/2102.09690):** divide out the model's
+  built-in lean, learned from a content-free input or a batch of unlabeled inputs. No labels needed.
+
+Tested, on both models (right behavior / right tile-or-not; old rules 80% / 88%; always answering
+"document" 56% / 56%):
+
+| Design | Laya | Julia 1 |
+|---|---|---|
+| Round 1: five options, numbers in the state | 38% / 45% | 51% / 54% |
+| State in plain words (sizes as words, missing buttons spelled out) | 48% / 61% | 36% / 56% |
+| Plus descriptive options | 35% / 46% (state cut in 50 of 84) | 54% / 56% |
+| Plus averaging over all five option orders | 35–42% / 49–55% | 57% / 57% (calls every document a document, little else) |
+| Four atomic yes/no questions, combined in code | 18–27% / 44–55% | 14–25% / 39–45% |
+| Coarse then fine: tile or float first, then which kind | 55–56% / 56–64% | 48–54% / 50–54% |
+| Batch or contextual calibration (on each of the above) | helps rarely, often hurts | mostly hurts |
+| Ask only where the rules would tile: "is this really a document?" | AUROC 0.51–0.75; no threshold fixes more than it breaks | AUROC 0.32–0.49 |
+| Best of any design, with the rules as the floor and the model only when ≥ 90% sure | 80% / 88% (equal to the rules) | 81% / 89% (one window better) |
+
+Speed for the richer designs: Laya 6.4 ms (one question), 13 ms (coarse then fine), 25 ms (four
+yes/no questions) and 33 ms (five rotations). Julia 1: 12–30 ms, and 82 ms with rotations.
+
+**Conclusion:** no question design, output count or calibration makes either model competitive
+zero-shot. The best ones mostly fall back on calling everything a document. Laya's own notes say
+the same: these are bases to fine-tune, not zero-shot engines.
+
+## How much space one adds to the app
+
+Tessel.app is **6.7 MB** today. The weights hardly compress (lzfse saves 5–8% on them, but takes
+the 32 MiB tokenizer down to 5 MiB), so the download grows almost as much as the installed app.
+
+Where the size goes:
+- **Laya:** a 240 MiB Core ML encoder (110M parameters), plus a 375 MiB vocabulary table
+  (256,000 tokens × 768, FP16), plus a 32 MiB tokenizer.
+- **Julia 1:** 144M parameters at FP32, 550 MiB, of which 98M (68%) is the same 256,000-token
+  vocabulary at 384 wide; the transformer is only about 46M. Plus the same tokenizer.
+
+| Version | Added to the installed app | Added to the download (est.) |
+|---|---|---|
+| Laya, as downloaded | **+648 MiB** | +575 MiB |
+| Julia 1, as downloaded | **+584 MiB** | +520 MiB |
+| Laya, 8-bit encoder (measured: 121 MiB) and 8-bit vocabulary | +342 MiB | +300 MiB |
+| Laya, 4-bit encoder (measured: 61 MiB) and vocabulary trimmed to 32k tokens, 8-bit | about +90 MiB | about +85 MiB |
+| Julia 1, 8-bit, full vocabulary | about +170 MiB | about +145 MiB |
+| Julia 1, 4-bit transformer and vocabulary trimmed to 32k tokens, 8-bit | about +40 MiB | about +35 MiB |
+
+- **Measured:** the 8-bit and 4-bit encoder sizes came from coremltools on this Mac. The trimmed
+  rows are estimates.
+- **Untested:** how much accuracy the quantized versions lose.
+- **Trimming has a cost:** cutting the vocabulary to 32k tokens keeps roughly English and a few
+  European languages. The 84 windows' titles and app names used only 180 distinct tokens, but
+  real users' titles are in every language. 64k tokens would add about 25 MiB (Laya) or 12 MiB
+  (Julia 1).
+- **Memory** at runtime is roughly the model's size again.
+
 ## What would make a System One model worth it
 
 - **Fine-tune one on windows,** not zero-shot. Laya supports fine-tuning on your own decisions
   and re-exporting to Core ML. That needs several hundred labeled windows, which is the
   follow-up that grows the set to 300+.
-- **Shrink it first.** Most of Laya's size is a 256k-token multilingual vocabulary. Julia 1
-  (144M) converted to Core ML would likely run in a few milliseconds on the Neural Engine, but
-  that's unmeasured.
+- **Shrink it first:** 4-bit weights and a trimmed vocabulary, as in the size table above. Julia 1
+  is the better base for size (about 40 MiB at the small end). Laya is the fastest on the Neural
+  Engine.
 - **Ship it only if** it beats the small classifier on held-out apps, and fits a menu-bar app's
   memory and download budget.
 
