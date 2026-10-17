@@ -108,9 +108,13 @@ public struct EventLog<Event: LoggedEvent> {
         }
     }
 
-    /// The folder is yours alone, and stays out of Time Machine and other backups: what
-    /// Tessel learns stays on this Mac.
-    private func makeFolder() throws {
+    private func makeFolder() throws { try PrivateFolder.make(folder) }
+}
+
+/// The learning folder is yours alone, and stays out of Time Machine and other backups:
+/// what Tessel learns stays on this Mac.
+enum PrivateFolder {
+    static func make(_ folder: URL) throws {
         let fm = FileManager.default
         guard !fm.fileExists(atPath: folder.path) else { return }
         try fm.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
