@@ -25,6 +25,15 @@ final class Learning {
         var decision: FloatDecision
         /// Wall-clock seconds when it was first seen.
         var seenAt: Double
+        /// What the window classifier made of it, and whether that went against the rules.
+        var behavior: WindowBehavior? = nil
+        var byModel: Bool? = nil
+    }
+
+    /// What Tessel decided for a window it just saw.
+    struct Verdict {
+        var decision: FloatDecision
+        var behavior: WindowBehavior
     }
 
     /// What isn't a log: kept as it is now, in memory.json.
@@ -126,30 +135,44 @@ final class Learning {
 
     // MARK: Float or tile
 
-    /// The first time Tessel sees a window that could tile: whether it should. Runs on the
-    /// window's app queue. nil when learning is off. `features` reads the window over
-    /// Accessibility and runs outside the lock.
-    func decide(_ id: CGWindowID, rule: FloatChoice, features: ([CGRect]) -> FloatFeatures?) -> FloatDecision? {
-        let (on, known, screens) = state.withLock { ($0.on, $0.seen[id]?.decision, $0.screens) }
+    /// The first time Tessel sees a window that could tile: how it behaves. Runs on the window's
+    /// app queue; nil when learning is off. `read` reads the window over Accessibility (outside
+    /// the lock); its title is used here and not kept.
+    ///
+    /// The window classifier (`BehaviorModel.base`, under the rules' safety floor) says what kind
+    /// of window it is; that's the starting point your own corrections (`FloatClassifier`) adjust.
+    func decide(_ id: CGWindowID, read: ([CGRect]) -> WindowTraits?) -> Verdict? {
+        let (on, known, screens) = state.withLock { ($0.on, $0.seen[id], $0.screens) }
         guard on else { return nil }
-        if let known { return known }
-        guard let f = features(screens) else { return nil }
+        if let known { return Verdict(decision: known.decision, behavior: known.behavior ?? (known.decision.choice == .tile ? .document : .panel)) }
+        guard let traits = read(screens) else { return nil }
+        let started = CACurrentMediaTime()
+        let meaning = TitleMeaning.shared.vector(traits.title)
+        let kind = BehaviorDecision.decide(traits, model: Self.model, meaning: meaning, floatingApps: Tiler.floatingApps)
+        let classified = CACurrentMediaTime() - started
+        let f = FloatFeatures(traits)
         // Only ever an app's own queue waits here, and only right after tiling starts.
         if loading.wait(timeout: .now() + 1) == .timedOut {
             learningLog.error("the learning log took over a second to read; deciding window \(id) by the rules")
         }
         let decision = state.withLock { s in
             if let known = s.seen[id] { return known.decision }
-            let decision = s.model.decide(f, rule: rule)
-            s.seen[id] = Seen(features: f, decision: decision, seenAt: Self.now)
+            let decision = s.model.decide(f, rule: kind.behavior.tiles ? .tile : .float)
+            s.seen[id] = Seen(features: f, decision: decision, seenAt: Self.now, behavior: kind.behavior, byModel: kind.byModel)
             return decision
+        }
+        if kind.byModel {
+            learningLog.notice("window \(id) (\(f.app, privacy: .public)) is a \(kind.behavior.rawValue, privacy: .public) (\(kind.confidence, format: .fixed(precision: 2)) sure, the rules said otherwise), decided in \(classified * 1000, format: .fixed(precision: 3)) ms")
         }
         if decision.source == .learned {
             learningLog.notice("window \(id) (\(f.app, privacy: .public)) will \(decision.choice.rawValue, privacy: .public): learned, p(float) \(decision.floatProbability, format: .fixed(precision: 2))")
         }
         scheduleSave()
-        return decision
+        return Verdict(decision: decision, behavior: kind.behavior)
     }
+
+    /// The window classifier Tessel ships with.
+    static let model = BehaviorModel.base
 
     /// What was decided for a window, if anything.
     func decision(for id: CGWindowID) -> FloatDecision? {
@@ -447,26 +470,6 @@ final class Learning {
     }
 
     // MARK: Reading a window
-
-    /// What a window looks like to the classifier. Runs on its app's queue. `subrole` and
-    /// `resizable` are passed in from the read Tessel already made.
-    static func features(of element: AXUIElement, app: AppHandle, frame: CGRect, subrole: String?,
-                         resizable: Bool, tabs: Int, screens: [CGRect]) -> FloatFeatures? {
-        guard let bundleID = app.bundleID else { return nil }
-        var buttons: WindowButtons = []
-        if element.element(kAXCloseButtonAttribute) != nil { buttons.insert(.close) }
-        if element.element(kAXMinimizeButtonAttribute) != nil { buttons.insert(.minimize) }
-        if element.element(kAXZoomButtonAttribute) != nil { buttons.insert(.zoom) }
-        if element.element(kAXFullScreenButtonAttribute) != nil { buttons.insert(.fullScreen) }
-        let center = CGPoint(x: frame.midX, y: frame.midY)
-        let screen = screens.first { $0.contains(center) }
-            ?? screens.max { $0.intersection(frame).area < $1.intersection(frame).area }
-        let share = screen.map { frame.area / max(1, $0.area) } ?? 0.5
-        let name = NSRunningApplication(processIdentifier: app.pid)?.localizedName
-        return FloatFeatures(app: bundleID, subrole: subrole, resizable: resizable, buttons: buttons, size: frame.size,
-                             screenShare: share, title: TitleKind(title: element.string(kAXTitleAttribute), appName: name),
-                             tabs: tabs > 0)
-    }
 
     /// An app's name for people, from its bundle ID.
     static func appName(_ bundleID: String) -> String {

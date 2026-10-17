@@ -12,6 +12,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     var onShowHelp: (() -> Void)?
     var onShowWelcome: (() -> Void)?
     var onShowShortcuts: (() -> Void)?
+    var onShowWindowClasses: (() -> Void)?
     var onEnterLicense: (() -> Void)?
     var onBuy: (() -> Void)?
     var onCheckForUpdates: (() -> Void)?
@@ -113,6 +114,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         if Learning.shared.isOn {
             let learned = NSMenuItem(title: "What Tessel Learned", action: nil, keyEquivalent: "")
             let lessons = NSMenu()
+            lessons.addItem(action("How Tessel Sees Your Windows…") { [weak self] in self?.onShowWindowClasses?() })
+            lessons.addItem(.separator())
             let list = Learning.shared.lessons()
             if list.isEmpty {
                 lessons.addItem(disabled: "Nothing yet")

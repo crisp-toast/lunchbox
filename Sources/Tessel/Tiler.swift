@@ -359,7 +359,8 @@ final class Tiler {
 
     /// Runs on the app's queue.
     private static func readWindows(of app: AppHandle) -> [WindowInfo] {
-        app.element.elements(kAXWindowsAttribute).compactMap { element in
+        let all = app.element.elements(kAXWindowsAttribute)
+        return all.compactMap { element in
             guard let id = element.windowID, let frame = element.frame else { return nil }
             let standard = element.role == kAXWindowRole && element.subrole == kAXStandardWindowSubrole
             let minimized = element.isMinimized
@@ -376,15 +377,20 @@ final class Tiler {
                 && element.element(kAXZoomButtonAttribute) != nil)
             let tabs = element.elements(kAXChildrenAttribute)
                 .first { $0.role == "AXTabGroup" }.map { $0.elements(kAXTabsAttribute).count } ?? 0
-            // The first time a window that could tile shows up, Learning decides whether it does.
-            let rule: FloatChoice = tileable && !floatingApps.contains(app.bundleID ?? "") ? .tile : .float
-            let learned = windowLike ? Learning.shared.decide(id, rule: rule) { screens in
-                Learning.features(of: element, app: app, frame: frame, subrole: element.subrole,
-                                  resizable: element.isResizable, tabs: tabs, screens: screens)
+            // The first time a window that could tile shows up, Learning decides how it behaves:
+            // the window classifier, then your own corrections. Off, it's the rules as always.
+            let verdict = windowLike ? Learning.shared.decide(id) { screens in
+                app.bundleID.map { bundleID in
+                    WindowReader.traits(of: element, id: id, bundleID: bundleID,
+                                        appName: NSRunningApplication(processIdentifier: app.pid)?.localizedName,
+                                        frame: frame, screens: screens, appWindows: all.count)
+                }
             } : nil
             return WindowInfo(id: id, element: element, frame: frame, tileable: tileable, minimized: minimized,
-                              standard: standard, windowLike: windowLike, dialog: dialog, fullScreen: fullScreen,
-                              tabs: tabs, learned: learned)
+                              standard: standard, windowLike: windowLike,
+                              // A window asking something that the rules missed floats centered too.
+                              dialog: dialog || verdict?.behavior == .dialog, fullScreen: fullScreen,
+                              tabs: tabs, learned: verdict?.decision)
         }
     }
 

@@ -98,6 +98,13 @@ public struct FloatFeatures: Codable, Equatable, Sendable {
         self.sizeLimited = sizeLimited
     }
 
+    /// The kind of window, from what the window classifier reads (`WindowTraits`).
+    public init(_ t: WindowTraits) {
+        self.init(app: t.app, subrole: t.subrole, resizable: t.resizable, buttons: t.buttons,
+                  size: CGSize(width: t.width, height: t.height), screenShare: t.screenShare,
+                  title: TitleKind(title: t.title, appName: t.appName), tabs: t.hasTabs)
+    }
+
     public var standard: Bool { subrole == "AXStandardWindow" }
 
     /// A full document window: standard, every title-bar button, not small, titled like a

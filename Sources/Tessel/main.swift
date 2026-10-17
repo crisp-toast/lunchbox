@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let licensing = Licensing()
     private let updater = Updater()
     private lazy var licenseWindow = LicenseWindow(licensing: licensing)
+    private let windowClasses = WindowClassesWindow()
     private var trialTimer: Timer?
     private var trustPoll: Timer?
     private var signalSource: DispatchSourceSignal?
@@ -44,6 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.onTeachKeys = { [weak self] in self?.onboarding.show(at: .keys) }
         menu.onShowWelcome = { [weak self] in self?.onboarding.show() }
         menu.onShowShortcuts = { [weak self] in self?.shortcuts.show() }
+        menu.onShowWindowClasses = { [weak self] in self?.windowClasses.show() }
         menu.licensing = licensing
         menu.onEnterLicense = { [weak self] in self?.licenseWindow.show() }
         menu.onBuy = { NSWorkspace.shared.open(Licensing.buyURL) }
@@ -261,6 +263,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             tiler.expectWindow(from: String(command.dropFirst(7)), another: true)
             return
         }
+        // classes shows How Tessel Sees Your Windows; classify writes the same, without titles, to
+        // ~/Library/Application Support/Tessel/classes.json, for agents checking the classifier.
+        if command == "classes" { windowClasses.show(); return }
+        if command == "classify" { writeClasses(); return }
         // snapshot:<path> appends every window of every app (with titles) to a JSON Lines file,
         // to build the window classifier's labeled set in the test VMs.
         if command.hasPrefix("snapshot:") {
@@ -353,6 +359,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("launcher", _): return .launcher
         case ("help", _): return .help
         default: return nil
+        }
+    }
+
+    private func writeClasses() {
+        let screens = Display.current().map(\.visible)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let survey = WindowClassesWindow.survey(screens: screens)
+            let rows = survey.rows.map { r -> [String: Any] in
+                ["id": r.id, "app": r.appID, "behavior": r.behavior.rawValue, "confidence": (r.confidence * 100).rounded() / 100,
+                 "rules": r.rules.rawValue, "againstRules": r.byModel]
+            }
+            let n = Double(max(1, survey.rows.count))
+            let report: [String: Any] = ["windows": rows, "readMsPerWindow": survey.readMs / n, "decideMsPerWindow": survey.decideMs / n]
+            let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Tessel")
+            if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
+                try? data.write(to: dir.appendingPathComponent("classes.json"))
+            }
         }
     }
 
