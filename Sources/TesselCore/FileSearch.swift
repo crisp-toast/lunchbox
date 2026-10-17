@@ -11,6 +11,12 @@ public enum FileSearch {
             .filter { !$0.isEmpty }
     }
 
+    /// Whether Summon searches files for this query: two letters or more, not all wildcards.
+    public static func searches(_ query: String) -> Bool {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        return q.count >= 2 && !terms(in: q).isEmpty
+    }
+
     /// Whether a name has every term in it, ignoring case and accents: what Spotlight was
     /// asked for, so its last answer can stay up while you keep typing.
     public static func matches(_ terms: [String], name: String) -> Bool {
