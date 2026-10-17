@@ -26,7 +26,7 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
 | ⌘ + Workspace key 1 / 2 / 3 | Go to that Workspace |
 | ⌘ ⇧ + Workspace key 1 / 2 / 3 | Move the focused window to that Workspace and go there with it |
-| ⇧ Space | **Summon**: open an app, file or website |
+| ⇧ Space | **Summon**: open an app, or go to any open window, file or website |
 | Left ⌘ ⇧ + Space | The **Cheat Sheet**: every shortcut, with search |
 
 The Workspace keys are whatever three keys you pick on first launch (menu → **Set Up Workspace Keys…**).
@@ -36,7 +36,7 @@ On Tyler's Boop65 they're the three keys on the far right, above the right arrow
 
 | Name | What it is |
 | --- | --- |
-| **Summon** | The ⇧Space search bar: apps, then files and folders, then the web |
+| **Summon** | The ⇧Space search bar: apps, then open windows, then files and folders, then the web |
 | **Focus** | ⌘⇧F: one window centered, the rest on the Shelf |
 | **the Shelf** | The tilted cards beside a Focus window |
 | **Tidy** | ⌘⇧0: even out every split in the space |
@@ -67,8 +67,15 @@ Apps you open often rise to the top.
 - An app with a window you can get to (tiled in a space, minimized, or floating on screen) shows two rows: **go to its window** (switching spaces if
   needed) and **New … window** (⇧↩), which uses the app's own File › New Window and lands
   tiled and focused in the current space.
+- **Open windows** are found by the words in their titles: type "invoice", "lunch" or "Tiler"
+  and the window whose title has a word starting that way is listed, with its app and Workspace
+  beneath. Return goes to it wherever it is: another Workspace, another display, or minimized in
+  the Dock. A word can also be the app's name ("slack" lists each Slack window). Windows that match
+  more of what you typed come first, then the ones you used most recently. Window rows sit below
+  apps whose name you typed and above files. It's plain word matching on titles read as Summon
+  opens, so typing never waits on another app, and titles are never saved.
 - When no app matches, it searches Spotlight's index for files and folders, most
-  recently used first.
+  recently used first, listed after any windows.
 - Opening an app that isn't running yet (or is running with no windows), or a **New … window**,
   makes room right away, so a slow launch never looks like nothing happened: the windows here glide
   aside and a frosted **placeholder** with the app's icon, gently pulsing, holds the exact spot and

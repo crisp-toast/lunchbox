@@ -68,7 +68,7 @@ public enum Command: String, CaseIterable, Codable, Sendable {
         case .moveToWorkspace1: return "Move the window to Workspace 1 and go with it"
         case .moveToWorkspace2: return "Move the window to Workspace 2 and go with it"
         case .moveToWorkspace3: return "Move the window to Workspace 3 and go with it"
-        case .summon: return "Summon: open an app, file or website"
+        case .summon: return "Summon: open an app, window, file or website"
         case .cheatSheet: return "Open this Cheat Sheet"
         }
     }
@@ -113,7 +113,8 @@ public enum Command: String, CaseIterable, Codable, Sendable {
             return workspace + ["move to", "send", "throw", "carry", "take window", "move window", "workspace \(n)", "\(n)", numbers[n - 1]]
         case .summon: return ["summon", "launcher", "launch", "open app", "open", "search", "find", "spotlight search",
                               "alfred", "raycast", "run", "start", "application", "app", "file", "folder", "web",
-                              "google", "website", "url", "new window", "quick open", "command bar", "palette"]
+                              "google", "website", "url", "new window", "quick open", "command bar", "palette",
+                              "find window", "window title", "switch window", "witch", "contexts"]
         case .cheatSheet: return ["cheat sheet", "help", "shortcuts", "keys", "keyboard", "list", "reference",
                                   "commands", "hotkeys", "keybindings", "key bindings", "guide", "how", "what", "manual", "?"]
         }
