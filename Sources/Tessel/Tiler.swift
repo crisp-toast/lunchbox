@@ -92,6 +92,11 @@ final class Tiler {
     private var savedLayouts: [String: Layout] = [:]
     private var settlingUntil: [CGWindowID: CFTimeInterval] = [:]
     private var lastReassert: [CGWindowID: CFTimeInterval] = [:]
+    /// Windows that moved on their own, waiting to hold still before they go back.
+    private var pendingReassert: [CGWindowID: DispatchWorkItem] = [:]
+    /// When the user last let go of a dragged window. Dropped at a screen edge, macOS 15 and
+    /// later animates it into a tile of its own right after Tessel sends it back.
+    private var droppedAt: [CGWindowID: CFTimeInterval] = [:]
     private var draggedByUser = Set<CGWindowID>()
     private var mouseDown: CGPoint?
     private var notificationTokens: [NSObjectProtocol] = []
@@ -700,6 +705,8 @@ final class Tiler {
         dialogsAwaitingScreen.remove(id)
         settlingUntil[id] = nil
         lastReassert[id] = nil
+        pendingReassert.removeValue(forKey: id)?.cancel()
+        droppedAt[id] = nil
     }
 
     private func removeFromLayouts(_ id: CGWindowID) {
@@ -727,6 +734,9 @@ final class Tiler {
                 quietFocus()
                 let wasFocused = focusedID == id
                 let frame = windows[id].flatMap { $0.hidden ? nil : ($0.target ?? $0.frame) }
+                // A dialog or other floating window hands focus back to the tile used before
+                // it, not to whichever tile is nearest the middle of the screen.
+                let before = place(of: id) == nil ? lastFocused[currentSpace] : nil
                 forget(id)
                 relayout(animated: true)
                 persist()
@@ -734,7 +744,7 @@ final class Tiler {
                 // parked in another space. Keep focus where the user was looking instead.
                 if wasFocused, let frame {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { [weak self] in
-                        self?.focusNearest(to: frame, excluding: id)
+                        self?.focusNearest(to: frame, excluding: id, preferring: before)
                     }
                 }
             } else {
@@ -751,9 +761,10 @@ final class Tiler {
             // Same as closing: keep focus near where the user was looking.
             if let id = app.windowIDs[element], id == focusedID, let w = windows[id], !w.hidden {
                 let frame = w.target ?? w.frame
+                let before = place(of: id) == nil ? lastFocused[currentSpace] : nil
                 quietFocus()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
-                    self?.focusNearest(to: frame, excluding: id)
+                    self?.focusNearest(to: frame, excluding: id, preferring: before)
                 }
             }
             scheduleScan(app)
@@ -933,6 +944,9 @@ final class Tiler {
         guard enabled else { return }
         checkForGhosts()
         guard let (space, _) = place(of: id) else {
+            // A dialog or other floating window: remember the tile it took focus from (which
+            // may have been tiled only after it got focus), so focus goes back there after.
+            if let tile = focusedID, place(of: tile)?.space == currentSpace { lastFocused[currentSpace] = tile }
             focusedID = id
             if windows[id] == nil { scheduleScan(app) }
             return
@@ -1110,17 +1124,26 @@ final class Tiler {
             return
         }
         let now = CACurrentMediaTime()
-        guard now > settlingUntil[id] ?? 0, let w = windows[id], !w.hidden, w.target != nil else { return }
+        // Moves just after a drop count even while Tessel's own glide back settles: the check
+        // below waits for the window to hold still and acts only on a real difference.
+        let justDropped = now - (droppedAt[id] ?? 0) < 1.5
+        guard now > settlingUntil[id] ?? 0 || justDropped, let w = windows[id], !w.hidden, w.target != nil else { return }
         if NSEvent.pressedMouseButtons & 1 != 0 {
             draggedByUser.insert(id)
             return
         }
-        // The app moved itself (some do when opening). Put it back, but never
-        // wrestle with an app that insists: once every two seconds at most.
-        guard now - (lastReassert[id] ?? 0) > 2 else { return }
-        lastReassert[id] = now
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            guard let self, let w = self.windows[id], !w.hidden else { return }
+        // The app moved itself (some do when opening), or macOS did: Window › Fill and the
+        // other window tiling commands (macOS 15 and later) animate for about half a second,
+        // and a move back mid-way is lost under the rest of it. So wait until the window
+        // holds still, then put it back, but never wrestle with an app that insists: once
+        // every two seconds at most.
+        pendingReassert[id]?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.pendingReassert[id] = nil
+            let now = CACurrentMediaTime()
+            guard now - (self.lastReassert[id] ?? 0) > 2, let w = self.windows[id], !w.hidden else { return }
+            self.lastReassert[id] = now
             let element = w.handle.element
             w.handle.app.queue.async {
                 let actual = element.frame
@@ -1137,6 +1160,8 @@ final class Tiler {
                 }
             }
         }
+        pendingReassert[id] = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
     }
 
     private func mouseUp() {
@@ -1156,6 +1181,7 @@ final class Tiler {
         guard enabled, let down, !dragged.isEmpty else { return }
         for id in dragged {
             guard let w = windows[id], let target = w.target, target.insetBy(dx: -12, dy: -12).contains(down) else { continue }
+            droppedAt[id] = CACurrentMediaTime()
             let element = w.handle.element
             w.handle.app.queue.async { [weak self] in
                 let frame = element.frame
@@ -1570,13 +1596,15 @@ final class Tiler {
         badge.show(space: index, count: Self.spaceCount, caption: caption ?? "Moved to Workspace \(index + 1)", on: display)
     }
 
-    /// Focuses the visible window closest to `frame`, or the desktop when this space is empty.
-    private func focusNearest(to frame: CGRect, excluding excluded: CGWindowID? = nil) {
+    /// Focuses `preferred` if it's visible, else the visible window closest to `frame`, or the
+    /// desktop when this space is empty.
+    private func focusNearest(to frame: CGRect, excluding excluded: CGWindowID? = nil, preferring preferred: CGWindowID? = nil) {
         var visible = visibleFrames()
         if let excluded { visible[excluded] = nil }
-        if let next = visible.min(by: {
+        let nearest = visible.min(by: {
             hypot($0.value.midX - frame.midX, $0.value.midY - frame.midY) < hypot($1.value.midX - frame.midX, $1.value.midY - frame.midY)
-        })?.key {
+        })?.key
+        if let next = preferred.flatMap({ visible[$0] == nil ? nil : $0 }) ?? nearest {
             activate(next)
             showRing(on: next)
         } else {

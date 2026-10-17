@@ -55,10 +55,10 @@ Focused Window" now enters real Focus.
 5. **Battery drain.** A day on battery with a video playing in a parked Workspace compared to
    one with Tessel off. If the difference is large, Tessel should pause parked windows' rendering
    or the site should mention it.
-6. **Older macOS.** The site says macOS 14 or later, and Tessel has only run on macOS 27 beta.
-   Test at least macOS 14, 15 and 26: a MacBook on one of them plus macOS virtual machines for
-   the others (I can set those up here, one at a time). If that's too much, raise the minimum to
-   what was tested and change the site to match.
+6. **Older macOS.** Tested in VMs on 2026-10-16: macOS 14, 15 and 26 pass, so the site's "macOS 14
+   or later" stands. Two bugs turned up, both fixed: macOS window tiling leaving a window over its
+   neighbour (found on 15), and focus jumping to another window when a dialog closed (found on 26).
+   Details in [macos-compatibility.md](macos-compatibility.md).
 7. **Picture-in-picture.** A PiP video should float above the tiles and stay on every Workspace.
 8. **A fresh Mac account.** First launch, granting Accessibility, the 7-day trial, and what happens
    when it ends. To end it early:
