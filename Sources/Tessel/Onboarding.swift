@@ -281,16 +281,22 @@ final class Onboarding: NSObject, NSWindowDelegate {
             let mods = all[0].dropLast()
             guard !keys.isEmpty, all.allSatisfy({ $0.dropLast() == mods }) else { return caps(.workspace2) }
             let short = ["Page Up": "PgUp", "Page Down": "PgDn"]
-            // "=" marks a key to pick one of (drawn green), "/" the slash between them.
-            let choices = all.compactMap(\.last).map { "=" + (short[$0] ?? $0) }
+            // "/" is the slash between keys to pick one of.
+            let choices = all.compactMap(\.last).map { short[$0] ?? $0 }
             return Array(mods) + choices.flatMap { [$0, "/"] }.dropLast()
+        }()
+        // More or less space: ⌘⇧ + / −, when grow and shrink share their modifiers.
+        let growOrShrink: [String] = {
+            let grow = caps(.grow), shrink = caps(.shrink)
+            guard let g = grow.last, let s = shrink.last, grow.dropLast() == shrink.dropLast() else { return grow }
+            return Array(grow.dropLast()) + [g, "/", s]
         }()
         let items: [(String, [String], String)] = [
             // Summon first: it's how every window gets opened in the first place.
             ("summon", caps(.summon), "Open an app with Summon (type, then ↩)"),
             ("focus", anyDirection([.focusLeft, .focusRight, .focusUp, .focusDown]), "Move focus in any direction"),
             ("move", anyDirection([.moveLeft, .moveRight, .moveUp, .moveDown]), "Move a window any way"),
-            ("size", caps(.grow), "Give a window more space"),
+            ("size", growOrShrink, "Give a window more or less space"),
             ("focusMode", caps(.focusMode), "Focus on one window, then again to undo"),
             ("tidy", caps(.tidy), "Tidy everything back to even"),
             ("space", betweenWorkspaces, "Go between Workspaces"),
@@ -588,13 +594,9 @@ private final class PracticeRow: NSStackView {
             case "arrows": return ArrowCluster()
             case "/":
                 let slash = NSTextField(labelWithString: "/")
-                slash.textColor = .systemGreen
+                slash.textColor = .secondaryLabelColor
                 slash.font = .systemFont(ofSize: 13, weight: .semibold)
                 return slash
-            case _ where k.hasPrefix("="):
-                let cap = Keycap(text: String(k.dropFirst()))
-                cap.tint = .systemGreen
-                return cap
             default: return Keycap(text: k)
             }
         })
