@@ -190,15 +190,16 @@ final class Learning {
         }
     }
 
-    /// A window closed (or its app quit): how long it lived with its choice is a quiet hint.
-    /// Only a close that says something is written down, which keeps the log to a few
-    /// kilobytes a day.
-    func closed(_ id: CGWindowID) {
+    /// A window closed: how long it lived with its choice is a quiet hint. `lifetime` is from
+    /// when Tessel first saw it; `counts` is false for a window that was open before Tessel
+    /// started, or closed because its app quit. Only a close that says something is written
+    /// down, which keeps the log to a few kilobytes a day.
+    func closed(_ id: CGWindowID, lifetime: Double, counts: Bool) {
         let now = Self.now
         let event: FloatEvent? = state.withLock { s in
-            guard let seen = s.seen.removeValue(forKey: id), s.on else { return nil }
+            guard let seen = s.seen.removeValue(forKey: id), s.on, counts else { return nil }
             let event = FloatEvent.closed(seen.features, as: seen.decision.choice, source: seen.decision.source,
-                                          lifetime: now - seen.seenAt, at: now)
+                                          lifetime: lifetime, at: now)
             guard FloatClassifier.evidence(in: event) != nil else { return nil }
             s.model.learn(event, now: now)
             return event
@@ -243,12 +244,18 @@ final class Learning {
         if on { write(ArrangeEvent.arranged(a, on: display, dwell: dwell, at: now), to: arrangeLog) }
     }
 
-    /// You gave a lone window of an app a shape of its own.
+    /// You gave a lone window of an app a shape of its own (or put it back to the default
+    /// one, which forgets the lesson).
     func shaped(_ app: String, shape: LoneShape, on display: String) {
+        let key = ArrangementMemory.loneKey(display: display, app: app)
+        if shape.height == nil, abs(shape.scale - Layout.defaultSingleScale) < 0.001 {
+            if state.withLock({ $0.on && $0.arrangements.loneShape(of: app, on: display) != nil }) { forget(key) }
+            return
+        }
         let on = state.withLock { s in
             guard s.on else { return false }
             s.arrangements.recordLone(app, shape: shape, on: display)
-            s.ledger.forget(ArrangementMemory.loneKey(display: display, app: app)) // a new shape: try again
+            s.ledger.forget(key) // a new shape: a new lesson
             return true
         }
         if on { write(ArrangeEvent.lone(app, shape: shape, on: display, at: Self.now), to: arrangeLog) }
@@ -293,16 +300,16 @@ final class Learning {
 
     // MARK: Undo
 
-    /// You pressed the undo key for something Tessel did on its own. True when that thing
-    /// now stops (undone twice in a row).
+    /// You pressed the undo key for something Tessel did on its own. Undone twice in a row,
+    /// Tessel forgets that lesson (and stops doing it) until you teach it again. True then.
     @discardableResult
     func undone(_ key: String) -> Bool {
         let stopped = state.withLock { $0.ledger.undone(key) }
         if key.hasPrefix("place|") {
             write(WorkspaceMemory.Event(.undone, app: String(key.dropFirst(6)), at: Self.now), to: workspaceLog)
         }
-        learningLog.notice("undone: \(key, privacy: .public)\(stopped ? " (stops now)" : "", privacy: .public)")
-        scheduleSave()
+        learningLog.notice("undone: \(key, privacy: .public)\(stopped ? " (twice: forgetting it)" : "", privacy: .public)")
+        if stopped { forget(key) } else { scheduleSave() }
         return stopped
     }
 
@@ -333,9 +340,7 @@ final class Learning {
             out.append((key, "\(Self.appName(app)): the size you gave it when it's alone"))
         }
         for app in s.workspaces.homes.keys {
-            if !s.ledger.allows("place|\(app)") {
-                out.append(("place|\(app)", "\(Self.appName(app)): opens where you are (you undid moving it twice)"))
-            } else if let home = s.workspaces.home(of: app) {
+            if let home = s.workspaces.home(of: app) {
                 out.append(("place|\(app)", "\(Self.appName(app)): new windows open in Workspace \(home + 1)"))
             }
         }

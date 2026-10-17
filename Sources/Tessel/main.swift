@@ -261,6 +261,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             tiler.expectWindow(from: String(command.dropFirst(7)), another: true)
             return
         }
+        // learning-lived:<seconds> counts that much window time at once (trying Workspace homes).
+        if command.hasPrefix("learning-lived:") {
+            tiler.countLivedForTesting(Double(command.dropFirst(15)) ?? 0)
+            return
+        }
         if command.hasPrefix("help:") {
             help.show(query: String(command.dropFirst(5)))
             return

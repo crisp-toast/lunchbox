@@ -19,6 +19,9 @@ final class ManagedWindow {
     let seenAt = CACurrentMediaTime()
     /// It opened just now: only new windows are placed by what Tessel learned.
     var isNew: Bool { CACurrentMediaTime() - seenAt < 10 }
+    /// It opened while Tessel was running (not one already open when it started), so how
+    /// long it lived means something.
+    var openedWhileRunning = false
 
     init(handle: WindowHandle, frame: CGRect) {
         self.handle = handle
@@ -321,7 +324,7 @@ final class Tiler {
         let gone = windows.values.filter { $0.pid == pid }.map(\.id)
         let focusedFrame = focusedID.flatMap { id in gone.contains(id) ? visibleFrames()[id] : nil }
         if !gone.isEmpty { quietFocus(for: 1) }
-        gone.forEach(forget)
+        gone.forEach { forget($0, appQuit: true) }
         if !gone.isEmpty {
             relayout(animated: true)
             persist()
@@ -600,6 +603,7 @@ final class Tiler {
 
     private func register(_ info: WindowInfo, app: AppHandle) -> ManagedWindow {
         let window = ManagedWindow(handle: WindowHandle(id: info.id, element: info.element, app: app), frame: info.frame)
+        window.openedWhileRunning = initialScanDone
         windows[info.id] = window
         app.windowIDs[info.element] = info.id
         if let observer = app.observer {
@@ -678,6 +682,10 @@ final class Tiler {
     }
 
     // MARK: Learning: what Tessel does on its own
+
+    /// `learning-lived:<seconds>`: counts that much window time in each Workspace at once, to
+    /// try Workspace homes without waiting ten minutes.
+    func countLivedForTesting(_ seconds: Double) { learningTick(seconds: seconds, testing: true) }
 
     /// Settings › Learn Where Windows Go. Windows already open stay as they are until Tessel
     /// looks at them again.
@@ -910,13 +918,14 @@ final class Tiler {
     }
 
     /// You arranged a layout (or let Tessel's arrangement stand): from now on it counts,
-    /// for as long as it stays the same. A lone window's shape is kept right away.
-    private func noteArranged(space: Int, display uuid: String, byYou: Bool = true) {
+    /// for as long as it stays the same. `shaped`: you resized a lone window (or Tidied it),
+    /// and that shape is kept right away.
+    private func noteArranged(space: Int, display uuid: String, byYou: Bool = true, shaped: Bool = false) {
         guard Learning.shared.isOn, let d = displays.first(where: { $0.uuid == uuid }) else { return }
         let key = "\(space)|\(uuid)"
         flushStanding(key)
         guard let layout = spaces[space][uuid]?.withoutPlaceholders() else { return }
-        if byYou, layout.windowCount == 1, let id = layout.windows.first, let app = appID(of: id) {
+        if shaped, layout.windowCount == 1, let id = layout.windows.first, let app = appID(of: id) {
             // The shape you left it at; after Tidy, the default one.
             let shape = layout.singleOwner == id ? LoneShape(scale: layout.singleScale, height: layout.singleHeight)
                 : LoneShape(scale: Layout.defaultSingleScale, height: nil)
@@ -952,8 +961,9 @@ final class Tiler {
     /// Once a minute: how long each app's windows spent in each Workspace (while you're at
     /// the Mac: a night away isn't a night in Workspace 2), and every ten minutes, the time
     /// arrangements stood.
-    private func learningTick() {
+    private func learningTick(seconds: Double = 60, testing: Bool = false) {
         guard enabled, Learning.shared.isOn else { return }
+        guard !testing else { return countLived(seconds) }
         learningTicks += 1
         if learningTicks % 10 == 0 {
             for (key, s) in standing {
@@ -962,11 +972,15 @@ final class Tiler {
             }
         }
         guard Self.secondsSinceInput() < 300 else { return }
+        countLived(seconds)
+    }
+
+    private func countLived(_ seconds: Double) {
         var lived: [String: [Int: Double]] = [:]
         for (s, layouts) in spaces.enumerated() {
             for layout in layouts.values {
                 for id in layout.windows {
-                    if let app = windows[id]?.handle.app.bundleID { lived[app, default: [:]][s, default: 0] += 60 }
+                    if let app = windows[id]?.handle.app.bundleID { lived[app, default: [:]][s, default: 0] += seconds }
                 }
             }
         }
@@ -1056,8 +1070,11 @@ final class Tiler {
     /// When a tiled window first went out of view without closing.
     private var offScreenSince: [CGWindowID: CFTimeInterval] = [:]
 
-    private func forget(_ id: CGWindowID) {
-        Learning.shared.closed(id)
+    /// - appQuit: it closed because its app quit, which says nothing about the window.
+    private func forget(_ id: CGWindowID, appQuit: Bool = false) {
+        if let w = windows[id] {
+            Learning.shared.closed(id, lifetime: CACurrentMediaTime() - w.seenAt, counts: w.openedWhileRunning && !appQuit)
+        }
         requested.remove(id)
         announced.remove(id)
         placedForYou[id] = nil
@@ -1577,7 +1594,7 @@ final class Tiler {
             w.target = nil
             relayout(animated: true)
             persist()
-            noteArranged(space: space, display: uuid)
+            noteArranged(space: space, display: uuid, shaped: true)
             return
         }
         if abs(frame.width - target.width) > 4 || abs(frame.height - target.height) > 4 {
@@ -1915,7 +1932,7 @@ final class Tiler {
             spaces[space][uuid] = layout
             relayout(animated: true)
             persist()
-            noteArranged(space: space, display: uuid)
+            noteArranged(space: space, display: uuid, shaped: true)
         }
         showRing(on: id)
     }
@@ -2530,7 +2547,7 @@ final class Tiler {
         relayout(animated: true)
         persist()
         // Even shares (and default sizes) are an arrangement you chose too.
-        for uuid in spaces[currentSpace].keys { noteArranged(space: currentSpace, display: uuid) }
+        for uuid in spaces[currentSpace].keys { noteArranged(space: currentSpace, display: uuid, shaped: true) }
         if let id = focusedID { showRing(on: id) }
     }
 
