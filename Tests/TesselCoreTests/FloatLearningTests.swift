@@ -28,7 +28,9 @@ private func tiled(_ f: FloatFeatures, at time: Double = t0) -> FloatEvent {
 @Suite struct FloatClassifierLearns {
     @Test func withNothingLearnedTheRulesDecide() {
         let model = FloatClassifier()
-        #expect(model.decide(window(), rule: .tile) == FloatDecision(choice: .tile, source: .rule, floatProbability: 0.1))
+        let first = model.decide(window(), rule: .tile)
+        #expect(first.choice == .tile && first.source == .rule)
+        #expect(abs(first.floatProbability - 0.1) < 1e-9)
         #expect(model.decide(palette, rule: .float).choice == .float)
         #expect(model.decide(palette, rule: .float).source == .rule)
     }
@@ -39,6 +41,17 @@ private func tiled(_ f: FloatFeatures, at time: Double = t0) -> FloatEvent {
         let next = model.decide(palette, rule: .tile)
         #expect(next.choice == .float)
         #expect(next.source == .learned)
+    }
+
+    @Test func aDocumentWindowTakesTwoCorrections() {
+        let document = window(share: 0.3, title: .document)
+        #expect(document.looksLikeDocument)
+        #expect(!palette.looksLikeDocument)
+        var model = FloatClassifier()
+        model.learn(floated(document, at: t0), now: t0)
+        #expect(model.decide(document, rule: .tile).choice == .tile) // once can be a one-off
+        model.learn(floated(document, at: t0 + 60), now: t0 + 60)
+        #expect(model.decide(document, rule: .tile).choice == .float)
     }
 
     @Test func otherKindsOfWindowAndOtherAppsAreLeftAlone() {
@@ -164,8 +177,8 @@ private func tiled(_ f: FloatFeatures, at time: Double = t0) -> FloatEvent {
 
     @Test func decidingTakesAboutAMicrosecond() {
         var model = FloatClassifier()
-        for i in 0..<1000 { model.learn(floated(window("com.example.app\(i)")), now: t0) }
-        let probe = window("com.example.app500")
+        for i in 0..<1000 { model.learn(floated(window("com.example.app\(i)", share: 0.05, title: .utility)), now: t0) }
+        let probe = window("com.example.app500", share: 0.05, title: .utility)
         let clock = ContinuousClock()
         var floats = 0
         let elapsed = clock.measure {

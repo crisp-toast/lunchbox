@@ -100,6 +100,14 @@ public struct FloatFeatures: Codable, Equatable, Sendable {
 
     public var standard: Bool { subrole == "AXStandardWindow" }
 
+    /// A full document window: standard, every title-bar button, not small, titled like a
+    /// document or the app. Floating one of these is often a one-off, so it takes two
+    /// corrections before the next one floats; a small or tool-like window takes one.
+    public var looksLikeDocument: Bool {
+        standard && buttons.isSuperset(of: [.close, .minimize, .zoom]) && sizeClass != "s"
+            && (title == .document || title == .app)
+    }
+
     /// Small, medium or large next to its screen.
     public var sizeClass: String {
         screenShare < 0.12 ? "s" : screenShare < 0.4 ? "m" : "l"
@@ -230,6 +238,8 @@ public struct FloatClassifier: Sendable {
     /// kind of window's own.
     static let appStrength = 2.0
     static let signatureStrength = 0.5
+    /// A document window's rules hold three times as hard (see `looksLikeDocument`).
+    static let documentStrength = 1.5
     /// How sure it must be to go against the rules.
     public static let threshold = 0.75
 
@@ -281,7 +291,8 @@ public struct FloatClassifier: Sendable {
         let app = byApp[f.app] ?? Evidence()
         let kind = bySignature[f.signature] ?? Evidence()
         let pApp = (app.float + Self.appStrength * prior) / (app.total + Self.appStrength)
-        let p = (kind.float + Self.signatureStrength * pApp) / (kind.total + Self.signatureStrength)
+        let strength = rule == .tile && f.looksLikeDocument ? Self.documentStrength : Self.signatureStrength
+        let p = (kind.float + strength * pApp) / (kind.total + strength)
         // Your latest word on this kind of window, else on the app.
         let told = kind.lastCorrection ?? app.lastCorrection
         if rule == .tile, p >= Self.threshold, told == .float {
