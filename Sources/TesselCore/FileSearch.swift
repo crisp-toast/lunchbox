@@ -17,6 +17,19 @@ public enum FileSearch {
         return q.count >= 2 && !terms(in: q).isEmpty
     }
 
+    /// The same search as an `mdfind` query: every term somewhere in the name, ignoring case
+    /// and accents. `terms` come from `terms(in:)`, so none holds a quote or a backslash.
+    public static func mdfindQuery(_ terms: [String]) -> String {
+        terms.map { "kMDItemFSName == \"*\($0)*\"cd" }.joined(separator: " && ")
+    }
+
+    /// Two answers to one search as one list: `first` in its order, then whatever only `second`
+    /// found, without paths Summon never shows.
+    public static func merge(_ first: [String], _ second: [String], home: String) -> [String] {
+        var seen = Set<String>()
+        return (first + second).filter { !isHidden($0, home: home) && seen.insert($0).inserted }
+    }
+
     /// Whether a name has every term in it, ignoring case and accents: what Spotlight was
     /// asked for, so its last answer can stay up while you keep typing.
     public static func matches(_ terms: [String], name: String) -> Bool {

@@ -81,6 +81,13 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     private var fileRows: [Result] = []
     private var fileQuery: NSMetadataQuery?
     private var fileSearch: DispatchWorkItem?
+    /// The files behind `fileRows`: Spotlight's answer, and a fresh process's answer for the
+    /// folders macOS let Tessel into since it started (`searchAfresh`).
+    private var spotlightPaths: [String] = []
+    private var freshPaths: [String] = []
+    private var freshSearch: Process?
+    /// Folders Tessel could read once you chose the folder offer, this time Tessel is running.
+    private var newlyAllowedFolders: [String] = []
     private var icons: [String: NSImage] = [:]
     /// Checked as the panel opens, while the folder offer is unanswered.
     private var fullDiskAccess = false
@@ -134,6 +141,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         fileQuery?.stop()
         fileQuery = nil
         fileSearch?.cancel()
+        stopFreshSearch()
         panel?.orderOut(nil)
     }
 
@@ -234,6 +242,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         fileSearch?.cancel()
         fileQuery?.stop()
         fileQuery = nil
+        stopFreshSearch()
 
         let uses = UserDefaults.standard.dictionary(forKey: "launcherUses") as? [String: Int] ?? [:]
         let ranked: [(app: App, nameScore: Int)]
@@ -257,10 +266,10 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         // Spotlight's last answer stays while it still fits what's typed, until the new one.
         let terms = FileSearch.terms(in: query)
         let searchesFiles = FileSearch.searches(query)
-        fileRows = !searchesFiles ? [] : fileRows.filter {
-            if case .file(let url) = $0 { return FileSearch.matches(terms, name: url.lastPathComponent) }
-            return false
-        }
+        let fits = { (path: String) in searchesFiles && FileSearch.matches(terms, name: (path as NSString).lastPathComponent) }
+        spotlightPaths = spotlightPaths.filter(fits)
+        freshPaths = freshPaths.filter(fits)
+        rankFiles()
         compose(keeping: key)
 
         if searchesFiles {
@@ -328,6 +337,38 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(filesFound(_:)), name: .NSMetadataQueryDidUpdate, object: q)
         fileQuery = q
         q.start()
+        if !newlyAllowedFolders.isEmpty { searchAfresh(terms) }
+    }
+
+    /// Spotlight keeps answering a running app as it did when the app first asked, so files in a
+    /// folder macOS let Tessel into since it started stay hidden from `NSMetadataQuery` until
+    /// Tessel starts again. Until then, a new `mdfind` searches those folders, and Spotlight
+    /// answers it afresh: it's Tessel's own child, so macOS gives it Tessel's permissions.
+    private func searchAfresh(_ terms: [String]) {
+        let mdfind = Process()
+        mdfind.executableURL = URL(fileURLWithPath: "/usr/bin/mdfind")
+        mdfind.arguments = ["-0"] + newlyAllowedFolders.flatMap { ["-onlyin", $0] } + [FileSearch.mdfindQuery(terms)]
+        let out = Pipe()
+        mdfind.standardOutput = out
+        mdfind.standardError = FileHandle.nullDevice
+        guard (try? mdfind.run()) != nil else { return }
+        freshSearch = mdfind
+        DispatchQueue.global(qos: .userInitiated).async {
+            let data = out.fileHandleForReading.readDataToEndOfFile()
+            mdfind.waitUntilExit()
+            let paths = data.split(separator: 0).prefix(300).map { String(decoding: $0, as: UTF8.self) }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.freshSearch === mdfind else { return } // a newer search took over
+                self.freshSearch = nil
+                self.freshPaths = paths
+                self.showFiles()
+            }
+        }
+    }
+
+    private func stopFreshSearch() {
+        if let p = freshSearch, p.isRunning { p.terminate() }
+        freshSearch = nil
     }
 
     @objc private func filesFound(_ note: Notification) {
@@ -344,9 +385,21 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
                   !FileSearch.isHidden(path, home: home) else { continue }
             paths.append(path)
         }
+        spotlightPaths = paths
+        showFiles()
+    }
+
+    /// Spotlight's files and the fresh search's, together, ranked by name and place.
+    private func rankFiles() {
+        let home = NSHomeDirectory()
         let query = field.stringValue.trimmingCharacters(in: .whitespaces)
-        fileRows = FileSearch.rank(paths, query: query, home: home).prefix(Self.maxRows).map { .file(URL(fileURLWithPath: $0)) }
-        // A row you moved to stays highlighted; otherwise the top row is.
+        fileRows = FileSearch.rank(FileSearch.merge(spotlightPaths, freshPaths, home: home), query: query, home: home)
+            .prefix(Self.maxRows).map { .file(URL(fileURLWithPath: $0)) }
+    }
+
+    /// New files arrived: a row you moved to stays highlighted; otherwise the top row is.
+    private func showFiles() {
+        rankFiles()
         compose(keeping: selected > 0 && results.indices.contains(selected) ? results[selected].key : nil)
     }
 
@@ -375,11 +428,13 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         hide()
         DispatchQueue.global(qos: .userInitiated).async {
             // Each read waits while macOS's prompt for its folder is up.
-            for folder in FolderAccess.folders(home: NSHomeDirectory()) {
-                _ = try? FileManager.default.contentsOfDirectory(atPath: folder)
+            let readable = FolderAccess.folders(home: NSHomeDirectory()).filter {
+                (try? FileManager.default.contentsOfDirectory(atPath: $0)) != nil
             }
             DispatchQueue.main.async { [weak self] in
-                guard let self, !self.isVisible else { return } // you've already moved on
+                guard let self else { return }
+                self.newlyAllowedFolders = readable
+                guard !self.isVisible else { return } // you've already moved on
                 self.show(query: query)
             }
         }

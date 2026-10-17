@@ -81,6 +81,19 @@ import Testing
         #expect(!FileSearch.matches([], name: "anything"))
     }
 
+    @Test func mdfindAsksForEveryWord() {
+        #expect(FileSearch.mdfindQuery(["lunch"]) == #"kMDItemFSName == "*lunch*"cd"#)
+        #expect(FileSearch.mdfindQuery(FileSearch.terms(in: "lunch \"plans\"")) ==
+            #"kMDItemFSName == "*lunch*"cd && kMDItemFSName == "*plans*"cd"#)
+    }
+
+    @Test func twoAnswersMergeWithoutRepeats() {
+        let desktop = Self.home + "/Desktop/Lunch.txt", projects = Self.home + "/Projects/Lunch plan.txt"
+        let hidden = Self.home + "/Desktop/.Lunch.swp"
+        #expect(FileSearch.merge([projects], [desktop, projects, hidden], home: Self.home) == [projects, desktop])
+        #expect(FileSearch.merge([], [desktop], home: Self.home) == [desktop])
+    }
+
     @Test func filesAreSearchedFromTwoLetters() {
         #expect(!FileSearch.searches(""))
         #expect(!FileSearch.searches("b"))
