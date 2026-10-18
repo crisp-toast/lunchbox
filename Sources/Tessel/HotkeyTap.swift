@@ -5,12 +5,17 @@ import TesselCore
 /// Watches the keyboard with a CGEventTap on its own high-priority thread, so a
 /// busy main thread can never delay typing. Key presses are matched against the
 /// user's keymap; anything that isn't a Tessel shortcut passes straight through.
+///
+/// It also sees mouse presses and drags, for one thing: dragging the edge of a centered window
+/// (alone, or in Focus) stretches both sides, the way macOS resizes with ⌥ held, since the
+/// window stays centered anyway.
 final class HotkeyTap {
     private struct State {
         var enabled = false
         var workspaceKeys: [Int64] = []
         var keymap = Keymap()
         var learner: ((Int64, CGEventFlags) -> Void)?
+        var centered: [CGRect] = []
     }
 
     private let state = OSAllocatedUnfairLock(initialState: State())
@@ -21,6 +26,8 @@ final class HotkeyTap {
     private var swallowed = Set<Int64>()
     /// "⇧ then key" detection; tap thread only.
     private var chord = ShiftTapChord()
+    /// A drag on a centered window's edge is under way; tap thread only.
+    private var stretching = false
 
     init(onAction: @escaping (KeyAction) -> Void) {
         self.onAction = onAction
@@ -42,6 +49,13 @@ final class HotkeyTap {
         set { state.withLock { $0.keymap = newValue } }
     }
 
+    /// Where the centered windows are (top-left coordinates, like the mouse events): a drag
+    /// starting just outside one of their edges resizes from the center.
+    var centeredFrames: [CGRect] {
+        get { state.withLock { $0.centered } }
+        set { state.withLock { $0.centered = newValue } }
+    }
+
     /// While set, the next key press (with its modifiers) goes to `learner`
     /// instead of the app in front.
     func learnNextKey(_ learner: ((Int64, CGEventFlags) -> Void)?) {
@@ -55,7 +69,8 @@ final class HotkeyTap {
         var created = false
         let thread = Thread { [self] in
             let mask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue)
-                | (1 << CGEventType.flagsChanged.rawValue)
+                | (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.leftMouseDown.rawValue)
+                | (1 << CGEventType.leftMouseDragged.rawValue) | (1 << CGEventType.leftMouseUp.rawValue)
             guard let port = CGEvent.tapCreate(
                 tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
                 eventsOfInterest: CGEventMask(mask),
@@ -83,6 +98,9 @@ final class HotkeyTap {
         return created
     }
 
+    /// How far outside a window's edge a press still starts a resize.
+    static let edgeReach: CGFloat = 7
+
     private func handle(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
         let pass = Unmanaged.passUnretained(event)
         switch type {
@@ -94,6 +112,22 @@ final class HotkeyTap {
             return swallowed.remove(code) != nil ? nil : pass
         case .flagsChanged:
             chord.flagsChanged(event.flags)
+            return pass
+        case .leftMouseDown:
+            // Just outside the edge is where macOS starts a resize; ⌥ makes it stretch both sides.
+            // Not when another modifier is held (⇧ keeps the shape, ⌘ moves without activating).
+            let (on, centered) = state.withLock { ($0.enabled, $0.centered) }
+            let p = event.location
+            stretching = on && event.flags.isDisjoint(with: [.maskShift, .maskCommand, .maskControl, .maskAlternate])
+                && centered.contains { $0.insetBy(dx: -Self.edgeReach, dy: -Self.edgeReach).contains(p) && !$0.contains(p) }
+            if stretching { event.flags.insert(.maskAlternate) }
+            return pass
+        case .leftMouseDragged:
+            if stretching { event.flags.insert(.maskAlternate) }
+            return pass
+        case .leftMouseUp:
+            if stretching { event.flags.insert(.maskAlternate) }
+            stretching = false
             return pass
         case .keyDown:
             break

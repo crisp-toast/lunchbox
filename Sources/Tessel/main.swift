@@ -32,7 +32,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var signalSource: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        tiler.onChange = { [weak self] in self?.menu.refresh() }
+        tiler.onChange = { [weak self] in
+            guard let self else { return }
+            self.menu.refresh()
+            self.tap.centeredFrames = self.tiler.centeredFrames
+        }
         _ = launcher // build the app list now, so the first ⇧Space already finds apps
         menu.onToggle = { [weak self] in self?.toggleTiling() }
         menu.onTeachKeys = { [weak self] in self?.onboarding.show(at: .keys) }
