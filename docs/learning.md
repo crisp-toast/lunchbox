@@ -15,7 +15,7 @@ Settings › Learn Where Windows Go. Then:
   tile twice in a row. The next window like it floats by itself.
 - Give two apps an uneven split (⌘⇧ + / −), leave it for half a minute, then quit one app and
   open it again. It comes back in its spot, at its share.
-- Move an app's window to Workspace 2 (⌥⌘2) and keep it there for ten
+- Move an app's window to Workspace 2 (⌘⇧2) and keep it there for ten
   minutes. New windows of that app now open in Workspace 2.
 
 Each time, a quiet line at the bottom of the screen says what happened, and ⌘ with the key of
@@ -216,7 +216,7 @@ The trial is 7 days, so something smart has to happen within the first hour, wit
 *Code:* `WorkspaceMemory` ([Workspaces.swift](../Sources/TesselCore/Workspaces.swift)),
 `Tiler.insert`, `placedInHome`, `undoAutomatic`.
 
-- **The lesson:** you move one of an app's windows to a Workspace yourself (⌥⌘ and its number).
+- **The lesson:** you move one of an app's windows to a Workspace yourself (⌘⇧ and its number).
   Hide (⌘⇧H) is putting it away, not a home, so it doesn't count. Once the app's windows have then
   spent 10 minutes of window time there, and nine tenths of their time since the move, that's its
   home. Window time is only counted while you're at the Mac (input within 5 minutes). Moving one

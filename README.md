@@ -35,17 +35,24 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + ← → | Move the window one step sideways: first it stacks with its neighbor, a second press moves it past |
 | Left ⌘ ⇧ + ↑ ↓ | Swap with the window above or below in a stack |
 | Left ⌘ ⇧ + plus / minus | Give the window more or less space (a lone window, or one in Focus, grows or shrinks around the center) |
+| Left ⌘ ⇧ + R | **Resize**: then → wider, ← narrower, ↑ taller, ↓ shorter (hold to keep going); Return or Esc when done |
 | Left ⌘ ⇧ + F | **Focus**: the window alone in the center, the rest of the Workspace on the Shelf. Again, a click on a Shelf card, ⌘ (or ⌘ ⇧) with any arrow, or a file dragged onto a Shelf card ends it |
 | Left ⌘ ⇧ + H | **Hide** the window: it moves to the last Workspace (3, unless you added more) |
 | Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
 | Left ⌘ + 1 / 2 / 3 | Go to that Workspace |
-| Left ⌘ ⌥ + 1 / 2 / 3 | Move the focused window to that Workspace and go there with it |
+| Left ⌘ ⇧ + 1 / 2 / 3 | Move the focused window to that Workspace and go there with it |
 | ⇧ Space | **Summon**: open an app, or go to any open window, file or website |
 | Left ⌘ ⇧ + Space | The **Cheat Sheet**: every shortcut, with search |
 
-Workspaces are ⌘ and their number. Moving a window there is ⌥⌘, not ⌘⇧, because ⌘⇧3, ⌘⇧4 and
-⌘⇧5 are the Mac's screenshot keys. Right ⌘ and a number still reaches the app in front (a browser's
-tabs, say), and so does ⌘ and the number of a Workspace you don't have. **Add a Workspace** and
+**Resize mode** (Left ⌘ ⇧ + R) changes the width or the height alone: a tiled window's column gets
+wider or narrower, or its share of its stack taller or shorter, and a centered window (alone, or in
+Focus) changes just that side and stays centered. A line at the bottom of the screen says what the
+arrows do; it ends with Return, Esc, any other key, or after five seconds without one.
+
+Workspaces are ⌘ and their number, and ⌘⇧ and the number takes the window along, like ⌘⇧ and an
+arrow moves it. Right ⌘ and a number still reaches the app in front (a browser's tabs, say), right
+⌘⇧3, ⌘⇧4 and ⌘⇧5 still take screenshots, and ⌘ (or ⌘⇧) and the number of a Workspace you don't have
+is left alone, so with three Workspaces ⌘⇧4 and ⌘⇧5 are the Mac's screenshot keys on either side. **Add a Workspace** and
 **Remove Workspace N** are in the menu; a removed Workspace's windows move to the one before it.
 (Earlier versions had you pick three Workspace keys; a shortcut you changed back then keeps them.)
 
