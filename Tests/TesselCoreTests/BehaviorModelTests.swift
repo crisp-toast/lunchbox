@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import TesselCore
 
-private let floating: Set<String> = ["com.apple.QuickTimePlayerX", "com.apple.systempreferences", "com.apple.calculator"]
+private let floating = WindowBehavior.floatingApps
 
 private struct Labeled: Decodable {
     var id: Int
@@ -46,10 +46,29 @@ private func labeled() throws -> [Labeled] {
     }
 
     @Test func itNeverTilesWhatCantOrMustntTile() {
-        let fixed = WindowTraits(app: "com.example.app", title: "Report.pages", resizable: false, width: 1200, height: 800, screenShare: 0.5)
-        #expect(BehaviorDecision.combine(fixed, rule: .panel, model: .document, confidence: 0.99, threshold: 0.5, floatingApps: floating) == .panel)
-        let movie = WindowTraits(app: "com.apple.QuickTimePlayerX", title: "clip.mp4", width: 1280, height: 720, screenShare: 0.5)
-        #expect(BehaviorDecision.combine(movie, rule: .panel, model: .document, confidence: 0.99, threshold: 0.5, floatingApps: floating) == .panel)
+        // Never asked about: a fixed-size window that can't be minimized is centered like a dialog,
+        // and one that isn't window-like keeps floating.
+        let about = WindowTraits(app: "com.example.app", title: "Report.pages", resizable: false, minimizable: false,
+                                 width: 1200, height: 800, screenShare: 0.5)
+        #expect(BehaviorDecision.combine(about, rule: .dialog, model: .document, confidence: 0.99, threshold: 0.5, floatingApps: floating) == .dialog)
+        let palette = WindowTraits(app: "com.example.app", subrole: "AXFloatingWindow", title: "Report.pages", buttons: [.close],
+                                   width: 1200, height: 800, screenShare: 0.5)
+        #expect(BehaviorDecision.combine(palette, rule: .panel, model: .document, confidence: 0.99, threshold: 0.5, floatingApps: floating) == .panel)
+        let overlay = WindowTraits(app: "com.apple.screencaptureui", title: "clip.mov", width: 1280, height: 720, screenShare: 0.5)
+        #expect(BehaviorDecision.combine(overlay, rule: .panel, model: .document, confidence: 0.99, threshold: 0.5, floatingApps: floating) == .panel)
+    }
+
+    @Test func itDecidesWhetherAFixedSizeWindowTiles() {
+        // The rules tile Calculator at its own size; the model may float it, or keep it tiled.
+        let calculator = WindowTraits(app: "com.apple.calculator", title: "Calculator", resizable: false, minimizable: true,
+                                      width: 230, height: 400, screenShare: 0.03)
+        #expect(WindowBehavior.hardRule(calculator) == nil)
+        #expect(BehaviorDecision.combine(calculator, rule: .document, model: .panel, confidence: 0.9, threshold: 0.5, floatingApps: floating) == .panel)
+        #expect(BehaviorDecision.combine(calculator, rule: .document, model: .document, confidence: 0.9, threshold: 0.5, floatingApps: floating) == .document)
+        // A resizable floating window with every title-bar button may be tiled.
+        let fonts = WindowTraits(app: "com.example.app", subrole: "AXFloatingWindow", title: "Fonts", buttons: [.close, .minimize, .zoom])
+        #expect(WindowBehavior.hardRule(fonts) == nil)
+        #expect(BehaviorDecision.combine(fonts, rule: .panel, model: .document, confidence: 0.9, threshold: 0.5, floatingApps: floating) == .document)
     }
 
     @Test func unsureMeansTheRules() {
@@ -59,10 +78,29 @@ private func labeled() throws -> [Labeled] {
     }
 
     @Test func todaysRulesInTheSameTerms() {
-        #expect(WindowBehavior.byRules(WindowTraits(app: "com.example.app"), floatingApps: floating) == .document)
-        #expect(WindowBehavior.byRules(WindowTraits(app: "com.apple.calculator"), floatingApps: floating) == .panel)
-        #expect(WindowBehavior.byRules(WindowTraits(app: "com.example.app", subrole: "AXFloatingWindow"), floatingApps: floating) == .panel)
-        #expect(WindowBehavior.byRules(WindowTraits(app: "com.example.app", hasDefaultButton: true, hasCancelButton: true), floatingApps: floating) == .dialog)
+        func rules(_ t: WindowTraits) -> WindowBehavior { WindowBehavior.byRules(t, floatingApps: floating) }
+        #expect(rules(WindowTraits(app: "com.example.app")) == .document)
+        #expect(rules(WindowTraits(app: "com.example.app", subrole: "AXFloatingWindow")) == .panel)
+        #expect(rules(WindowTraits(app: "com.example.app", hasDefaultButton: true, hasCancelButton: true)) == .dialog)
+        #expect(rules(WindowTraits(app: "com.apple.screencaptureui")) == .panel)
+        // Only overlays always float: System Settings and Calculator tile, Calculator at its own size.
+        #expect(rules(WindowTraits(app: "com.apple.systempreferences", buttons: [.close, .minimize, .zoom])) == .document)
+        #expect(rules(WindowTraits(app: "com.apple.calculator", resizable: false, minimizable: true)) == .document)
+        // Can't be resized or minimized (an About box, a settings window): centered, like a dialog.
+        #expect(rules(WindowTraits(app: "com.example.app", buttons: [.close, .minimize, .zoom], resizable: false, minimizable: false)) == .dialog)
+        // Read before Tessel noted whether it can be minimized: a minimize button stands in.
+        #expect(rules(WindowTraits(app: "com.example.app", buttons: [.close, .minimize, .zoom], resizable: false)) == .document)
+        #expect(rules(WindowTraits(app: "com.example.app", buttons: [.close], resizable: false)) == .dialog)
+        // A "dialog" that resizes, has every title-bar button and asks nothing is a window (Little Arc).
+        let littleArc = WindowTraits(app: "company.thebrowser.Browser", subrole: "AXSystemDialog", buttons: [.close, .minimize, .zoom])
+        #expect(rules(littleArc) == .document)
+        #expect(WindowBehavior.hardRule(littleArc) == nil)
+        var fixedArc = littleArc
+        fixedArc.resizable = false
+        #expect(rules(fixedArc) == .dialog)
+        var asking = littleArc
+        asking.modal = true
+        #expect(rules(asking) == .dialog)
     }
 
     @Test func titlesAreReadNotKept() {

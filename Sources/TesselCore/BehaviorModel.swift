@@ -212,14 +212,18 @@ public enum BehaviorDecision {
     }
 
     /// The safety floor around what the model says:
-    /// - a dialog by the rules is a dialog;
+    /// - the rules decide every window Tessel never asks the model about (`hardRule`): dialogs,
+    ///   About boxes and the like, and windows that aren't window-like;
     /// - the model only counts when it's at least `threshold` sure;
-    /// - it never tiles a window that can't be resized, or one of an app Tessel always floats.
+    /// - it never tiles a window of an app Tessel always floats.
+    ///
+    /// A window that can't be resized may tile: the model is only asked about one the rules
+    /// already tile at its own size (Calculator), and may float it instead.
     public static func combine(_ t: WindowTraits, rule: WindowBehavior, model: WindowBehavior, confidence: Double,
                                threshold: Double, floatingApps: Set<String>) -> WindowBehavior {
         if let hard = WindowBehavior.hardRule(t) { return hard }
         guard confidence >= threshold else { return rule }
-        if model == .document, !t.resizable || floatingApps.contains(t.app) { return rule }
+        if model == .document, floatingApps.contains(t.app) { return rule }
         return model
     }
 }

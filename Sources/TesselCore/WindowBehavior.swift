@@ -37,6 +37,9 @@ public struct WindowTraits: Codable, Equatable, Sendable {
     public var title: String?
     public var buttons: WindowButtons
     public var resizable: Bool
+    /// Its minimize button is there and enabled. Nil for windows read before Tessel noted it
+    /// (2026-10-17); a minimize button being there stands in for it then.
+    public var minimizable: Bool?
     public var modal: Bool
     public var hasDefaultButton: Bool
     public var hasCancelButton: Bool
@@ -59,7 +62,7 @@ public struct WindowTraits: Codable, Equatable, Sendable {
     public init(app: String, appName: String? = nil, appCategory: String? = nil, role: String? = "AXWindow",
                 subrole: String? = "AXStandardWindow", identifier: String? = nil, title: String? = nil,
                 buttons: WindowButtons = [.close, .minimize, .zoom, .fullScreen], resizable: Bool = true,
-                modal: Bool = false, hasDefaultButton: Bool = false, hasCancelButton: Bool = false,
+                minimizable: Bool? = nil, modal: Bool = false, hasDefaultButton: Bool = false, hasCancelButton: Bool = false,
                 hasToolbar: Bool = false, hasTabs: Bool = false, isDocument: Bool = false, isMain: Bool = false,
                 layer: Int = 0, width: Double = 900, height: Double = 600, screenShare: Double = 0.3, appWindows: Int = 1) {
         self.app = app
@@ -71,6 +74,7 @@ public struct WindowTraits: Codable, Equatable, Sendable {
         self.title = title
         self.buttons = buttons
         self.resizable = resizable
+        self.minimizable = minimizable
         self.modal = modal
         self.hasDefaultButton = hasDefaultButton
         self.hasCancelButton = hasCancelButton
@@ -96,22 +100,55 @@ public struct WindowTraits: Codable, Equatable, Sendable {
 // MARK: Today's rules, as behaviors
 
 extension WindowBehavior {
+    /// Apps whose windows always float: overlays, not windows you work in. (Simulator,
+    /// Calculator, System Settings and the like tile, at the size they take.)
+    public static let floatingApps: Set<String> = ["com.apple.screencaptureui", "com.tyleryouens.tessel"]
+
     /// What Tessel's hand-written rules do with a window, in the same terms, so the two can be
-    /// compared: dialogs center (`Dialogs.isDialog`), standard resizable windows tile unless
-    /// their app always floats, and everything else floats (a panel, as far as the rules know).
+    /// compared:
+    /// - a dialog floats, centered (`Dialogs.isDialog`); a "dialog" that resizes, has every
+    ///   title-bar button and isn't asking anything (Little Arc) is a window;
+    /// - so does a window that can be neither resized nor minimized (an About box);
+    /// - any other window tiles, at its own size if it can't be resized (Calculator), unless
+    ///   its app always floats;
+    /// - everything else (a palette, a floating panel) floats where it is.
     public static func byRules(_ t: WindowTraits, floatingApps: Set<String>) -> WindowBehavior {
-        if Dialogs.isDialog(subrole: t.subrole, identifier: t.identifier, hasDefaultButton: t.hasDefaultButton,
-                            hasCancelButton: t.hasCancelButton, modal: t.modal) { return .dialog }
-        let standard = t.role == "AXWindow" && t.subrole == "AXStandardWindow"
-        if standard, t.resizable, !floatingApps.contains(t.app) { return .document }
+        let r = RulesReading(t)
+        if r.centered { return .dialog }
+        if r.tiles, !floatingApps.contains(t.app) { return .document }
         return .panel
     }
 
-    /// What can never be learned: a window the rules call a dialog, or one that can't be
-    /// resized, never tiles; a dialog is always centered.
+    /// What can never be learned, because Tessel never asks the classifier: a window the rules
+    /// center (a dialog, an About box), and one that isn't window-like (no standard window's
+    /// role, and not a resizable window with every title-bar button). Those get the rules.
     public static func hardRule(_ t: WindowTraits) -> WindowBehavior? {
-        if Dialogs.isDialog(subrole: t.subrole, identifier: t.identifier, hasDefaultButton: t.hasDefaultButton,
-                            hasCancelButton: t.hasCancelButton, modal: t.modal) { return .dialog }
-        return nil
+        let r = RulesReading(t)
+        if r.centered { return .dialog }
+        return r.windowLike ? nil : .panel
+    }
+}
+
+/// How `Tiler.readWindow` reads a window, from its traits. Keep the two in step.
+struct RulesReading {
+    /// It floats, centered: a dialog, or a window that can be neither resized nor minimized.
+    let centered: Bool
+    /// The rules tile it (at its own size, if it can't be resized).
+    let tiles: Bool
+    /// Tessel asks the classifier about it (`windowLike`).
+    let windowLike: Bool
+
+    init(_ t: WindowTraits) {
+        let windowButtons = t.buttons.isSuperset(of: [.close, .minimize, .zoom])
+        let dialogSubrole = t.subrole.map(Dialogs.subroles.contains) ?? false
+        let dialog = Dialogs.isDialog(subrole: t.subrole, identifier: t.identifier, hasDefaultButton: t.hasDefaultButton,
+                                      hasCancelButton: t.hasCancelButton, modal: t.modal,
+                                      looksLikeWindow: dialogSubrole && t.resizable && windowButtons)
+        let windowRole = t.role == "AXWindow" && (t.subrole == "AXStandardWindow" || (dialogSubrole && !dialog))
+        let minimizable = t.resizable || (t.minimizable ?? t.buttons.contains(.minimize))
+        let panel = windowRole && !minimizable
+        centered = dialog || panel
+        tiles = windowRole && !centered
+        windowLike = !centered && (tiles || (t.resizable && t.role == "AXWindow" && windowButtons))
     }
 }
