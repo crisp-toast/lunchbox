@@ -40,10 +40,12 @@ or call, or a dialog. It reads the window's Accessibility traits and its title, 
 about 0.05 ms, plus 1–1.6 ms of Accessibility reads on the app's own queue. The old rules stay
 underneath it as a safety floor.
 
-Held out by app, it gets 88% of windows' behavior right where the rules get 81%, and 98% of
-tile-or-not decisions where the rules get 89%, on a small labeled set of 84 windows. Its call is
-the starting point your own corrections adjust. Details, the honest caveats, and how to see it on
-your own windows are in [window-classifier.md](window-classifier.md).
+Held out by app, it gets 85% of windows' behavior right where the rules get 81%, and 92% of
+tile-or-not decisions where the rules get 86%, on a small labeled set of 84 windows. That's
+measured against Tessel's rules as of 2026-10-17, which tile Calculator, System Settings and
+QuickTime (against the older rules it was 88% and 98%). Its call is the starting point your own
+corrections adjust. Details, the honest caveats, and how to see it on your own windows are in
+[window-classifier.md](window-classifier.md).
 
 ## One promise, three proofs
 
