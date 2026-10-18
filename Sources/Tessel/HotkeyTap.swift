@@ -195,14 +195,15 @@ final class HotkeyTap {
         let afterShiftTap = chord.keyDown(code: code, flags: event.flags, isRepeat: isRepeat)
         guard s.enabled else { return pass }
 
-        // Resize mode (⌘⇧R): the arrows change one side only, = and − both; held, they keep
-        // going. Return, Esc or ⌘⇧R ends it; any other key ends it and does what it always does.
+        // Resize mode (⌘⇧R): the arrows push the window's edge on their side; + and − (either row,
+        // or the number pad) grow or shrink it all round, the same as ⌘⇧+ and ⌘⇧−; held, they
+        // keep going. Return, Esc or ⌘⇧R ends it; any other key ends it and does what it always does.
         let now = CACurrentMediaTime()
         if now < s.resizeUntil {
             let along: [Int64: Direction] = [124: .right, 123: .left, 126: .up, 125: .down]
             var step: KeyAction?
             if let direction = along[code] { step = .resizeAlong(direction) }
-            else if code == 24 { step = .grow } else if code == 27 { step = .shrink }
+            else if code == 24 || code == 69 { step = .grow } else if code == 27 || code == 78 { step = .shrink }
             if let step {
                 state.withLock { $0.resizeUntil = now + Self.resizeModeSeconds }
                 swallowed.insert(code)
