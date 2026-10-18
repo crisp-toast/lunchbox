@@ -14,8 +14,9 @@ enum CheatSheetContent {
                        title: c.title, group: c.group, keywords: c.keywords)
         }
         all += [
-            CheatEntry(id: "summon.go", keys: ["↩"], title: "In Summon: open the app, or go to its window", group: "Summon",
-                       keywords: ["return", "enter", "open", "go to", "existing window", "launch", "select"]),
+            CheatEntry(id: "summon.go", keys: ["↩"], title: "In Summon: open the app, or go to the window", group: "Summon",
+                       keywords: ["return", "enter", "open", "go to", "existing window", "launch", "select",
+                                  "find window", "window title", "switch window", "jump to window", "other workspace"]),
             CheatEntry(id: "summon.new", keys: ["⇧", "↩"], title: "In Summon: open a new window of an app that's already open", group: "Summon",
                        keywords: ["new window", "another window", "second window", "shift return", "shift enter", "duplicate", "fresh window"]),
             CheatEntry(id: "summon.choose", keys: ["↑ ↓"], title: "In Summon: choose a result", group: "Summon",

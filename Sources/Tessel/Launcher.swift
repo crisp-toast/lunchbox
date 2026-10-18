@@ -1,12 +1,14 @@
 import AppKit
 import TesselCore
 
-/// ⇧Space: a small, instant app and file launcher.
+/// ⇧Space: a small, instant app, window and file launcher.
 ///
 /// Apps are listed from the Applications folders into memory, so matching runs
 /// on every keystroke with no disk access. An app that's already open gets two
-/// rows: go to its window, or open a new one. When no app matches, Spotlight's
-/// index is searched for files and folders instead. Apps you open often rise.
+/// rows: go to its window, or open a new one. Open windows are found by the words
+/// in their titles, from a snapshot taken as the panel opens, so typing never
+/// waits on another app. Spotlight's index is searched for files and folders as
+/// you type, listed after the windows. Apps you open often rise.
 final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     struct App {
         let name: String
@@ -21,6 +23,8 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         /// `newWindow`: it also has a real New Window command, offered on ⇧↩.
         /// Otherwise Return opens the app.
         case app(App, running: NSRunningApplication?, reachable: Bool, newWindow: Bool)
+        /// An open window, found by its title or app: Return goes to it, wherever it is.
+        case window(Tiler.OpenWindow)
         case file(URL)
         /// Nothing matched: search the web for the text, or open it if it's an address.
         case web(String)
@@ -29,13 +33,23 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             switch self {
             case .app(let a, _, _, _): return a.url.path
             case .file(let url): return url.path
-            case .web: return ""
+            case .window, .web: return ""
             }
         }
 
         var hasNewWindowAction: Bool {
             if case .app(_, _, true, true) = self { return true }
             return false
+        }
+
+        /// Which row this is, so it stays highlighted while the list changes around it.
+        var key: String {
+            switch self {
+            case .app(let a, _, _, _): return "app " + a.url.path
+            case .window(let w): return "window \(w.id)"
+            case .file(let url): return "file " + url.path
+            case .web: return "web"
+            }
         }
     }
 
@@ -48,6 +62,13 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     private var selected = 0
     private var apps: [App] = []
     private var appsLoadedAt: Date?
+    /// The open windows as they were when the panel opened, and the search over their words.
+    private var openWindows: [CGWindowID: Tiler.OpenWindow] = [:]
+    private var windowSearch = WindowSearch([])
+    /// What the query found, kept apart so Spotlight's files can join the list when they arrive.
+    private var appRows: [(app: Result, nameScore: Int)] = []
+    private var windowRows: [Result] = []
+    private var fileRows: [Result] = []
     private var fileQuery: NSMetadataQuery?
     private var fileSearch: DispatchWorkItem?
     private var icons: [String: NSImage] = [:]
@@ -83,6 +104,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         if appsLoadedAt.map({ Date().timeIntervalSince($0) > 30 }) ?? true { reloadApps() }
         let panel = self.panel ?? makePanel()
         field.stringValue = query
+        snapshotWindows()
         update()
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main ?? NSScreen.screens[0]
         let height = panelHeight
@@ -169,61 +191,104 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         return found
     }
 
+    // MARK: Windows
+
+    /// Takes the open windows with the titles Tessel last read, so the first keystroke already
+    /// finds them, then reads every title again (each app on its own queue) and searches anew.
+    /// Typing itself never asks another app for anything.
+    private func snapshotWindows() {
+        setWindows(tiler.openWindows())
+        tiler.readWindowTitles { [weak self] in
+            guard let self, self.isVisible else { return }
+            self.setWindows(self.tiler.openWindows())
+            if !self.field.stringValue.trimmingCharacters(in: .whitespaces).isEmpty { self.refreshKeepingSelection() }
+        }
+    }
+
+    private func setWindows(_ list: [Tiler.OpenWindow]) {
+        openWindows = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        windowSearch = WindowSearch(list.map {
+            SearchableWindow(id: $0.id, appID: $0.appID ?? "pid.\($0.pid)", appName: $0.appName, title: $0.title)
+        })
+    }
+
     // MARK: Searching
 
     func controlTextDidChange(_ obj: Notification) { update() }
 
-    private func update() {
+    private func update(keeping key: String? = nil) {
         let query = field.stringValue.trimmingCharacters(in: .whitespaces)
         fileSearch?.cancel()
         fileQuery?.stop()
         fileQuery = nil
 
         let uses = UserDefaults.standard.dictionary(forKey: "launcherUses") as? [String: Int] ?? [:]
-        let ranked: [App]
+        let ranked: [(app: App, nameScore: Int)]
         if query.isEmpty {
             ranked = apps.filter { (uses[$0.url.path] ?? 0) > 0 }
                 .sorted { (uses[$0.url.path] ?? 0) > (uses[$1.url.path] ?? 0) }
+                .map { ($0, 0) }
         } else {
-            ranked = apps.compactMap { app -> (App, Int)? in
+            ranked = apps.compactMap { app -> (App, Int, Int)? in
                 guard let s = Fuzzy.score(query, app.name) else { return nil }
-                return (app, s + min(uses[app.url.path] ?? 0, 40) * 25)
+                return (app, s, s + min(uses[app.url.path] ?? 0, 40) * 25)
             }
-            .sorted { $0.1 > $1.1 }
-            .map(\.0)
+            .sorted { $0.2 > $1.2 }
+            .prefix(Self.maxRows)
+            .map { ($0.0, $0.1) }
         }
-
-        let list: [Result] = ranked.prefix(Self.maxRows).map { app in
-            let running = runningApp(app)
-            let reachable = running.map { tiler.hasReachableWindow(ofApp: $0.processIdentifier) } ?? false
-            var newWindow = false
-            if reachable, let running {
-                // Only apps with a real New Window command get the ⇧↩ line; the
-                // first time, Tessel looks at the app's menus and redraws.
-                newWindow = tiler.supportsNewWindow(pid: running.processIdentifier, bundleID: app.bundleID) { [weak self] in
-                    self?.refreshKeepingSelection()
-                } ?? false
-            }
-            return .app(app, running: running, reachable: reachable, newWindow: newWindow)
+        appRows = ranked.map { (row(for: $0.app), $0.nameScore) }
+        windowRows = windowSearch.find(query, listedApps: Set(ranked.compactMap(\.app.bundleID)))
+            .compactMap { openWindows[$0.id] }.map { .window($0) }
+        // Files come with every query of two letters or more, not only when no app matches.
+        // Spotlight's last answer stays while it still fits what's typed, until the new one.
+        let terms = FileSearch.terms(in: query)
+        let searchesFiles = query.count >= 2 && !terms.isEmpty
+        fileRows = !searchesFiles ? [] : fileRows.filter {
+            if case .file(let url) = $0 { return FileSearch.matches(terms, name: url.lastPathComponent) }
+            return false
         }
-        results = list
-        if list.isEmpty, !query.isEmpty { results = [.web(query)] }
-        selected = 0
-        render()
+        compose(keeping: key)
 
-        if list.isEmpty, !query.isEmpty {
-            let work = DispatchWorkItem { [weak self] in self?.searchFiles(query) }
+        if searchesFiles {
+            let work = DispatchWorkItem { [weak self] in self?.searchFiles(terms) }
             fileSearch = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.06, execute: work)
         }
     }
 
-    /// Re-runs the search after a menu check, keeping the highlighted row.
+    private func row(for app: App) -> Result {
+        let running = runningApp(app)
+        let reachable = running.map { tiler.hasReachableWindow(ofApp: $0.processIdentifier) } ?? false
+        var newWindow = false
+        if reachable, let running {
+            // Only apps with a real New Window command get the ⇧↩ line; the
+            // first time, Tessel looks at the app's menus and redraws.
+            newWindow = tiler.supportsNewWindow(pid: running.processIdentifier, bundleID: app.bundleID) { [weak self] in
+                self?.refreshKeepingSelection()
+            } ?? false
+        }
+        return .app(app, running: running, reachable: reachable, newWindow: newWindow)
+    }
+
+    /// Puts the list together: apps named by the query, windows, files, then apps that only
+    /// loosely match, with the web last when no app matched. `key` stays highlighted if it's there.
+    private func compose(keeping key: String? = nil) {
+        let query = field.stringValue.trimmingCharacters(in: .whitespaces)
+        results = Summon.order(apps: appRows, windows: windowRows, files: fileRows, limit: Self.maxRows).map {
+            switch $0 {
+            case .app(let r), .window(let r), .file(let r): return r
+            }
+        }
+        if !query.isEmpty, appRows.isEmpty { results.append(.web(query)) }
+        selected = key.flatMap { k in results.firstIndex { $0.key == k } } ?? 0
+        render()
+    }
+
+    /// Re-runs the search after a menu check or fresh titles, keeping the highlighted row.
     private func refreshKeepingSelection() {
-        guard isVisible, results.allSatisfy({ if case .app = $0 { return true }; return false }) else { return }
-        let keep = selected
-        update()
-        select(min(keep, max(0, results.count - 1)))
+        guard isVisible else { return }
+        update(keeping: results.indices.contains(selected) ? results[selected].key : nil)
     }
 
     private func runningApp(_ app: App) -> NSRunningApplication? {
@@ -232,13 +297,14 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             .first { $0.activationPolicy == .regular && !$0.isTerminated }
     }
 
-    /// Files and folders whose name contains the query, from Spotlight's index,
-    /// most recently used first.
-    private func searchFiles(_ query: String) {
-        let cleaned = query.filter { $0 != "*" && $0 != "?" && $0 != "\"" }
-        guard !cleaned.isEmpty else { return }
+    /// Files and folders whose name has every typed word in it, from Spotlight's index,
+    /// most recently used first (FileSearch then ranks them).
+    private func searchFiles(_ terms: [String]) {
+        guard !terms.isEmpty else { return }
         let q = NSMetadataQuery()
-        q.predicate = NSPredicate(format: "%K LIKE[cd] %@", NSMetadataItemFSNameKey, "*\(cleaned)*")
+        let parts = terms.map { NSPredicate(format: "%K LIKE[cd] %@", NSMetadataItemFSNameKey, "*\($0)*") }
+        // NSMetadataQuery throws on an AND of just one predicate.
+        q.predicate = parts.count == 1 ? parts[0] : NSCompoundPredicate(andPredicateWithSubpredicates: parts)
         q.searchScopes = [NSMetadataQueryUserHomeScope, URL(fileURLWithPath: "/Volumes/Master Storage")]
         q.sortDescriptors = [NSSortDescriptor(key: "kMDItemLastUsedDate", ascending: false)]
         NotificationCenter.default.addObserver(self, selector: #selector(filesFound(_:)), name: .NSMetadataQueryDidFinishGathering, object: q)
@@ -251,19 +317,20 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         guard let q = note.object as? NSMetadataQuery, q === fileQuery else { return }
         q.disableUpdates()
         defer { q.enableUpdates() }
-        let skip = ["/Library/", "/.", "/node_modules/", "/.build/", "/DerivedData/", "/Caches/", ".app/"]
-        var files: [Result] = []
-        for i in 0..<min(q.resultCount, 200) {
+        // The most recently used few dozen, without hidden, app and Library paths (iCloud Drive's
+        // Desktop and Documents are under Library, and do show), ranked by name and place.
+        let home = NSHomeDirectory()
+        var paths: [String] = []
+        for i in 0..<min(q.resultCount, 300) where paths.count < 60 {
             guard let item = q.result(at: i) as? NSMetadataItem,
                   let path = item.value(forAttribute: NSMetadataItemPathKey) as? String,
-                  !skip.contains(where: { path.contains($0) }), !path.hasSuffix(".app") else { continue }
-            files.append(.file(URL(fileURLWithPath: path)))
-            if files.count == Self.maxRows { break }
+                  !FileSearch.isHidden(path, home: home) else { continue }
+            paths.append(path)
         }
         let query = field.stringValue.trimmingCharacters(in: .whitespaces)
-        results = files + (query.isEmpty ? [] : [.web(query)])
-        selected = 0
-        render()
+        fileRows = FileSearch.rank(paths, query: query, home: home).prefix(Self.maxRows).map { .file(URL(fileURLWithPath: $0)) }
+        // A row you moved to stays highlighted; otherwise the top row is.
+        compose(keeping: selected > 0 && results.indices.contains(selected) ? results[selected].key : nil)
     }
 
     // MARK: Opening
@@ -272,6 +339,12 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     /// window (Shift-Return, only offered when the app has a window to go to).
     private func open(_ result: Result, newWindow: Bool) {
         hide()
+        if case .window(let w) = result {
+            // Wherever it is: another Workspace, another display, the Dock. If it closed
+            // since Summon opened, its app's most recent window instead.
+            if !tiler.goToWindow(w.id) { _ = tiler.goToWindow(ofApp: w.pid) }
+            return
+        }
         var uses = UserDefaults.standard.dictionary(forKey: "launcherUses") as? [String: Int] ?? [:]
         uses[result.path, default: 0] += 1
         UserDefaults.standard.set(uses, forKey: "launcherUses")
@@ -306,6 +379,8 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             NSWorkspace.shared.open(url)
         case .web(let text):
             if let url = Self.webURL(for: text) { openWeb(url) }
+        case .window:
+            break // went to it above
         }
     }
 
@@ -420,9 +495,12 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         case .app(let app, let running, let reachable, _):
             let subtitle = reachable ? "Go to its window" : (running == nil ? "Open" : "Open · running with no windows")
             return (app.name, subtitle, app.url.path)
+        case .window(let w):
+            let place = w.minimized ? "Minimized" : w.space.map { "Workspace \($0 + 1)" } ?? "Floating"
+            let subtitle = ([w.appName, place] + (w.display.map { [$0] } ?? [])).joined(separator: " · ")
+            return (w.title.isEmpty ? w.appName : w.title, subtitle, w.appURL?.path ?? "")
         case .file(let url):
-            let folder = url.deletingLastPathComponent().path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
-            return (url.lastPathComponent, folder, url.path)
+            return (url.lastPathComponent, FileSearch.folder(of: url.path, home: NSHomeDirectory()), url.path)
         case .web(let text):
             let browser = Self.defaultBrowser
             let inBrowser = browser.map { " in \($0.name)" } ?? ""
@@ -493,7 +571,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = .systemFont(ofSize: 24, weight: .regular)
-        field.placeholderString = "Summon an app, file or website"
+        field.placeholderString = "Summon an app, window, file or website"
         field.delegate = self
         field.cell?.isScrollable = true
         field.cell?.wraps = false

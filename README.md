@@ -40,7 +40,7 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
 | Left ⌘ + 1 / 2 / 3 | Go to that Workspace |
 | Left ⌘ ⌥ + 1 / 2 / 3 | Move the focused window to that Workspace and go there with it |
-| ⇧ Space | **Summon**: open an app, file or website |
+| ⇧ Space | **Summon**: open an app, or go to any open window, file or website |
 | Left ⌘ ⇧ + Space | The **Cheat Sheet**: every shortcut, with search |
 
 Workspaces are ⌘ and their number. Moving a window there is ⌥⌘, not ⌘⇧, because ⌘⇧3, ⌘⇧4 and
@@ -53,7 +53,7 @@ tabs, say), and so does ⌘ and the number of a Workspace you don't have. **Add 
 
 | Name | What it is |
 | --- | --- |
-| **Summon** | The ⇧Space search bar: apps, then files and folders, then the web |
+| **Summon** | The ⇧Space search bar: apps, then open windows, then files and folders, then the web |
 | **Focus** | ⌘⇧F: one window centered, the rest on the Shelf |
 | **the Shelf** | The tilted cards beside a Focus window |
 | **Tidy** | ⌘⇧0: even out every split in the space |
@@ -84,8 +84,22 @@ Apps you open often rise to the top.
 - An app with a window you can get to (tiled in a space, minimized, or floating on screen) shows two rows: **go to its window** (switching spaces if
   needed) and **New … window** (⇧↩), which uses the app's own File › New Window and lands
   tiled and focused in the current space.
-- When no app matches, it searches Spotlight's index for files and folders, most
-  recently used first.
+- **Open windows** are found by the words in their titles: type "invoice", "lunch" or "Tiler"
+  and the window whose title has a word starting that way is listed, with its app and Workspace
+  beneath. Return goes to it wherever it is: another Workspace, another display, or minimized in
+  the Dock. A word can also be the app's name ("slack" lists each Slack window). Windows that match
+  more of what you typed come first, then the ones you used most recently. Window rows sit below
+  apps whose name you typed and above files. It's plain word matching on titles read as Summon
+  opens, so typing never waits on another app, and titles are never saved.
+- **Files and folders** come from Spotlight's index as you type (two letters or more), alongside
+  apps and windows and listed after them, with at least two rows kept for them. A name that is what
+  you typed comes first, then names that start with it, then names with a word starting each typed
+  word; among those, the Desktop, Documents and Downloads (on this Mac or in iCloud Drive) come
+  before deeper folders, then the most recently used. iCloud Drive and cloud storage folders
+  (Dropbox, Google Drive) are searched; the rest of Library, hidden files and apps aren't.
+  macOS hides files in Desktop, Documents and Downloads from apps it hasn't let into those
+  folders, Spotlight's answers included, so Summon lists them only once Tessel has that access
+  (for now, Full Disk Access in Privacy & Security). Tessel never asks for it on its own.
 - Opening an app that isn't running yet (or is running with no windows), or a **New … window**,
   makes room right away, so a slow launch never looks like nothing happened: the windows here glide
   aside and a frosted **placeholder** with the app's icon, gently pulsing, holds the exact spot and
