@@ -18,6 +18,9 @@ import QuartzCore
 final class Animator {
     enum Kind {
         case animate
+        /// Its final size at once, then a slide into place: for a window that keeps its own
+        /// size or shape, which would jitter if resized every frame.
+        case slide
         case snap
         /// Parking a window off screen: only its position changes.
         case positionOnly
@@ -81,7 +84,7 @@ final class Animator {
         var start = from
         if let existing = running[window.id] { start = existing.frame(at: now) }
 
-        let snaps = kind != .animate || latency > Self.slideLatency || start.isClose(to: to, tolerance: 1)
+        let snaps = (kind != .animate && kind != .slide) || latency > Self.slideLatency || start.isClose(to: to, tolerance: 1)
         guard !snaps else {
             running[window.id] = nil
             window.app.queue.async { [weak self] in
@@ -91,7 +94,7 @@ final class Animator {
         }
         running[window.id] = Animation(
             window: window, from: start, to: to, start: now,
-            resizeEveryFrame: latency < Self.fullAnimationLatency, token: token,
+            resizeEveryFrame: kind == .animate && latency < Self.fullAnimationLatency, token: token,
             sizeSent: start.size == to.size
         )
     }
@@ -129,16 +132,21 @@ final class Animator {
         guard latest.withLock({ $0[window.id] }) == token else { return } // a newer move took over
         let element = window.element
         let t0 = CACurrentMediaTime()
-        if positionOnly { element.setPosition(target.origin) } else { element.setFrame(target) }
-        window.app.recordLatency((CACurrentMediaTime() - t0) / (positionOnly ? 1 : 2))
-
-        let actual = element.frame
-        // Parking only needs the window pushed off the right edge (macOS may clamp
-        // its height); a normal move needs its position to land. Size may differ
-        // when an app enforces a minimum or maximum size, and that's fine.
+        let actual: CGRect?
+        if positionOnly {
+            element.setPosition(target.origin)
+            actual = element.frame
+        } else {
+            // A window that won't take this size sits centered on its slot (until Tessel learns
+            // what it takes), not in its corner.
+            actual = element.place(in: target)
+        }
+        window.app.recordLatency((CACurrentMediaTime() - t0) / (positionOnly ? 3 : 4))
+        // Parking only needs the window pushed off the right edge (macOS may clamp its
+        // height); a normal move needs it centered where it was sent.
         let landed: Bool = actual.map { a in
             positionOnly ? a.minX >= target.minX - 2
-                : abs(a.minX - target.minX) <= 2 && abs(a.minY - target.minY) <= 2
+                : abs(a.midX - target.midX) <= 2 && abs(a.midY - target.midY) <= 2
         } ?? false
         if !landed, attempt < Self.retryDelays.count {
             window.app.queue.asyncAfter(deadline: .now() + Self.retryDelays[attempt]) { [weak self] in

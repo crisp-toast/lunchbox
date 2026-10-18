@@ -86,7 +86,11 @@ public struct Layout: Equatable, Sendable {
     /// Adds a new window. It gets its own column while there is room
     /// (`maxColumns`), placed right after the focused window's column;
     /// after that it stacks into the column with the fewest windows.
-    public mutating func insert(_ id: WindowID, near focused: WindowID?, maxColumns: Int) {
+    /// - room: the usable area and gap, with `limits`, so a window that can't be squeezed
+    ///   (a minimum height, a fixed size) stacks where it fits, or gets a column of its own when
+    ///   no column has the height for it and the others leave enough width.
+    public mutating func insert(_ id: WindowID, near focused: WindowID?, maxColumns: Int,
+                                limits: [WindowID: SizeLimits] = [:], room: (area: CGSize, gap: CGFloat)? = nil) {
         guard !contains(id) else { return }
         spotlight = nil
         guard !columns.isEmpty else {
@@ -99,9 +103,48 @@ public struct Layout: Equatable, Sendable {
             columns.insert(Column(windows: [id], weight: averageColumnWeight), at: index)
             return
         }
-        let fewest = columns.map(\.windows.count).min() ?? 0
-        var target = columns.lastIndex { $0.windows.count == fewest } ?? columns.count - 1
-        if let f = focusedPos, columns[f.column].windows.count == fewest {
+        var candidates = Array(columns.indices)
+        if let room, let natural = limits[id]?.maxWidth {
+            // A narrow window (it keeps its own width: Calculator, a phone in Simulator) gets a
+            // column of its own when the others keep a comfortable width, rather than squeezing
+            // into a stack.
+            let used = columns.map { col -> CGFloat in
+                let caps = col.windows.map { limits[$0]?.maxWidth }
+                return caps.contains(where: { $0 == nil }) ? 800 : caps.compactMap { $0 }.max() ?? 800
+            }.reduce(0, +) + room.gap * CGFloat(columns.count)
+            if used + natural <= room.area.width {
+                let index = focusedPos.map { $0.column + 1 } ?? columns.count
+                columns.insert(Column(windows: [id], weight: averageColumnWeight), at: index)
+                return
+            }
+        }
+        if let room {
+            // Every window needs at least a sliver; windows with a minimum need that much.
+            func height(_ ids: [WindowID]) -> CGFloat {
+                ids.map { max(limits[$0]?.minHeight ?? 0, 80) }.reduce(0, +) + room.gap * CGFloat(ids.count - 1)
+            }
+            let fitting = columns.indices.filter { height(columns[$0].windows + [id]) <= room.area.height }
+            if fitting.isEmpty {
+                // Narrow columns (windows that keep their own width) can leave room beside them.
+                func width(_ col: Column) -> CGFloat {
+                    let caps = col.windows.map { limits[$0]?.maxWidth }
+                    let widest = caps.contains(where: { $0 == nil }) ? 400 : caps.compactMap { $0 }.max() ?? 400
+                    return max(col.windows.compactMap { limits[$0]?.minWidth }.max() ?? 0, widest)
+                }
+                let needed = limits[id].flatMap { $0.minWidth ?? $0.maxWidth } ?? 400
+                let used = columns.map(width).reduce(0, +) + room.gap * CGFloat(columns.count)
+                if used + needed <= room.area.width {
+                    let index = focusedPos.map { $0.column + 1 } ?? columns.count
+                    columns.insert(Column(windows: [id], weight: averageColumnWeight), at: index)
+                    return
+                }
+            } else {
+                candidates = fitting
+            }
+        }
+        let fewest = candidates.map { columns[$0].windows.count }.min() ?? 0
+        var target = candidates.last { columns[$0].windows.count == fewest } ?? columns.count - 1
+        if let f = focusedPos, candidates.contains(f.column), columns[f.column].windows.count == fewest {
             target = f.column
         }
         let row = (focusedPos?.column == target) ? focusedPos!.row + 1 : columns[target].windows.count
@@ -352,18 +395,21 @@ public struct Layout: Equatable, Sendable {
     // MARK: Geometry
 
     /// Target frames for every window, in top-left-origin screen coordinates.
-    public func frames(in rect: CGRect, gap: CGFloat) -> [WindowID: CGRect] {
+    /// - limits: windows that can't fill a tile (see `SizeLimits`). Each sits at the size it
+    ///   takes, centered in its slot, and its column (or its share of a stack) is sized to fit
+    ///   it, so a narrow window doesn't leave half the screen empty.
+    public func frames(in rect: CGRect, gap: CGFloat, limits: [WindowID: SizeLimits] = [:]) -> [WindowID: CGRect] {
         let usable = CGRect(
             x: (rect.minX + gap).rounded(), y: (rect.minY + gap).rounded(),
             width: (rect.width - 2 * gap).rounded(), height: (rect.height - 2 * gap).rounded()
         )
         var result: [WindowID: CGRect] = [:]
         if windowCount == 1, let id = windows.first {
-            result[id] = centeredFrame(id, in: usable)
+            result[id] = Self.fit(id, in: centeredFrame(id, in: usable), limits: limits, within: usable)
             return result
         }
         if let spot = spotlight, contains(spot) {
-            let center = centeredFrame(spot, in: usable)
+            let center = Self.fit(spot, in: centeredFrame(spot, in: usable), limits: limits, within: usable)
             result[spot] = center
             let others = windows.filter { $0 != spot }
             for (id, frame) in zip(others, Self.shelfFrames(count: others.count, beside: center, in: usable, gap: gap)) {
@@ -372,26 +418,45 @@ public struct Layout: Equatable, Sendable {
             return result
         }
 
-        let widthTotal = columns.map(\.weight).reduce(0, +)
+        // A column needs at least the widest minimum among its windows, and is never wider
+        // than its widest window can be (when every window in it has a maximum).
+        let mins = columns.map { col in col.windows.compactMap { limits[$0]?.minWidth }.max() ?? 0 }
+        let maxs = columns.map { col -> CGFloat in
+            let caps = col.windows.map { limits[$0]?.maxWidth }
+            return caps.contains(where: { $0 == nil }) ? .infinity : caps.compactMap { $0 }.max() ?? .infinity
+        }
         let availWidth = usable.width - gap * CGFloat(columns.count - 1)
-        var x = usable.minX
+        let widths = Self.distribute(availWidth, weights: columns.map(\.weight), mins: mins.map { min($0, availWidth) }, maxs: maxs)
+        // Columns that all stopped short of the screen sit together in the middle.
+        var x = usable.minX + max(0, (availWidth - widths.reduce(0, +)) / 2).rounded()
         for (c, column) in columns.enumerated() {
-            let width = c == columns.count - 1
-                ? usable.maxX - x
-                : (availWidth * CGFloat(column.weight / widthTotal)).rounded()
-            let heightTotal = column.weights.reduce(0, +)
+            let width = widths[c]
             let availHeight = usable.height - gap * CGFloat(column.windows.count - 1)
-            var y = usable.minY
+            let heights = Self.distribute(
+                availHeight, weights: column.weights,
+                mins: column.windows.map { min(limits[$0]?.minHeight ?? 0, availHeight) },
+                maxs: column.windows.map { limits[$0]?.maxHeight ?? .infinity })
+            var y = usable.minY + max(0, (availHeight - heights.reduce(0, +)) / 2).rounded()
             for (r, id) in column.windows.enumerated() {
-                let height = r == column.windows.count - 1
-                    ? usable.maxY - y
-                    : (availHeight * CGFloat(column.weights[r] / heightTotal)).rounded()
-                result[id] = CGRect(x: x, y: y, width: width, height: height)
-                y += height + gap
+                let slot = CGRect(x: x, y: y, width: width, height: heights[r])
+                result[id] = Self.fit(id, in: slot, limits: limits, within: usable)
+                y += heights[r] + gap
             }
             x += width + gap
         }
         return result
+    }
+
+    /// A window's frame in its slot: the slot itself, or for a window that can't fill it, the
+    /// nearest size it takes, centered on the slot and kept on the screen.
+    static func fit(_ id: WindowID, in slot: CGRect, limits: [WindowID: SizeLimits], within usable: CGRect) -> CGRect {
+        guard let l = limits[id], !l.isEmpty else { return slot }
+        let size = l.clamp(slot.size)
+        guard size != slot.size else { return slot }
+        var x = (slot.midX - size.width / 2).rounded(), y = (slot.midY - size.height / 2).rounded()
+        x = max(usable.minX, min(x, usable.maxX - size.width))
+        y = max(usable.minY, min(y, usable.maxY - size.height))
+        return CGRect(x: x, y: y, width: size.width, height: size.height)
     }
 
     /// Where a lone or spotlighted window sits: the shape the user gave it, else

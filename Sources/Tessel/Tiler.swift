@@ -17,6 +17,11 @@ final class ManagedWindow {
     var standard = false
     /// How many tabs its native tab bar shows (0 without one).
     var tabs = 0
+    /// Whether it can be resized at all (a fixed-size window tiles at its own size).
+    var resizable = true
+    /// The size it had after Tessel last placed it: a different size later means it
+    /// resized itself.
+    var settledSize: CGSize?
     /// When Tessel first saw it.
     let seenAt = CACurrentMediaTime()
 
@@ -39,6 +44,8 @@ private struct WindowInfo {
     /// A full window in all but name: resizable, with close, minimize and zoom
     /// buttons, but not marked standard.
     let windowLike: Bool
+    /// Whether it can be resized at all.
+    let resizable: Bool
     /// An alert, prompt, or Open or Save panel: it floats, centered, never tiled.
     let dialog: Bool
     /// In a Space of its own from the green button.
@@ -61,12 +68,9 @@ final class Tiler {
     static let gap: CGFloat = 8
     static let spaceCount = 3
     static let resizeStep = 0.08
-    /// Apps whose windows always float.
-    static let floatingApps: Set<String> = [
-        "com.apple.systempreferences", "com.apple.iphonesimulator", "com.1password.1password",
-        "com.apple.calculator", "com.apple.QuickTimePlayerX", "com.apple.ScreenSharing",
-        "com.apple.screencaptureui", "com.tyleryouens.tessel",
-    ]
+    /// Apps whose windows always float: overlays, not windows you work in. (Simulator,
+    /// Calculator, System Settings and the like tile, at the size they take.)
+    static let floatingApps: Set<String> = ["com.apple.screencaptureui", "com.tyleryouens.tessel"]
 
     private(set) var enabled = false
     private(set) var currentSpace = 0
@@ -144,6 +148,12 @@ final class Tiler {
         }
         let json = defaults.string(forKey: "layouts").map { Data($0.utf8) }
         savedLayouts = json.flatMap { try? JSONDecoder().decode([String: Layout].self, from: $0) } ?? [:]
+        // What windows still open from before take, so they're fitted from the start. Window numbers
+        // start over when the Mac restarts, so after a restart none of it applies; and each entry is
+        // only believed for a window of the same app at the same size (`consider`).
+        let saved = defaults.string(forKey: "limits").flatMap { try? JSONDecoder().decode(SavedLimits.self, from: Data($0.utf8)) }
+        limits = [:]
+        savedLimits = saved?.boot == Self.bootTime ? saved!.windows : [:]
     }
 
     // MARK: Lifecycle
@@ -253,7 +263,7 @@ final class Tiler {
             for (uuid, layout) in layouts {
                 let display = displays.first { $0.uuid == uuid } ?? displays.first
                 guard let d = display else { continue }
-                for (id, frame) in layout.frames(in: d.visible, gap: Self.gap) {
+                for (id, frame) in layout.frames(in: d.visible, gap: Self.gap, limits: limits) {
                     guard let w = windows[id], w.hidden else { continue }
                     let size = w.target?.size ?? w.frame.size
                     let origin = CGPoint(x: frame.midX - size.width / 2, y: frame.midY - size.height / 2)
@@ -368,14 +378,21 @@ final class Tiler {
                                       hasCancelButton: element.element(kAXCancelButtonAttribute) != nil,
                                       modal: element.bool(kAXModalAttribute), looksLikeWindow: looksLikeWindow)
         // A "dialog" that turned out to be a window (Little Arc) tiles like one.
-        let standard = role == kAXWindowRole && (subrole == kAXStandardWindowSubrole || (dialogSubrole && !dialog))
+        let windowRole = role == kAXWindowRole && (subrole == kAXStandardWindowSubrole || (dialogSubrole && !dialog))
+        // A window that can't be resized still tiles, at its own size, if it can be minimized
+        // like any app window (Calculator, a game). One that can do neither is a small panel
+        // (an About box, a progress window): it floats, centered, like a dialog.
+        let minimizable = resizable || (element.element(kAXMinimizeButtonAttribute).map { $0.bool(kAXEnabledAttribute) } ?? false)
+        let panel = windowRole && !minimizable
+        let standard = windowRole && !panel
         let minimized = element.isMinimized
         let fullScreen = element.isFullScreen
-        let usable = !minimized && !fullScreen && resizable && !dialog
+        let usable = !minimized && !fullScreen && !dialog && !panel
         let tileable = standard && usable
-        let windowLike = tileable || (usable && role == kAXWindowRole && hasWindowButtons())
+        let windowLike = tileable || (usable && resizable && role == kAXWindowRole && hasWindowButtons())
         return WindowInfo(id: id, element: element, frame: frame, tileable: tileable, minimized: minimized,
-                          standard: standard, windowLike: windowLike, dialog: dialog, fullScreen: fullScreen,
+                          standard: standard, windowLike: windowLike, resizable: resizable, dialog: dialog || panel,
+                          fullScreen: fullScreen,
                           tabs: element.elements(kAXChildrenAttribute)
                             .first { $0.role == "AXTabGroup" }.map { $0.elements(kAXTabsAttribute).count } ?? 0)
     }
@@ -406,6 +423,7 @@ final class Tiler {
             // numbers get reused by new windows: forget their spots.
             let alive = allWindowIDs()
             if !alive.isEmpty { self.savedPlacement = self.savedPlacement.filter { alive.contains($0.key) } }
+            self.savedLimits = [:]
             self.relayout(animated: false)
             self.persist()
             self.refreshFocus()
@@ -456,6 +474,7 @@ final class Tiler {
         // before the tab that just went back is looked at.
         let ordered = infos.filter { onScreen.contains($0.id) } + infos.filter { !onScreen.contains($0.id) }
         for info in ordered where consider(info, app: app, onScreen: onScreen, shown: shown) { changed = true }
+        if layoutChangedSize { layoutChangedSize = false; changed = true }
         if changed {
             relayout(animated: true)
             persist()
@@ -507,9 +526,19 @@ final class Tiler {
             }
         }
         if !window.hidden { window.frame = info.frame }
+        if isNew, let saved = savedLimits.removeValue(forKey: String(info.id)), saved.app == app.bundleID,
+           abs(saved.width - info.frame.width) <= 2, abs(saved.height - info.frame.height) <= 2 {
+            limits[info.id] = saved.limits
+        }
         window.minimized = info.minimized
         window.standard = info.standard
         window.tabs = info.tabs
+        window.resizable = info.resizable
+        // A window that can't be resized tiles at its own size.
+        if !info.resizable, info.tileable, !window.hidden, limits[info.id] != .fixed(info.frame.size) {
+            limits[info.id] = .fixed(info.frame.size)
+            if place(of: info.id) != nil { layoutChangedSize = true }
+        }
         let appHidden = NSRunningApplication(processIdentifier: app.pid)?.isHidden ?? false
         let wantsTile = (info.tileable || (adopted.contains(info.id) && info.windowLike))
             && !offDisplay.contains(info.id)
@@ -616,16 +645,43 @@ final class Tiler {
         let before = saved.flatMap { s in s.display == display.uuid ? savedLayouts["\(s.space)|\(s.display)"] : nil }
         if !(before.map { layout.restore(window.id, from: $0) } ?? false) {
             let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
-            layout.insert(window.id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
+            layout.insert(window.id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width),
+                          limits: limits, room: room(on: display))
         }
         spaces[space][display.uuid] = layout
         log.notice("tiling window \(window.id) (\(window.handle.app.bundleID ?? "?")) in space \(space + 1)")
+    }
+
+    /// What a layout on this display has to fit windows into, for windows that can't be squeezed.
+    private func room(on display: Display) -> (area: CGSize, gap: CGFloat) {
+        (CGSize(width: display.visible.width - 2 * Self.gap, height: display.visible.height - 2 * Self.gap), Self.gap)
     }
 
     /// The display a new window joins: the one it opened on, else the main one.
     private func arrivalDisplay(for frame: CGRect) -> Display? {
         activeDisplays.first { $0.frame.contains(frame.center) } ?? activeDisplays.first { $0.isMain } ?? activeDisplays.first
     }
+
+    /// What each window that can't fill a tile takes (see `SizeLimits`): fixed for one that
+    /// can't be resized, learned from how the others answer being asked for a size.
+    private var limits: [CGWindowID: SizeLimits] = [:]
+    /// Limits saved when Tessel last ran, waiting for their windows to be seen again.
+    private var savedLimits: [String: SavedLimits.Entry] = [:]
+
+    private struct SavedLimits: Codable {
+        struct Entry: Codable { let app: String; let width: CGFloat; let height: CGFloat; let limits: SizeLimits }
+        let boot: Double
+        let windows: [String: Entry]
+    }
+
+    /// When the Mac started up: window numbers are only good until the next restart.
+    private static let bootTime: Double = {
+        var time = timeval(), size = MemoryLayout<timeval>.size
+        sysctlbyname("kern.boottime", &time, &size, nil, 0)
+        return Double(time.tv_sec)
+    }()
+    /// A fixed-size window changed size during a scan: lay out again.
+    private var layoutChangedSize = false
 
     /// Windows that just joined a layout for the first time: they snap into their tiles
     /// instead of gliding there from wherever their app opened them.
@@ -671,24 +727,36 @@ final class Tiler {
               // It may be about to become a tab, which would drag its whole tab group along.
               !windows.values.contains(where: { $0.pid == app.pid && $0.tabs >= 2 }),
               // A tab being dragged out into a window of its own follows the mouse.
-              NSEvent.pressedMouseButtons & 1 == 0,
-              let target = plannedFrame(for: info, app: app), !info.frame.isClose(to: target, tolerance: 1) else { return }
+              NSEvent.pressedMouseButtons & 1 == 0 else { return }
+        if !info.resizable { limits[info.id] = .fixed(info.frame.size) } // it goes in at its own size
+        guard let target = plannedFrame(for: info, app: app), !info.frame.isClose(to: target, tolerance: 1) else { return }
         let element = info.element
-        app.queue.async { element.setFrame(target) }
+        app.queue.async { element.place(in: target) }
     }
+
+    /// Windows moved into place before they're laid out, with the display and when: others
+    /// arriving at the same moment (an app opening two at once) are planned around them.
+    private var prePlaced: [CGWindowID: (display: String, at: CFTimeInterval)] = [:]
 
     /// Where a window on its way will tile, worked out without changing anything.
     private func plannedFrame(for info: WindowInfo, app: AppHandle) -> CGRect? {
         let probe = ManagedWindow(handle: WindowHandle(id: info.id, element: info.element, app: app), frame: info.frame)
         if let e = expected.first(where: { $0.matches(probe) }), let (s, uuid) = place(of: e.id), s == currentSpace,
            let d = activeDisplays.first(where: { $0.uuid == uuid }) {
-            return spaces[s][uuid]?.frames(in: d.visible, gap: Self.gap)[e.id] // the tile held for it
+            return spaces[s][uuid]?.frames(in: d.visible, gap: Self.gap, limits: limits)[e.id] // the tile held for it
         }
         guard let display = arrivalDisplay(for: info.frame) else { return nil }
         var layout = spaces[currentSpace][display.uuid] ?? Layout()
+        let maxColumns = Layout.maxColumns(forWidth: display.visible.width)
+        let now = CACurrentMediaTime()
+        prePlaced = prePlaced.filter { now - $0.value.at < 1.5 && place(of: $0.key) == nil }
+        for (id, _) in prePlaced.filter({ $0.value.display == display.uuid }).sorted(by: { $0.value.at < $1.value.at }) {
+            layout.insert(id, near: layout.windows.last, maxColumns: maxColumns)
+        }
         let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
-        layout.insert(info.id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
-        return layout.frames(in: display.visible, gap: Self.gap)[info.id]
+        layout.insert(info.id, near: near, maxColumns: maxColumns, limits: limits, room: room(on: display))
+        prePlaced[info.id] = (display.uuid, now)
+        return layout.frames(in: display.visible, gap: Self.gap, limits: limits)[info.id]
     }
 
     /// Where each window in full screen was tiled: its Workspace, display, the layout
@@ -738,6 +806,8 @@ final class Tiler {
         lastReassert[id] = nil
         pendingReassert.removeValue(forKey: id)?.cancel()
         droppedAt[id] = nil
+        limits[id] = nil
+        prePlaced[id] = nil
     }
 
     private func removeFromLayouts(_ id: CGWindowID) {
@@ -1047,7 +1117,7 @@ final class Tiler {
         removeFromLayouts(id)
         var layout = spaces[currentSpace][display.uuid] ?? Layout()
         let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
-        layout.insert(id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
+        layout.insert(id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width), limits: limits, room: room(on: display))
         spaces[currentSpace][display.uuid] = layout
         quietFocus()
         relayout(animated: true)
@@ -1128,7 +1198,10 @@ final class Tiler {
                 DispatchQueue.main.async {
                     guard let actual, let w = self.windows[id], let target = w.target, !w.hidden else { return }
                     var corrected = corrected
-                    if !actual.isClose(to: target, tolerance: 2), last.map({ actual.isClose(to: $0, tolerance: 1) }) == true,
+                    // Centered where Tessel put it at another size is a window that can't fill its tile
+                    // (`learnLimits` handles it); anywhere else, it moved.
+                    let moved = abs(actual.midX - target.midX) > 3 || abs(actual.midY - target.midY) > 3
+                    if moved, last.map({ actual.isClose(to: $0, tolerance: 1) }) == true,
                        CACurrentMediaTime() > self.settlingUntil[id] ?? 0,
                        !self.draggedByUser.contains(id), NSEvent.pressedMouseButtons & 1 == 0 {
                         // Back where it was before the last correction: the app insists (a window with a
@@ -1199,6 +1272,18 @@ final class Tiler {
                     guard let actual, let w = self.windows[id], let target = w.target, !w.hidden,
                           !actual.isClose(to: target, tolerance: 2) else { return }
                     if self.isOnUnmanagedDisplay(actual) { self.leaveAlone(id); return }
+                    // Centered where Tessel put it at another size: it can't fill its tile. That's
+                    // for `learnLimits`, not a reason to move it.
+                    if abs(actual.midX - target.midX) <= 3, abs(actual.midY - target.midY) <= 3 {
+                        if w.resizable { self.learnLimits(of: id, askedFor: target) }
+                        return
+                    }
+                    // A window that can't fill its tile changed its own size (another Simulator
+                    // device, a different video): that's the most it wants now. Fit it at that size.
+                    if w.resizable, self.limits[id] != nil, let before = w.settledSize,
+                       abs(actual.width - before.width) > 8 || abs(actual.height - before.height) > 8 {
+                        self.limits[id] = SizeLimits(maxWidth: actual.width, maxHeight: actual.height)
+                    }
                     w.frame = actual
                     w.target = nil
                     self.relayout(animated: true)
@@ -1254,6 +1339,7 @@ final class Tiler {
             return
         }
         if abs(frame.width - target.width) > 4 || abs(frame.height - target.height) > 4 {
+            if w.resizable { limits[id] = nil } // it took a size of the user's choosing
             if let d = displays.first(where: { $0.uuid == uuid }), var layout = spaces[space][uuid] {
                 layout.adopt(id, size: frame.size, in: d.visible, gap: Self.gap)
                 spaces[space][uuid] = layout
@@ -1394,7 +1480,7 @@ final class Tiler {
                 if s == currentSpace, let d = activeDisplays.first(where: { $0.uuid == uuid }) {
                     // Spotlight: the shelved windows wait off screen; the shelf shows cards for them.
                     let shelved = Set(layout.shelved)
-                    for (id, frame) in layout.frames(in: d.visible, gap: Self.gap) {
+                    for (id, frame) in layout.frames(in: d.visible, gap: Self.gap, limits: limits) {
                         if let tile = tile(for: id) {
                             if shelved.contains(id) { tile.conceal() } else { tile.show(at: frame, animated: animated) }
                             continue
@@ -1406,9 +1492,15 @@ final class Tiler {
                             continue
                         }
                         if !w.hidden, let t = w.target, t.isClose(to: frame, tolerance: 0.5) { continue }
-                        let from = w.hidden ? frame : (w.target ?? w.frame)
+                        // Start from where it really is: a window that couldn't fill its last target sits
+                        // centered inside it, not in its corner.
+                        let filled = w.target.map { t in w.settledSize.map { abs($0.width - t.width) <= 2 && abs($0.height - t.height) <= 2 } ?? true } ?? false
+                        let from = w.hidden ? frame : (filled ? w.target ?? w.frame : w.frame)
                         let new = arriving.contains(id)
-                        let kind: Animator.Kind = animated && animationsAllowed && !w.hidden && !new ? .animate : .snap
+                        // A window that keeps its own size or shape slides at its final size (resizing it
+                        // every frame would jitter); one whose sizes aren't known yet goes in one move.
+                        let kind: Animator.Kind = !animated || !animationsAllowed || w.hidden || new ? .snap
+                            : limits[id] != nil ? .slide : filled ? .animate : .snap
                         w.target = frame
                         w.hidden = false
                         // A snap lands in one go, so a new window's own moves count again almost at once.
@@ -1433,7 +1525,7 @@ final class Tiler {
         var result: [CGWindowID: CGRect] = [:]
         for d in activeDisplays {
             guard let layout = spaces[currentSpace][d.uuid] else { continue }
-            result.merge(layout.frames(in: d.visible, gap: Self.gap)) { a, _ in a }
+            result.merge(layout.frames(in: d.visible, gap: Self.gap, limits: limits)) { a, _ in a }
         }
         return result.filter { !Placeholder.isPlaceholder($0.key) }
     }
@@ -1462,6 +1554,14 @@ final class Tiler {
         }
         UserDefaults.standard.set(currentSpace, forKey: "currentSpace")
         UserDefaults.standard.set(adopted.filter { windows[$0] != nil || savedPlacement[$0] != nil }.map(Int.init), forKey: "adopted")
+        var entries: [String: SavedLimits.Entry] = [:]
+        for (id, l) in limits {
+            guard let w = windows[id], let app = w.handle.app.bundleID else { continue }
+            entries[String(id)] = .init(app: app, width: w.frame.width, height: w.frame.height, limits: l)
+        }
+        if let json = try? JSONEncoder().encode(SavedLimits(boot: Self.bootTime, windows: entries)) {
+            UserDefaults.standard.set(String(decoding: json, as: UTF8.self), forKey: "limits")
+        }
     }
 
     // MARK: Keyboard actions
@@ -1615,7 +1715,8 @@ final class Tiler {
         quietFocus()
         removeFromLayouts(id)
         var destination = spaces[index][uuid] ?? Layout()
-        destination.insert(id, near: destination.windows.last, maxColumns: Layout.maxColumns(forWidth: display?.visible.width ?? 1600))
+        destination.insert(id, near: destination.windows.last, maxColumns: Layout.maxColumns(forWidth: display?.visible.width ?? 1600),
+                           limits: limits, room: display.map(room(on:)))
         spaces[index][uuid] = destination
         if follow {
             lastFocused[index] = id
@@ -1934,7 +2035,7 @@ final class Tiler {
         placeholderCount += 1
         var layout = spaces[currentSpace][display.uuid] ?? Layout()
         let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
-        layout.insert(id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
+        layout.insert(id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width), limits: limits, room: room(on: display))
         spaces[currentSpace][display.uuid] = layout
 
         let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
@@ -2144,8 +2245,78 @@ final class Tiler {
         guard let actual else { scheduleScan(w.handle.app); return }
         guard !w.hidden else { return }
         w.frame = actual
+        w.settledSize = actual.size
         if ringWindow == id, ring.isShowing, let target = w.target, !actual.isClose(to: target, tolerance: 2) {
             ring.flash(actual, on: displays)
+        }
+        if w.resizable, let target = w.target, abs(actual.width - target.width) > 2 || abs(actual.height - target.height) > 2 {
+            learnLimits(of: id, askedFor: target)
+        }
+    }
+
+    /// A window's minimum height was just discovered (only squeezing a window shows it), and
+    /// its column can't hold everything in it any more. The window that arrived there last, if
+    /// it's only just arrived, moves to a column that fits it, or to one of its own; windows that
+    /// have been in place a while are never shuffled.
+    private func reconsiderColumn(of id: CGWindowID) {
+        guard let (s, uuid) = place(of: id), var layout = spaces[s][uuid], layout.spotlight == nil,
+              let display = activeDisplays.first(where: { $0.uuid == uuid }) else { return }
+        let r = room(on: display)
+        let now = CACurrentMediaTime()
+        func overfull(_ column: [CGWindowID]) -> Bool {
+            column.map { max(limits[$0]?.minHeight ?? 0, 80) }.reduce(0, +) + r.gap * CGFloat(column.count - 1) > r.area.height
+        }
+        var moved: Set<CGWindowID> = []
+        for _ in 0..<2 {
+            guard let (c, _) = layout.position(of: id), overfull(layout.columns[c].windows), layout.columns[c].windows.count > 1,
+                  let newest = layout.columns[c].windows.filter({ !moved.contains($0) && windows[$0].map { now - $0.seenAt < 4 } == true })
+                    .max(by: { windows[$0]!.seenAt < windows[$1]!.seenAt }) else { break }
+            layout.remove(newest)
+            layout.insert(newest, near: layout.windows.last, maxColumns: Layout.maxColumns(forWidth: display.visible.width),
+                          limits: limits, room: r)
+            moved.insert(newest)
+            log.notice("window \(newest) didn't fit its column; moved to one with room")
+        }
+        // A window that just arrived turned out narrow (it keeps its own width): a column of its own,
+        // if that leaves the others their room.
+        if moved.isEmpty, let w = windows[id], now - w.seenAt < 4, limits[id]?.maxWidth != nil,
+           let (c, _) = layout.position(of: id), layout.columns[c].windows.count > 1 {
+            var trial = layout
+            trial.remove(id)
+            trial.insert(id, near: trial.windows.last, maxColumns: Layout.maxColumns(forWidth: display.visible.width), limits: limits, room: r)
+            if let (tc, _) = trial.position(of: id), trial.columns[tc].windows == [id] {
+                layout = trial
+                moved.insert(id)
+                log.notice("window \(id) keeps its own width; gave it a column")
+            }
+        }
+        if !moved.isEmpty { spaces[s][uuid] = layout }
+    }
+
+    /// A window settled at another size than it was asked for. Look again a moment later
+    /// (a slow app may still be catching up), and if it's still that size, centered where
+    /// Tessel put it, remember what it takes and lay out around it.
+    private func learnLimits(of id: CGWindowID, askedFor target: CGRect) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self, let w = self.windows[id], !w.hidden, w.target == target else { return } // moved on since
+            let element = w.handle.element
+            w.handle.app.queue.async {
+                let frame = element.frame
+                DispatchQueue.main.async {
+                    guard let frame, let w = self.windows[id], !w.hidden, w.target == target,
+                          abs(frame.midX - target.midX) <= 3, abs(frame.midY - target.midY) <= 3 else { return }
+                    let before = self.limits[id] ?? SizeLimits()
+                    let after = before.learning(asked: target.size, got: frame.size)
+                    guard after != before else { return }
+                    self.limits[id] = after.isEmpty ? nil : after
+                    w.settledSize = frame.size
+                    self.reconsiderColumn(of: id)
+                    log.notice("window \(id) (\(w.handle.app.bundleID ?? "?", privacy: .public)) can't fill its tile: it takes \(String(describing: after), privacy: .public)")
+                    w.frame = frame
+                    self.relayout(animated: true)
+                    self.persist()
+                }
+            }
         }
     }
 
@@ -2164,6 +2335,8 @@ final class Tiler {
         for uuid in spaces[currentSpace].keys { spaces[currentSpace][uuid]?.balance() }
         for id in spaces[currentSpace].values.flatMap(\.windows) {
             if let w = windows[id], !w.hidden { w.target = nil }
+            // Start over on what each window takes, in case Tessel ever learned it wrong.
+            if windows[id]?.resizable == true { limits[id] = nil }
         }
         relayout(animated: true)
         persist()
@@ -2197,13 +2370,15 @@ final class Tiler {
                 "id": w.id, "app": w.handle.app.bundleID ?? "?", "hidden": w.hidden,
                 "target": w.target.map { NSStringFromRect($0) } ?? "none",
                 "latencyMs": (w.handle.app.latency * 1000).rounded(),
+                "resizable": w.resizable, "tiled": place(of: w.id) != nil,
+                "limits": limits[w.id].map { String(describing: $0) } ?? "none",
             ]
         }
         let now = CACurrentMediaTime()
         let placeholders = expected.map { e -> [String: Any] in
             let spot = place(of: e.id)
             let display = spot.flatMap { s in activeDisplays.first { $0.uuid == s.display } }
-            let frame = spot.flatMap { s in display.flatMap { spaces[s.space][s.display]?.frames(in: $0.visible, gap: Self.gap)[e.id] } }
+            let frame = spot.flatMap { s in display.flatMap { spaces[s.space][s.display]?.frames(in: $0.visible, gap: Self.gap, limits: limits)[e.id] } }
             return ["id": e.id, "app": e.bundleID, "pid": e.pid ?? 0, "space": spot.map { $0.space + 1 } ?? 0,
                     "waitingSeconds": (now - e.started).rounded(), "frame": frame.map { NSStringFromRect($0) } ?? "none"]
         }
