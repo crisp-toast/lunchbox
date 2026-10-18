@@ -216,13 +216,15 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
 
     /// Takes the open windows with the titles Tessel last read, so the first keystroke already
     /// finds them, then reads every title again (each app on its own queue) and searches anew.
-    /// Typing itself never asks another app for anything.
+    /// Typing itself never asks another app for anything. Fresh titles can put a window above
+    /// the top row: like new files, a row you moved to stays highlighted; otherwise the top row is.
     private func snapshotWindows() {
         setWindows(tiler.openWindows())
         tiler.readWindowTitles { [weak self] in
             guard let self, self.isVisible else { return }
             self.setWindows(self.tiler.openWindows())
-            if !self.field.stringValue.trimmingCharacters(in: .whitespaces).isEmpty { self.refreshKeepingSelection() }
+            guard !self.field.stringValue.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+            self.update(keeping: self.selected > 0 && self.results.indices.contains(self.selected) ? self.results[self.selected].key : nil)
         }
     }
 
