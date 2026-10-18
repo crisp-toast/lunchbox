@@ -363,6 +363,11 @@ final class Tiler {
 
     private func untrack(_ pid: pid_t) {
         launchedByYou[pid] = nil
+        lastCreated[pid] = nil
+        burstSince[pid] = nil
+        burstPause[pid] = nil
+        heldArrivals[pid] = nil
+        burstEnd.removeValue(forKey: pid)?.cancel()
         guard let app = apps.removeValue(forKey: pid) else { return }
         detach(app)
         let gone = windows.values.filter { $0.pid == pid }.map(\.id)
@@ -534,7 +539,9 @@ final class Tiler {
         if let arrived { requested.insert(arrived) }
         for info in ordered where consider(info, app: app, onScreen: onScreen, shown: shown) { changed = true }
         if layoutChangedSize { layoutChangedSize = false; changed = true }
-        if changed {
+        if changed, heldArrivals[app.pid] != nil {
+            scheduleBurstEnd(app) // laid out together once the app stops making windows
+        } else if changed {
             relayout(animated: true)
             persist()
         }
@@ -644,7 +651,11 @@ final class Tiler {
             if initialScanDone {
                 // New to Tessel: straight into its tile, not on a glide from wherever its app put it.
                 if CACurrentMediaTime() - window.seenAt < 2 { arriving.insert(info.id) }
-                confirmPlacement(of: info.id)
+                if isBursting(app.pid) {
+                    heldArrivals[app.pid, default: []].append(info.id)
+                } else {
+                    confirmPlacement(of: info.id)
+                }
             }
             return true
         }
@@ -1196,9 +1207,73 @@ final class Tiler {
     /// instead of gliding there from wherever their app opened them.
     private var arriving: Set<CGWindowID> = []
 
+    /// When each app last made a window, since when it's been making them in a burst, and the
+    /// longest pause between two of them so far.
+    private var lastCreated: [pid_t: CFTimeInterval] = [:]
+    private var burstSince: [pid_t: CFTimeInterval] = [:]
+    private var burstPause: [pid_t: CFTimeInterval] = [:]
+    /// Windows that joined during a burst, waiting for it to end to be laid out together.
+    private var heldArrivals: [pid_t: [CGWindowID]] = [:]
+    private var burstEnd: [pid_t: DispatchWorkItem] = [:]
+    /// Windows made closer together than this are a burst (an app restoring its windows).
+    static let burstGap: CFTimeInterval = 0.12
+    /// A burst is laid out after this long even if windows keep coming.
+    static let burstMax: CFTimeInterval = 0.6
+
+    /// An app making several windows in a row (restoring them at launch, opening a set):
+    /// lay them out once when it's done, instead of reflowing everything once per window.
+    private func isBursting(_ pid: pid_t) -> Bool {
+        guard let since = burstSince[pid], let last = lastCreated[pid] else { return false }
+        let now = CACurrentMediaTime()
+        return now - last < burstWait(pid) && now - since < Self.burstMax
+    }
+
+    /// How long after its last window a burst is over: half again its longest pause so far, so
+    /// an app that makes them all at once isn't kept waiting for more.
+    private func burstWait(_ pid: pid_t) -> CFTimeInterval {
+        min(Self.burstGap, max(0.05, (burstPause[pid] ?? 0) * 1.5))
+    }
+
+    private func noteCreated(by pid: pid_t) {
+        let now = CACurrentMediaTime()
+        if let last = lastCreated[pid], now - last < (burstSince[pid] == nil ? Self.burstGap : burstWait(pid)) {
+            if burstSince[pid] == nil { burstSince[pid] = last }
+            burstPause[pid] = max(burstPause[pid] ?? 0, now - last)
+        } else {
+            burstSince[pid] = nil
+            burstPause[pid] = nil
+        }
+        lastCreated[pid] = now
+    }
+
+    /// Lays out the windows held during a burst once it's over (or has gone on long enough).
+    private func scheduleBurstEnd(_ app: AppHandle) {
+        burstEnd[app.pid]?.cancel()
+        let work = DispatchWorkItem { [weak self, weak app] in
+            guard let self, let app else { return }
+            self.burstEnd[app.pid] = nil
+            if self.isBursting(app.pid) { self.scheduleBurstEnd(app); return }
+            let since = self.burstSince.removeValue(forKey: app.pid) ?? CACurrentMediaTime()
+            self.burstPause[app.pid] = nil
+            let held = self.heldArrivals.removeValue(forKey: app.pid) ?? []
+            guard self.enabled, self.apps[app.pid] === app else { return }
+            // The window that started the burst, laid out alone a moment ago, lands with the rest.
+            for w in self.windows.values where w.pid == app.pid && w.seenAt >= since && !w.hidden { self.arriving.insert(w.id) }
+            self.relayout(animated: true)
+            self.persist()
+            for id in held where self.windows[id] != nil { self.confirmPlacement(of: id) }
+        }
+        burstEnd[app.pid] = work
+        let now = CACurrentMediaTime()
+        let last = lastCreated[app.pid] ?? now, since = burstSince[app.pid] ?? now
+        let at = min(last + burstWait(app.pid), since + Self.burstMax)
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0.005, at - now), execute: work)
+    }
+
     /// A window was just made. Put it where it's going before it shows (`prePlace`), then
     /// lay it out the moment it's on screen instead of on the next routine scan.
     private func windowCreated(_ element: AXUIElement, app: AppHandle) {
+        noteCreated(by: app.pid)
         app.queue.async { [weak self] in
             let info = Self.readWindow(element, app: app, appWindows: { app.element.elements(kAXWindowsAttribute).count })
             DispatchQueue.main.async {
@@ -1207,7 +1282,9 @@ final class Tiler {
                     self.scheduleScan(app, after: [0.03, 0.3])
                     return
                 }
-                self.prePlace(info, app: app)
+                // In a burst, windows wait where their app put them and go to their tiles together
+                // (a tile planned now would be one of a layout about to change again).
+                if !self.isBursting(app.pid) { self.prePlace(info, app: app) }
                 self.scheduleScan(app, after: [0, 0.4])
                 if !isOnScreen(info.id) { self.scanWhenOnScreen(info.id, app: app, until: CACurrentMediaTime() + 2) }
             }
@@ -1239,8 +1316,39 @@ final class Tiler {
               NSEvent.pressedMouseButtons & 1 == 0 else { return }
         if !info.resizable { limits[info.id] = .fixed(info.frame.size) } // it goes in at its own size
         guard let target = plannedFrame(for: info, app: app), !info.frame.isClose(to: target, tolerance: 1) else { return }
-        let element = info.element
-        app.queue.async { element.place(in: target) }
+        let element = info.element, resizable = info.resizable
+        WindowHandle.queue(for: info.id).async { [weak self] in
+            guard let actual = element.place(in: target), resizable,
+                  abs(actual.width - target.width) > 2 || abs(actual.height - target.height) > 2 else { return }
+            DispatchQueue.main.async { self?.fittedOnArrival(info, app: app, asked: target, got: actual) }
+        }
+    }
+
+    /// A window being placed didn't take its tile's size: it has a minimum, a maximum or a shape
+    /// of its own (Simulator, 1Password). Learn that now and send it straight to the frame it fits,
+    /// rather than leaving it centered in the tile and moving it again once `learnLimits` notices.
+    private func fittedOnArrival(_ info: WindowInfo, app: AppHandle, asked target: CGRect, got actual: CGRect) {
+        guard enabled, apps[app.pid] === app, abs(actual.midX - target.midX) <= 3, abs(actual.midY - target.midY) <= 3 else { return }
+        let before = limits[info.id] ?? SizeLimits()
+        let after = before.learning(asked: target.size, got: actual.size)
+        guard after != before, !after.isEmpty else { return }
+        limits[info.id] = after
+        log.notice("window \(info.id) (\(app.bundleID ?? "?", privacy: .public)) can't fill its tile: it takes \(String(describing: after), privacy: .public)")
+        if let w = windows[info.id], place(of: info.id) != nil {
+            // Already laid out: fit it now, in one move.
+            guard !w.hidden, w.target == target else { return }
+            w.frame = actual
+            w.settledSize = actual.size
+            reconsiderColumn(of: info.id)
+            arriving.insert(info.id)
+            relayout(animated: true)
+            persist()
+        } else if windows[info.id] == nil {
+            prePlaced[info.id] = nil
+            guard let fitted = plannedFrame(for: info, app: app), !fitted.isClose(to: actual, tolerance: 2) else { return }
+            let element = info.element
+            WindowHandle.queue(for: info.id).async { element.place(in: fitted) }
+        }
     }
 
     /// Windows moved into place before they're laid out, with the display and when: others
@@ -1321,6 +1429,7 @@ final class Tiler {
         if let w = windows.removeValue(forKey: id) {
             w.handle.app.windowIDs.removeValue(forKey: w.handle.element)
         }
+        WindowHandle.forget(id)
         if focusedID == id { focusedID = nil }
         recentlyFocused.removeAll { $0 == id }
         adopted.remove(id)
@@ -1558,7 +1667,7 @@ final class Tiler {
             log.notice("window \(w.id) came back into view while parked; parking it again")
             settlingUntil[w.id] = now + 0.6
             let element = w.handle.element
-            w.handle.app.queue.async { element.setPosition(spot) }
+            w.handle.queue.async { element.setPosition(spot) }
         }
     }
 
@@ -2044,13 +2153,14 @@ final class Tiler {
                         }
                         if !w.hidden, let t = w.target, t.isClose(to: frame, tolerance: 0.5) { continue }
                         // Start from where it really is: a window that couldn't fill its last target sits
-                        // centered inside it, not in its corner.
-                        let filled = w.target.map { t in w.settledSize.map { abs($0.width - t.width) <= 2 && abs($0.height - t.height) <= 2 } ?? true } ?? false
+                        // centered inside it, not in its corner. One sent back to its slot on purpose (Tidy,
+                        // a drag let go, an app that moved it) has no target: it glides from where it is.
+                        let filled = w.target.map { t in w.settledSize.map { abs($0.width - t.width) <= 2 && abs($0.height - t.height) <= 2 } ?? true } ?? true
                         let from = w.hidden ? frame : (filled ? w.target ?? w.frame : w.frame)
                         let new = arriving.contains(id)
                         // A window that keeps its own size or shape slides at its final size (resizing it
                         // every frame would jitter); one whose sizes aren't known yet goes in one move.
-                        let kind: Animator.Kind = !animated || !animationsAllowed || w.hidden || new ? .snap
+                        let kind: Animator.Kind = w.hidden ? .reveal : !animated || !animationsAllowed || new ? .snap
                             : limits[id] != nil ? .slide : filled ? .animate : .snap
                         w.target = frame
                         w.hidden = false
@@ -2130,7 +2240,10 @@ final class Tiler {
         if case .switchSpace = action {} else if !recentlyFocused,
            let front = NSWorkspace.shared.frontmostApplication, let app = apps[front.processIdentifier] {
             app.queue.async { [weak self] in
+                let t0 = CACurrentMediaTime()
                 let id = app.element.element(kAXFocusedWindowAttribute)?.windowID
+                // How quickly it answers says whether its windows can glide right now.
+                app.recordLatency(CACurrentMediaTime() - t0, calls: 2)
                 DispatchQueue.main.async {
                     guard let self else { return }
                     log.debug("resolve \(front.bundleIdentifier ?? "?", privacy: .public): \(id.map(String.init) ?? "nil", privacy: .public), Tessel had \(self.focusedID.map(String.init) ?? "nil", privacy: .public)")

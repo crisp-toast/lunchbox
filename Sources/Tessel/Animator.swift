@@ -22,13 +22,20 @@ final class Animator {
         /// size or shape, which would jitter if resized every frame.
         case slide
         case snap
+        /// Bringing a parked window back into view: its size is set while it's still out of
+        /// sight, then it moves in.
+        case reveal
         /// Parking a window off screen: only its position changes.
         case positionOnly
     }
 
     static let duration: CFTimeInterval = 0.2
+    static let frameInterval: CFTimeInterval = 1.0 / 60
     static let fullAnimationLatency = 0.006
     static let slideLatency = 0.030
+    /// A frame this slow means the app stalls: a glide through it would stop and jump. An app
+    /// whose calls took half that lately can't keep a glide going either.
+    static let stallLatency = 0.040
     static let retryDelays: [Double] = [0.1, 0.25, 0.6]
 
     /// Called on the main thread with the frame a window really settled at
@@ -43,6 +50,7 @@ final class Animator {
         let resizeEveryFrame: Bool
         let token: UInt64
         var sizeSent: Bool
+        var finishNow = false
         var inFlight = false
         var finalSent = false
 
@@ -62,7 +70,7 @@ final class Animator {
     private var running: [CGWindowID: Animation] = [:]
     private var timer: DispatchSourceTimer?
     private var nextToken: UInt64 = 0
-    /// The newest move for each window, readable from the app queues so a
+    /// The newest move for each window, readable from the window queues so a
     /// retry never overrides a later move.
     private let latest = OSAllocatedUnfairLock(initialState: [CGWindowID: UInt64]())
 
@@ -84,16 +92,19 @@ final class Animator {
         var start = from
         if let existing = running[window.id] { start = existing.frame(at: now) }
 
-        let snaps = (kind != .animate && kind != .slide) || latency > Self.slideLatency || start.isClose(to: to, tolerance: 1)
+        let snaps = (kind != .animate && kind != .slide) || latency > Self.slideLatency || window.app.slowest > Self.stallLatency / 2
+            || start.isClose(to: to, tolerance: 1)
         guard !snaps else {
             running[window.id] = nil
-            window.app.queue.async { [weak self] in
-                self?.place(window, at: to, positionOnly: kind == .positionOnly, token: token, attempt: 0)
+            window.queue.async { [weak self] in
+                self?.place(window, at: to, positionOnly: kind == .positionOnly, sizeFirst: kind == .reveal, token: token, attempt: 0)
             }
             return
         }
+        // Its clock starts a frame back, so the frame sent right away is already a step on the way
+        // (at zero it would only repeat where the window is, and the first step would wait a frame).
         running[window.id] = Animation(
-            window: window, from: start, to: to, start: now,
+            window: window, from: start, to: to, start: now - Self.frameInterval,
             resizeEveryFrame: kind == .animate && latency < Self.fullAnimationLatency, token: token,
             sizeSent: start.size == to.size
         )
@@ -102,7 +113,7 @@ final class Animator {
     private func tick() {
         let now = CACurrentMediaTime()
         for (id, var anim) in running where !anim.inFlight && !anim.finalSent {
-            let isFinal = now - anim.start >= Self.duration
+            let isFinal = now - anim.start >= Self.duration || anim.finishNow
             let frame = isFinal ? anim.to : anim.frame(at: now)
             let sendSize: CGSize? = anim.resizeEveryFrame ? frame.size : (anim.sizeSent ? nil : anim.to.size)
             anim.sizeSent = true
@@ -111,24 +122,26 @@ final class Animator {
             running[id] = anim
 
             let window = anim.window, token = anim.token
-            window.app.queue.async { [weak self] in
+            window.queue.async { [weak self] in
                 guard let self else { return }
                 if isFinal {
                     self.place(window, at: frame, positionOnly: false, token: token, attempt: 0)
+                    self.queue.async { self.finished(id, token: token, stalled: false) }
                 } else {
                     let t0 = CACurrentMediaTime()
                     if let size = sendSize { window.element.setSize(size) }
                     window.element.setPosition(frame.origin)
-                    window.app.recordLatency((CACurrentMediaTime() - t0) / (sendSize == nil ? 1 : 2))
+                    let took = CACurrentMediaTime() - t0
+                    window.app.recordLatency(took, calls: sendSize == nil ? 1 : 2)
+                    self.queue.async { self.finished(id, token: token, stalled: took > Self.stallLatency) }
                 }
-                self.queue.async { self.finished(id, token: token) }
             }
         }
     }
 
-    /// Runs on the window's app queue: sets the final frame, reads it back, and
+    /// Runs on the window's queue: sets the final frame, reads it back, and
     /// retries a few times if the window didn't get there.
-    private func place(_ window: WindowHandle, at target: CGRect, positionOnly: Bool, token: UInt64, attempt: Int) {
+    private func place(_ window: WindowHandle, at target: CGRect, positionOnly: Bool, sizeFirst: Bool = false, token: UInt64, attempt: Int) {
         guard latest.withLock({ $0[window.id] }) == token else { return } // a newer move took over
         let element = window.element
         let t0 = CACurrentMediaTime()
@@ -139,9 +152,9 @@ final class Animator {
         } else {
             // A window that won't take this size sits centered on its slot (until Tessel learns
             // what it takes), not in its corner.
-            actual = element.place(in: target)
+            actual = element.place(in: target, sizeFirst: sizeFirst)
         }
-        window.app.recordLatency((CACurrentMediaTime() - t0) / (positionOnly ? 3 : 4))
+        window.app.recordLatency(CACurrentMediaTime() - t0, calls: positionOnly ? 3 : 4)
         // Parking only needs the window pushed off the right edge (macOS may clamp its
         // height); a normal move needs it centered where it was sent.
         let landed: Bool = actual.map { a in
@@ -149,8 +162,8 @@ final class Animator {
                 : abs(a.midX - target.midX) <= 2 && abs(a.midY - target.midY) <= 2
         } ?? false
         if !landed, attempt < Self.retryDelays.count {
-            window.app.queue.asyncAfter(deadline: .now() + Self.retryDelays[attempt]) { [weak self] in
-                self?.place(window, at: target, positionOnly: positionOnly, token: token, attempt: attempt + 1)
+            window.queue.asyncAfter(deadline: .now() + Self.retryDelays[attempt]) { [weak self] in
+                self?.place(window, at: target, positionOnly: positionOnly, sizeFirst: sizeFirst, token: token, attempt: attempt + 1)
             }
             return
         }
@@ -160,12 +173,15 @@ final class Animator {
         DispatchQueue.main.async { [weak self] in self?.onSettled?(window.id, actual, landed) }
     }
 
-    private func finished(_ id: CGWindowID, token: UInt64) {
+    /// - stalled: the app took so long over that frame that the glide stopped on screen. The
+    ///   rest of it would only stop and jump again, so the window goes the rest of the way at once.
+    private func finished(_ id: CGWindowID, token: UInt64, stalled: Bool) {
         guard var anim = running[id], anim.token == token else { return }
         if anim.finalSent {
             running[id] = nil
         } else {
             anim.inFlight = false
+            if stalled { anim.finishNow = true }
             running[id] = anim
         }
         updateTimer()
@@ -177,7 +193,7 @@ final class Animator {
             timer = nil
         } else if timer == nil {
             let t = DispatchSource.makeTimerSource(queue: queue)
-            t.schedule(deadline: .now() + .milliseconds(16), repeating: .nanoseconds(16_666_667), leeway: .milliseconds(1))
+            t.schedule(deadline: .now() + .milliseconds(16), repeating: .nanoseconds(Int(Self.frameInterval * 1e9)), leeway: .milliseconds(1))
             t.setEventHandler { [weak self] in self?.tick() }
             t.resume()
             timer = t

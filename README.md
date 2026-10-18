@@ -5,7 +5,10 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 - One window on a screen sits centered at a comfortable 16:10 size. Two or three tile side by side;
   the fourth makes a 2×2 grid, unless you've shown Tessel a shape you like better (see Learning).
 - Everything is driven by the **left** ⌘ key, so right ⌘ + arrows still move the text cursor.
-- Windows slide into place. Apps that can't keep up just snap, so Tessel never adds lag.
+- Windows slide into place, in one move each. Apps that can't keep up, or stall now and then, just
+  snap, so Tessel never adds lag; and an app's windows move together, never one after another. An
+  app opening several windows at once (restoring them at launch) has them laid out together, instead
+  of the layout reflowing once per window.
 - A new window goes straight into its tile, within a frame or two of appearing, instead of
   showing up where its app put it and gliding over. Tessel moves it the moment the app makes it,
   often before it's even on screen.
@@ -19,7 +22,8 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
   System Settings, apps with a minimum size. Each sits at the size it takes, centered in its slot,
   and its column is sized to fit it, so a phone in Simulator gets a narrow column and the window
   beside it gets the rest. Tessel learns what each window takes from how it answers being asked for
-  a size (no lists to keep), remembers it across relaunches, and relearns it when the window changes
+  a size (no lists to keep), the moment it first places it, so it goes straight to the size and
+  column it fits; it remembers that across relaunches, and relearns it when the window changes
   its own size, like switching to another device. Tidy (⌘⇧0) starts that over for the windows in
   view.
 - The green button's full screen just works: the rest of the Workspace stays put, and the window
@@ -142,8 +146,9 @@ while a window something moves onto another display (an agent testing on a dummy
     device-dependent modifier bit.
   - `Tiler` tracks apps and windows through the Accessibility API and owns the per-display,
     per-space layouts.
-  - `Animator` moves windows off the main thread, with one serial queue per app. It measures each
-    app's response time and picks full animation, slide-only, or snap.
+  - `Animator` moves windows off the main thread, with one serial queue per window, so an app's
+    windows move together. It measures each app's response time and picks full animation,
+    slide-only, or snap; a glide that stalls partway finishes in one move.
   - `Overlays` draws the focus ring and the space badge with Core Animation in click-through panels.
   - `Placeholders` draws a placeholder tile: a click-through frosted panel just above the desktop, under
     every app's windows, so the arriving window glides in over it. In a layout a placeholder is just a
@@ -198,8 +203,14 @@ osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificati
 **Testing window handling:** `scripts/windowlab/build.sh` builds WindowLab, a small app that opens every
 kind of window Tessel has to handle on command: fixed-size, minimum or maximum size, keeps its shape,
 an alert, an About box, a utility panel, two at once, one that animates itself like Little Arc, and one
-that switches "device". `scripts/windowlab/windowlab report:<path>` writes where each one ended up.
-Run it in a test VM, never on a Mac someone is using. `dump`'s state includes each window's learned
+that switches "device"; it can also open a burst of windows (an app restoring them), answer slowly
+(Arc at times), or draw slowly (a browser). `scripts/windowlab/windowlab report:<path>` writes where
+each one ended up. Run it in a test VM, never on a Mac someone is using.
+`scripts/windowlab/smooth.py` is the smoothness benchmark: it records every window's frame every 2 ms
+(`motion.swift`) through arrivals, a burst, an app restoring its windows, closing, moving, swapping,
+growing, Tidy, Focus, Workspace switches and windows that can't fill a tile, and counts each window's
+separate motions and stops, the time until everything settles, edges that shake, and overlap
+(results: [docs/smoothness.md](docs/smoothness.md)). `dump`'s state includes each window's learned
 size limits.
 
 Logs (`/usr/bin/log`, since zsh has its own `log` builtin):

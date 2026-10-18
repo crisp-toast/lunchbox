@@ -101,23 +101,29 @@ extension AXUIElement {
         return AXUIElementSetAttributeValue(self, kAXSizeAttribute as CFString, v) == .success
     }
 
-    /// Puts a window in `slot`. A window that comes back another size than the slot may only
-    /// have been held to the screen from where it was (macOS keeps windows on screen), so it's
-    /// moved into the slot and asked again; still another size means it really won't take it
-    /// (a minimum, a maximum, a shape it keeps), and it goes to the middle of the slot instead
-    /// of its corner. Returns the frame it ended up with.
+    /// Puts a window in `slot`. It goes there first and then takes the slot's size, so a window
+    /// on screen lands in its place and fills it, rather than swelling where it was and jumping;
+    /// and at the slot it can't be held short by the edge of the screen, as it can be resized
+    /// where it was. `sizeFirst` is for a window out of sight (parked in another Workspace): its
+    /// size changes unseen, then it comes into view at once. A window that comes back another
+    /// size than the slot really won't take it (a minimum, a maximum, a shape it keeps), and it
+    /// goes to the middle of the slot instead of its corner. Returns the frame it ended up with.
     @discardableResult
-    func place(in slot: CGRect) -> CGRect? {
+    func place(in slot: CGRect, sizeFirst: Bool = false) -> CGRect? {
         func off(_ s: CGSize) -> Bool { abs(s.width - slot.width) > 2 || abs(s.height - slot.height) > 2 }
+        if !sizeFirst { setPosition(slot.origin) }
         setSize(slot.size)
         guard var s = size else { setPosition(slot.origin); return frame }
-        setPosition(slot.origin)
-        if off(s) {
-            setSize(slot.size)
-            if let again = size { s = again }
+        if sizeFirst {
+            setPosition(slot.origin)
             if off(s) {
-                setPosition(CGPoint(x: (slot.midX - s.width / 2).rounded(), y: (slot.midY - s.height / 2).rounded()))
+                // Held to the screen from where it was, maybe: ask again now that it's in the slot.
+                setSize(slot.size)
+                if let again = size { s = again }
             }
+        }
+        if off(s) {
+            setPosition(CGPoint(x: (slot.midX - s.width / 2).rounded(), y: (slot.midY - s.height / 2).rounded()))
         }
         guard let p = position else { return nil }
         return CGRect(origin: p, size: s)

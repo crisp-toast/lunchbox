@@ -14,6 +14,11 @@
 //   alert                   an alert, shown without blocking (NSAlert's window)
 //   panel                   a floating utility panel (an inspector)
 //   pair                    two document windows at the same moment
+//   burst:N:MS              N document windows, MS apart (an app restoring its windows at launch)
+//   slow:MS                 from now on the app is busy MS of every 100 ms, so it answers
+//                           Accessibility late (Arc at times); slow:0 ends it
+//   heavy:MS                every window takes MS to draw, so resizing it is slow (a browser);
+//                           heavy:0 ends it
 //   littlearc               a window that animates itself to the middle after it opens (Little Arc)
 //   resize:N:W:H            window number N (from report), or the newest of a kind (aspect…), resizes itself to W×H
 //   device:W:H              the newest shape-keeping window switches to a W×H shape and size (Simulator: another device)
@@ -21,9 +26,20 @@
 //   report:<path>           writes every window's title, number and frame (top-left origin) as JSON
 import AppKit
 
+/// A content view that takes as long to draw as `Lab.drawCost` says.
+final class Canvas: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.windowBackgroundColor.setFill()
+        dirtyRect.fill()
+        if Lab.drawCost > 0 { usleep(useconds_t(Lab.drawCost * 1000)) }
+    }
+}
+
 final class Lab: NSObject, NSApplicationDelegate {
     var windows: [NSWindow] = []
     var count = 0
+    static var drawCost = 0.0
+    var busy: Timer?
 
     func applicationDidFinishLaunching(_ note: Notification) {
         DistributedNotificationCenter.default().addObserver(
@@ -45,6 +61,7 @@ final class Lab: NSObject, NSApplicationDelegate {
             : NSWindow(contentRect: rect, styleMask: style, backing: .buffered, defer: false)
         w.title = "lab-\(kind)-\(count)"
         w.isReleasedWhenClosed = false
+        w.contentView = Canvas(frame: NSRect(origin: .zero, size: size))
         let label = NSTextField(labelWithString: w.title)
         label.font = .systemFont(ofSize: 18, weight: .semibold)
         label.frame = NSRect(x: 16, y: 16, width: 360, height: 26)
@@ -59,7 +76,7 @@ final class Lab: NSObject, NSApplicationDelegate {
         let parts = command.split(separator: ":").map(String.init)
         // Opening a window is something you do in the app in front; alerts and panels can come
         // from an app in the background.
-        if !["alert", "panel", "report", "resize", "close", "closeall"].contains(parts.first ?? "") {
+        if !["alert", "panel", "report", "resize", "close", "closeall", "slow", "heavy"].contains(parts.first ?? "") {
             NSApp.activate(ignoringOtherApps: true)
         }
         let n = parts.dropFirst().compactMap { Double($0) }
@@ -100,6 +117,21 @@ final class Lab: NSObject, NSApplicationDelegate {
             let a = make("pair", size: NSSize(width: 700, height: 500), style: document)
             let b = make("pair", size: NSSize(width: 700, height: 500), style: document)
             a.orderFront(nil); b.makeKeyAndOrderFront(nil)
+        case "burst" where n.count == 2:
+            for i in 0..<Int(n[0]) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * n[1] / 1000) { [self] in
+                    make("burst", size: NSSize(width: 700, height: 500), style: document).makeKeyAndOrderFront(nil)
+                }
+            }
+        case "slow" where n.count == 1:
+            busy?.invalidate()
+            busy = nil
+            if n[0] > 0 {
+                let ms = n[0]
+                busy = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in usleep(useconds_t(ms * 1000)) }
+            }
+        case "heavy" where n.count == 1:
+            Lab.drawCost = n[0]
         case "littlearc":
             let w = make("littlearc", size: NSSize(width: 842, height: 1100), style: document)
             w.makeKeyAndOrderFront(nil)
