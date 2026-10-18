@@ -196,7 +196,10 @@ The trial is 7 days, so something smart has to happen within the first hour, wit
      Going back to a grid with that app sharing a column, and keeping it, unlearns it.
 
   Either way, one quiet line ("Claude has the left to itself, like last time · ⌘1 makes a
-  grid"), and the undo key gives the grid instead. Two undos forget it. It's listed under What
+  grid"), and the undo key gives the grid instead. Two undos forget it. The grid and the
+  shape give way to size limits (main's `SizeLimits`): a window whose minimum height can't
+  share a column gets a column with room instead, and a new window is moved into its learned
+  spot before it shows (`plannedFrame`), not into the grid and then across. It's listed under What
   Tessel Learned as "Claude: the left side to itself, with four windows".
 
 ### 3. Sends new windows to the Workspace they belong in

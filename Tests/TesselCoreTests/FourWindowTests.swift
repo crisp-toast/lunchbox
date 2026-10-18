@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Testing
 @testable import TesselCore
@@ -22,6 +23,17 @@ import Testing
         var one = layout([[1, 2, 3]])
         one.insert(4, near: 3, maxColumns: 1)
         #expect(one.columns.map(\.windows) == [[1, 2], [3, 4]])
+    }
+
+    @Test func notWhenAWindowCantShareAColumn() {
+        // A window that needs 950 of 1000 points of height can't sit over another one.
+        let room = (area: CGSize(width: 2560, height: 1000), gap: CGFloat(8))
+        var tall = layout([[1], [2], [3]])
+        tall.insert(4, near: 3, maxColumns: 3, limits: [4: SizeLimits(minHeight: 950)], room: room)
+        #expect(tall.columns.allSatisfy { col in !(col.windows.contains(4) && col.windows.count > 1) })
+        var fine = layout([[1], [2], [3]])
+        fine.insert(4, near: 3, maxColumns: 3, limits: [4: SizeLimits(minHeight: 300)], room: room)
+        #expect(fine.columns.map(\.windows) == [[1, 2], [3, 4]])
     }
 
     @Test func aPlaceholderThatGivesUpPutsEverythingBack() {

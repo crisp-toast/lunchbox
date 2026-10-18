@@ -6,9 +6,22 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
   the fourth makes a 2×2 grid, unless you've shown Tessel a shape you like better (see Learning).
 - Everything is driven by the **left** ⌘ key, so right ⌘ + arrows still move the text cursor.
 - Windows slide into place. Apps that can't keep up just snap, so Tessel never adds lag.
+- A new window goes straight into its tile, within a frame or two of appearing, instead of
+  showing up where its app put it and gliding over. Tessel moves it the moment the app makes it,
+  often before it's even on screen.
 - Three Workspaces on ⌘1, ⌘2 and ⌘3, switched instantly. Add more (up to nine) from the menu.
 - Dialogs (Open, Save, alerts, password prompts) float, centered on their screen, instead of
-  splitting the tiled windows apart.
+  splitting the tiled windows apart, and stay in view when you switch Workspaces. So do small
+  windows that can't be resized or minimized, like About boxes and progress windows. A "dialog"
+  with every title-bar button that you can resize, like Little Arc, is a window in all but name and
+  tiles like one.
+- Windows that can't fill a tile still tile: Simulator (it keeps its device's shape), Calculator,
+  System Settings, apps with a minimum size. Each sits at the size it takes, centered in its slot,
+  and its column is sized to fit it, so a phone in Simulator gets a narrow column and the window
+  beside it gets the rest. Tessel learns what each window takes from how it answers being asked for
+  a size (no lists to keep), remembers it across relaunches, and relearns it when the window changes
+  its own size, like switching to another device. Tidy (⌘⇧0) starts that over for the windows in
+  view.
 - The green button's full screen just works: the rest of the Workspace stays put, and the window
   goes back to the same spot when it leaves full screen (into Focus again, if it was in Focus).
 
@@ -163,6 +176,13 @@ osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificati
 osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately("com.tyleryouens.tessel.command", "resume", $(), true)'
 ```
 
+**Testing window handling:** `scripts/windowlab/build.sh` builds WindowLab, a small app that opens every
+kind of window Tessel has to handle on command: fixed-size, minimum or maximum size, keeps its shape,
+an alert, an About box, a utility panel, two at once, one that animates itself like Little Arc, and one
+that switches "device". `scripts/windowlab/windowlab report:<path>` writes where each one ended up.
+Run it in a test VM, never on a Mac someone is using. `dump`'s state includes each window's learned
+size limits.
+
 Logs (`/usr/bin/log`, since zsh has its own `log` builtin):
 
 ```bash
@@ -219,7 +239,7 @@ The Buy buttons go nowhere yet: set `CHECKOUT_URL` at the top of the page's scri
   When it comes back, they return to their spots on it. Changes wait a second to settle, so a display
   blinking off as the Mac wakes doesn't shuffle anything.
 - **macOS 27:** a parked window that macOS pulls back into view is parked again.
-- **Native tabs** share one tile. **Dialogs** float, centered. **Full screen** windows keep their spot.
+- **Native tabs** share one tile. **Dialogs** float, centered. **Windows that can't fill a tile** tile at their own size. **Full screen** windows keep their spot.
   **Show Desktop** works as usual.
 - **Updates:** Sparkle checks once a day and asks before installing (see docs/store.md).
 

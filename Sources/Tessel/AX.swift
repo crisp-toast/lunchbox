@@ -101,14 +101,28 @@ extension AXUIElement {
         return AXUIElementSetAttributeValue(self, kAXSizeAttribute as CFString, v) == .success
     }
 
-    /// Size, then position, then size again: the second size call catches apps
-    /// that clamp a window's size to the display it is currently on.
-    func setFrame(_ frame: CGRect) {
-        setSize(frame.size)
-        setPosition(frame.origin)
-        if let s = size, abs(s.width - frame.width) > 1 || abs(s.height - frame.height) > 1 {
-            setSize(frame.size)
+    /// Puts a window in `slot`: its size first, then its position, so a window that won't
+    /// take the slot's size (a minimum, a maximum, a shape it keeps) goes straight to the
+    /// middle of the slot instead of its corner. Returns the frame it ended up with.
+    @discardableResult
+    func place(in slot: CGRect) -> CGRect? {
+        func off(_ s: CGSize) -> Bool { abs(s.width - slot.width) > 2 || abs(s.height - slot.height) > 2 }
+        func origin(for s: CGSize) -> CGPoint {
+            off(s) ? CGPoint(x: (slot.midX - s.width / 2).rounded(), y: (slot.midY - s.height / 2).rounded()) : slot.origin
         }
+        setSize(slot.size)
+        var s = size
+        setPosition(s.map(origin) ?? slot.origin)
+        // Some apps hold a window to the size of the display it was on: try again now it's moved.
+        if let first = s, off(first) {
+            setSize(slot.size)
+            if let again = size, again != first {
+                s = again
+                setPosition(origin(for: again))
+            }
+        }
+        guard let s, let p = position else { return nil }
+        return CGRect(origin: p, size: s)
     }
 
     func set(_ attribute: String, _ value: Bool) {
@@ -147,6 +161,15 @@ func isDialogShowing(_ id: CGWindowID, pid: pid_t, frame: CGRect) -> Bool {
            (0...200).contains(margin.width), (0...200).contains(margin.height) { return true }
     }
     return false
+}
+
+/// Whether the window server is showing a window right now: far cheaper than the
+/// whole window list, so it can be asked every few milliseconds.
+func isOnScreen(_ id: CGWindowID) -> Bool {
+    var raw = UnsafeRawPointer(bitPattern: UInt(id))
+    guard let array = CFArrayCreate(nil, &raw, 1, nil),
+          let info = (CGWindowListCreateDescriptionFromArray(array) as? [[String: Any]])?.first else { return false }
+    return info[kCGWindowIsOnscreen as String] as? Bool ?? false
 }
 
 /// Where each on-screen window is, by window number.
