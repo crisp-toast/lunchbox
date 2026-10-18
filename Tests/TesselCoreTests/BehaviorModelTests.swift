@@ -82,7 +82,8 @@ private func labeled() throws -> [Labeled] {
         #expect(rules(WindowTraits(app: "com.example.app")) == .document)
         #expect(rules(WindowTraits(app: "com.example.app", subrole: "AXFloatingWindow")) == .panel)
         #expect(rules(WindowTraits(app: "com.example.app", hasDefaultButton: true, hasCancelButton: true)) == .dialog)
-        #expect(rules(WindowTraits(app: "com.apple.screencaptureui")) == .panel)
+        // The screenshot toolbar calls itself a system dialog, but Tessel never touches the screenshot UI.
+        #expect(rules(WindowTraits(app: "com.apple.screencaptureui", subrole: "AXSystemDialog", buttons: [], resizable: false)) == .panel)
         // Only overlays always float: System Settings and Calculator tile, Calculator at its own size.
         #expect(rules(WindowTraits(app: "com.apple.systempreferences", buttons: [.close, .minimize, .zoom])) == .document)
         #expect(rules(WindowTraits(app: "com.apple.calculator", resizable: false, minimizable: true)) == .document)

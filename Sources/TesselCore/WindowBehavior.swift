@@ -101,11 +101,13 @@ public struct WindowTraits: Codable, Equatable, Sendable {
 
 extension WindowBehavior {
     /// Apps whose windows always float: overlays, not windows you work in. (Simulator,
-    /// Calculator, System Settings and the like tile, at the size they take.)
+    /// Calculator, System Settings and the like tile, at the size they take.) Tessel never even
+    /// watches these two: the screenshot UI isn't a regular app, and Tessel is itself.
     public static let floatingApps: Set<String> = ["com.apple.screencaptureui", "com.tyleryouens.tessel"]
 
     /// What Tessel's hand-written rules do with a window, in the same terms, so the two can be
     /// compared:
+    /// - a window of an app that always floats is left where it is;
     /// - a dialog floats, centered (`Dialogs.isDialog`); a "dialog" that resizes, has every
     ///   title-bar button and isn't asking anything (Little Arc) is a window;
     /// - so does a window that can be neither resized nor minimized (an About box);
@@ -113,10 +115,10 @@ extension WindowBehavior {
     ///   its app always floats;
     /// - everything else (a palette, a floating panel) floats where it is.
     public static func byRules(_ t: WindowTraits, floatingApps: Set<String>) -> WindowBehavior {
+        if floatingApps.contains(t.app) { return .panel }
         let r = RulesReading(t)
         if r.centered { return .dialog }
-        if r.tiles, !floatingApps.contains(t.app) { return .document }
-        return .panel
+        return r.tiles ? .document : .panel
     }
 
     /// What can never be learned, because Tessel never asks the classifier: a window the rules
