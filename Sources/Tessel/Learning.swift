@@ -198,6 +198,7 @@ final class Learning {
             return event
         }
         guard let event else { return false }
+        TimeBackLedger.shared.count(.corrected)
         learningLog.notice("window \(id) (\(event.features.app, privacy: .public)): you chose \(choice.rawValue, privacy: .public) (\(gesture.rawValue, privacy: .public))")
         write(event, to: floatLog)
         scheduleSave()
@@ -332,7 +333,9 @@ final class Learning {
         if on { scheduleSave() }
     }
 
+    /// A new window went to the Workspace its app lives in.
     func placed(_ app: String, in space: Int) {
+        TimeBackLedger.shared.count(.sent)
         write(WorkspaceMemory.Event(.placed, app: app, space: space, at: Self.now), to: workspaceLog)
     }
 
@@ -343,6 +346,7 @@ final class Learning {
     @discardableResult
     func undone(_ key: String) -> Bool {
         let stopped = state.withLock { $0.ledger.undone(key) }
+        TimeBackLedger.shared.count(.corrected)
         if key.hasPrefix("place|") {
             write(WorkspaceMemory.Event(.undone, app: String(key.dropFirst(6)), at: Self.now), to: workspaceLog)
         }
@@ -420,9 +424,10 @@ final class Learning {
         learningLog.notice("forgot \(key, privacy: .public)")
     }
 
-    /// Settings › Reset What Tessel Learned: forgets every lesson and deletes the folder.
-    /// Windows open now stay as they are.
+    /// Settings › Reset What Tessel Learned: forgets every lesson and deletes the folder,
+    /// the time back counted in it too. Windows open now stay as they are.
     func reset() {
+        TimeBackLedger.shared.reset()
         state.withLock { s in
             s.model = FloatClassifier()
             s.arrangements = ArrangementMemory()

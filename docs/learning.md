@@ -7,7 +7,7 @@ and it never moves anything you're looking at.
 **Status.** Built on branch `claude/bold-villani-c70383` behind **Settings › Learn Where Windows
 Go**, off by default until Tyler has lived with it. All three proofs below work on real windows
 in the test VM (macOS 27), including undo, "undo twice and it forgets", relaunch and Forget.
-`swift test`: 143 tests pass.
+`swift test`: 182 tests pass (with the time-back count, on branch `claude/keen-agnesi-7eeb29`).
 
 **Try it:** build and install from the branch (`./scripts/build.sh --install`), then turn on
 Settings › Learn Where Windows Go. Then:
@@ -29,6 +29,13 @@ the Workspace you were in undoes it.
 
 How this turns into a reason to pay (a time-back count, the trial-end screen, window search):
 [worth-paying-for.md](worth-paying-for.md).
+
+**Time back (built 2026-10-17).** Tessel counts what it did that you'd otherwise do by hand, at
+a few seconds each, less 3 s for every correction or undo. The menu says "This week: 23 minutes
+back · 412 windows placed", What Tessel Learned says how it's counted, and the trial-end screen
+leads with the trial week and what Tessel learned. It's kept as daily counts in the learning
+folder (`timeback.json`, below) and never shown as a notification. What's counted and where:
+[Item 1, as built](worth-paying-for.md#item-1-as-built-2026-10-17).
 
 ---
 
@@ -79,7 +86,7 @@ of them have a unit test.
 |---|---|---|
 | **It only decides where a *new* window lands.** It never rearranges what you're looking at. | Learned placement only applies to windows Tessel first saw under 10 s ago (`ManagedWindow.isNew`), never to windows back from a relaunch, minimize or full screen. A usual spot is applied with `Layout.restore`, which places the newcomer without reordering the windows already there. A window's float or tile choice is decided once, and a tiled window stays tiled (`tiles`). | `UsualArrangements.windowsAlreadyThereNeverChangeOrder`, VM run |
 | **It never takes focus.** | A window placed in another Workspace while you stay is marked `placedForYou`, so its app grabbing focus is ignored (`ForeignFocus` returns `.stay`) and the keyboard goes back to your window. You only go along when you just opened the app yourself, the same as the Dock does. | `NotAnnoying.aWindowPlacedForYouNeverTakesYouThere`, VM run |
-| **No popups, notifications or questions.** | The only thing it shows is the quiet line: a click-through, non-activating pill that's gone after 2.5 s, with a newer line replacing an older one. Nothing ever asks. Reset asks for confirmation, but only because you clicked it. | VM screenshots |
+| **No popups, notifications or questions.** | The only thing it shows is the quiet line: a click-through, non-activating pill that's gone after 2.5 s, with a newer line replacing an older one. Nothing ever asks. Reset asks for confirmation, but only because you clicked it. The time back is a line in the menu and on the trial-end screen, never a notification. | VM screenshots |
 | **Silent when unsure.** | The rules decide unless you've taught otherwise:<br>• A float needs a correction (two for a document window).<br>• An arrangement needs to have stood 30 s.<br>• A Workspace home needs your move plus 10 minutes of window time, nine tenths of it there.<br>• An app that also has windows elsewhere gets no home placement.<br>Hints alone never override the rules. | `FloatClassifierLearns`, `WorkspaceHomes`, `UsualArrangements` |
 | **Everything automatic is one quiet line, and one key undoes it.** | The key is ⌘ and the number of the Workspace you were in (⌘1 in Workspace 1). Pressed in that Workspace it otherwise only shows the Workspace badge, so it takes nothing new from you. It works for 10 s, or 3.5 s when Tessel took you to another Workspace (so just going back doesn't also drag the window along). Things done within a second of each other share one line and one undo. | `NotAnnoying.oneQuietLine…`, `…manyThingsAtOnceShareOneLine`, VM run |
 | **Two undos in a row, and it forgets that lesson.** It stops until you teach it again. | `UndoLedger`, then `Learning.forget`. Undoing a learned float is itself a correction, so one undo is enough there. | `NotAnnoying.twoUndosInARowAndItStops`, VM run |
@@ -242,8 +249,10 @@ files of its cap, and anything older than 90 days is pruned at start.
 | `arrange.jsonl` | arrangements and how long they stood, lone shapes, forgotten lessons | 2 × 1 MB |
 | `workspace.jsonl` | moves, placements, undos, forgotten homes (the story; the numbers are in memory.json) | 2 × 512 KB |
 | `memory.json` | Workspace homes and their window time, the undo ledger, each open window's kind and choice | small (KB) |
+| `timeback.json` | the time back: how many windows Tessel tiled, put in their usual spot, sent home or put back each day, Summon jumps, and corrections. Dates and numbers only. Kept whether or not learning is on | 90 days, a few KB |
 
-A typical day writes a few kilobytes. Events hold bundle IDs, kinds of window, sizes, Workspace
+`timeback.json` follows the same rules as the logs: 0600, in the same folder, pruned after 90
+days, and Reset What Tessel Learned deletes it. A typical day writes a few kilobytes. Events hold bundle IDs, kinds of window, sizes, Workspace
 numbers, display sizes and times. **Never** window titles, file names, URLs, typed text or key
 codes.
 
@@ -273,9 +282,10 @@ you.
 
 ## Tested
 
-- **Unit tests** (`swift test`, 143 in all). New suites: `FloatClassifierLearns`, `WindowKinds`,
+- **Unit tests** (`swift test`, 182 in all). New suites: `FloatClassifierLearns`, `WindowKinds`,
   `UsualArrangements`, `WorkspaceHomes`, `NotAnnoying`, `EventLogStaysSmallAndLocal`,
-  `NothingLeavesThisMac`.
+  `NothingLeavesThisMac`, and for the time back `TimeBackCounts`, `TimeBackStaysOnThisMac` and
+  `TimeBackInWords`.
 - **Live, in the test VM (tessel-vm, macOS 27), 2026-10-16,** with TextEdit and Terminal:
   - **Floats:** a document floated once still tiles next time. Floated twice, the next one floats
     by itself at its natural size, with the quiet line. The undo key tiles it, and the next one

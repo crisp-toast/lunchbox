@@ -87,9 +87,22 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
+        // The time Tessel gave back this week, once there's any. How it's counted is in its
+        // tooltip and in What Tessel Learned.
+        let week = TimeBackLedger.shared.week
+        let unlicensed = licensing.map { $0.license == nil } ?? false
+        if trusted, !week.isEmpty {
+            let line = NSMenuItem(title: TimeBackWords.menuLine(week), action: nil, keyEquivalent: "")
+            line.isEnabled = false
+            line.toolTip = Self.howCounted(week)
+            menu.addItem(line)
+            if !unlicensed { menu.addItem(.separator()) }
+        }
         if let licensing, licensing.license == nil {
             switch licensing.trial {
-            case .active(let days): menu.addItem(disabled: "Free trial: \(days) day\(days == 1 ? "" : "s") left")
+            case .active(let days):
+                let soFar = TimeBackLedger.shared.tally(since: licensing.trialStart ?? Date())
+                menu.addItem(disabled: TimeBackWords.trialLine(daysLeft: days, soFar: soFar))
             case .ended: menu.addItem(disabled: "Free trial ended")
             }
             menu.addItem(action("Buy Tessel – $9.99…") { [weak self] in self?.onBuy?() })
@@ -126,6 +139,12 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             let lessons = NSMenu()
             lessons.addItem(action("How Tessel Sees Your Windows…") { [weak self] in self?.onShowWindowClasses?() })
             lessons.addItem(.separator())
+            let line = NSMenuItem(title: TimeBackWords.menuLine(week), action: nil, keyEquivalent: "")
+            line.isEnabled = false
+            line.toolTip = Self.howCounted(week)
+            lessons.addItem(line)
+            lessons.addItem(Self.footnote(TimeBackWords.howCounted.joined(separator: "\n"), toolTip: Self.howCounted(week)))
+            lessons.addItem(.separator())
             let list = Learning.shared.lessons()
             if list.isEmpty {
                 lessons.addItem(disabled: "Nothing yet")
@@ -153,12 +172,31 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         menu.addItem(NSMenuItem(title: "Quit Tessel", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
+    /// The working behind this week's number, for a tooltip.
+    private static func howCounted(_ week: TimeBack.Tally) -> String {
+        let rows = TimeBackWords.breakdown(week)
+        return (TimeBackWords.howCounted + (rows.isEmpty ? [] : ["", "This week:"] + rows)
+            + ["", "Counted on this Mac only. Reset What Tessel Learned clears it."]).joined(separator: "\n")
+    }
+
+    /// A small grey note in a menu.
+    private static func footnote(_ text: String, toolTip: String? = nil) -> NSMenuItem {
+        let entry = NSMenuItem(title: text, action: nil, keyEquivalent: "")
+        entry.attributedTitle = NSAttributedString(string: text, attributes: [
+            .font: NSFont.menuFont(ofSize: NSFont.smallSystemFontSize),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ])
+        entry.isEnabled = false
+        entry.toolTip = toolTip
+        return entry
+    }
+
     /// Asks once, since it can't be undone. Windows stay where they are either way.
     private static func confirmReset() {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = "Forget everything Tessel learned about how you work?"
-        alert.informativeText = "Your windows stay where they are. Nothing Tessel learned ever left this Mac."
+        alert.informativeText = "Your windows stay where they are, and the count of time Tessel gave back starts over. Nothing Tessel learned ever left this Mac."
         alert.addButton(withTitle: "Forget Everything")
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn { Learning.shared.reset() }

@@ -185,8 +185,13 @@ final class Tiler {
         guard !enabled else { return }
         enabled = true
         initialScanDone = false
+        // Windows put back after Tessel starts again count as time back; after a pause, they
+        // only undo the pause.
+        countsRestores = !startedBefore
+        startedBefore = true
         loadSaved()
         displays = Display.current()
+        TimeBackLedger.shared.load()
         Learning.shared.start(alive: allWindowIDs())
         Learning.shared.setScreens(displays.map(\.visible))
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 1.0)
@@ -267,6 +272,7 @@ final class Tiler {
         learningTimer?.invalidate()
         learningTimer = nil
         Learning.shared.stop()
+        TimeBackLedger.shared.saveNow()
         enabled = false
         notificationTokens.forEach {
             NSWorkspace.shared.notificationCenter.removeObserver($0)
@@ -1092,6 +1098,10 @@ final class Tiler {
     /// Set once the windows that were already open at launch are placed, so
     /// only windows opened afterwards count as new.
     private var initialScanDone = false
+    /// Tiling has started before in this run of Tessel (so this start is a resume).
+    private var startedBefore = false
+    /// Windows put back where they were count as time back: true after a launch, not a resume.
+    private var countsRestores = false
 
     private func insert(_ window: ManagedWindow) {
         if returnFromFullScreen(window) { return }
@@ -1136,7 +1146,15 @@ final class Tiler {
             standing["\(space)|\(display.uuid)"] = nil // it starts standing once you leave it be
             DispatchQueue.main.async { [weak self] in self?.noteArranged(space: space, display: display.uuid, byYou: false) }
         }
-        if let home, let app { placedInHome(window, app: app, home: home, display: display) }
+        if let home, let app {
+            placedInHome(window, app: app, home: home, display: display) // counted as sent, in Learning
+        } else if usual != nil {
+            TimeBackLedger.shared.count(.arranged)
+        } else if fresh {
+            TimeBackLedger.shared.count(.tiled)
+        } else if saved != nil, countsRestores {
+            TimeBackLedger.shared.count(.restored) // back in its Workspace and spot after Tessel started again
+        }
     }
 
     /// What a layout on this display has to fit windows into, for windows that can't be squeezed.
@@ -1905,7 +1923,7 @@ final class Tiler {
     private func displaysChanged() {
         guard enabled else { return }
         displays = Display.current()
-        welcomeBackDisplays()
+        welcomeBackDisplays(counting: true)
         mergeInactiveDisplays()
         relayout(animated: false)
         persist()
@@ -1916,10 +1934,12 @@ final class Tiler {
     private var departed: [String: [Layout?]] = [:]
 
     /// A display that went away is back: its windows, if still in the same Workspace,
-    /// go back to the spots they had on it.
-    private func welcomeBackDisplays() {
+    /// go back to the spots they had on it. `counting`: it really came back (plugged in, or
+    /// awake again), rather than Use All Displays being turned on, so it counts as time back.
+    private func welcomeBackDisplays(counting: Bool = false) {
         for display in activeDisplays {
             guard let before = departed.removeValue(forKey: display.uuid) else { continue }
+            var returned = 0
             for (s, snapshot) in before.enumerated() {
                 guard let snapshot, spaces.indices.contains(s) else { continue }
                 var layout = spaces[s][display.uuid] ?? Layout()
@@ -1931,10 +1951,15 @@ final class Tiler {
                     if !layout.restore(id, from: snapshot) {
                         layout.insert(id, near: layout.windows.last, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
                     }
+                    returned += 1
                 }
                 spaces[s][display.uuid] = layout.isEmpty ? nil : layout
             }
-            log.notice("display \(display.name, privacy: .public) is back; its windows returned")
+            if counting, returned > 0 {
+                TimeBackLedger.shared.count(.restored, times: returned)
+                TimeBackLedger.shared.count(.displayReturned)
+            }
+            log.notice("display \(display.name, privacy: .public) is back; \(returned) windows returned")
         }
     }
 
@@ -2528,7 +2553,14 @@ final class Tiler {
     }
 
     /// Restores the window if it's minimized, switches to its Workspace, and focuses it.
+    /// Only Summon comes here, by app or by window title.
     private func bringForward(_ w: ManagedWindow) {
+        // A jump that took you somewhere counts as time back; one to the window you were
+        // already in doesn't.
+        let elsewhere = place(of: w.id).map { $0.space != currentSpace } ?? false
+        if w.minimized || w.id != focusedID || elsewhere {
+            TimeBackLedger.shared.count(.summoned)
+        }
         if w.minimized {
             // Restore it; Tessel tiles it again when it comes back.
             let element = w.handle.element
@@ -2631,6 +2663,8 @@ final class Tiler {
         let started: CFTimeInterval
         var deadline: CFTimeInterval
         let tile: PlaceholderTile
+        /// It took the window's usual spot (Learning).
+        var usual = false
 
         init(id: CGWindowID, bundleID: String, pid: pid_t?, existing: Set<CGWindowID>, deadline: CFTimeInterval,
              tile: PlaceholderTile) {
@@ -2693,7 +2727,8 @@ final class Tiler {
         plain.insert(id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width),
                      limits: limits, room: room(on: display))
         // Learned: the placeholder takes the spot the window usually has next to these apps.
-        if let (placed, action, key) = usualPlace(id, app: bundleID, in: layout, display: display) {
+        let usual = usualPlace(id, app: bundleID, in: layout, display: display)
+        if let (placed, action, key) = usual {
             layout = placed
             didOnItsOwn(action, undo: .layout(space: currentSpace, display: display.uuid, applied: placed, plain: plain),
                         key: key, from: currentSpace, on: display)
@@ -2706,8 +2741,10 @@ final class Tiler {
         var name = running?.localizedName ?? url.map { FileManager.default.displayName(atPath: $0.path) } ?? ""
         if name.hasSuffix(".app") { name.removeLast(4) }
         let icon = running?.icon ?? url.map { NSWorkspace.shared.icon(forFile: $0.path) } ?? NSWorkspace.shared.icon(for: .application)
-        expected.append(Expected(id: id, bundleID: bundleID, pid: running?.processIdentifier, existing: Set(mine.map(\.id)),
-                                 deadline: CACurrentMediaTime() + Self.placeholderWait, tile: PlaceholderTile(icon: icon, name: name)))
+        let e = Expected(id: id, bundleID: bundleID, pid: running?.processIdentifier, existing: Set(mine.map(\.id)),
+                         deadline: CACurrentMediaTime() + Self.placeholderWait, tile: PlaceholderTile(icon: icon, name: name))
+        e.usual = usual != nil
+        expected.append(e)
         relayout(animated: true)
         schedulePlaceholderCheck()
         log.notice("holding a tile for \(bundleID, privacy: .public) in space \(self.currentSpace + 1)")
@@ -2726,6 +2763,7 @@ final class Tiler {
         }
         expected.removeAll { $0 === e }
         e.tile.dismiss(animated: animationsAllowed)
+        TimeBackLedger.shared.count(e.usual ? .arranged : .tiled)
         let waited = CACurrentMediaTime() - e.started
         log.notice("window \(window.id) (\(e.bundleID, privacy: .public)) took its tile after \(waited, format: .fixed(precision: 2)) s")
         return true
