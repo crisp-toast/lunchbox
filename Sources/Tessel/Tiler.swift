@@ -78,7 +78,7 @@ final class Tiler {
     static let resizeStep = 0.08
     /// Apps whose windows always float: overlays, not windows you work in. (Simulator,
     /// Calculator, System Settings and the like tile, at the size they take.)
-    static let floatingApps: Set<String> = ["com.apple.screencaptureui", "com.tyleryouens.tessel"]
+    static let floatingApps = WindowBehavior.floatingApps
 
     private(set) var enabled = false
     private(set) var currentSpace = 0

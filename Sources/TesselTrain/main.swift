@@ -41,6 +41,8 @@ let examples = records.map { r in
 let classes = WindowBehavior.allCases
 print("\(examples.count) windows from \(Set(examples.map(\.app)).count) apps:",
       classes.map { c in "\(c.rawValue) \(examples.filter { $0.label == c }.count)" }.joined(separator: ", "))
+let asked = examples.filter { WindowBehavior.hardRule($0.traits) == nil }
+print("Tessel asks the classifier about \(asked.count) of them (window-like); the rules decide the other \(examples.count - asked.count).")
 
 if let i = args.firstIndex(of: "--features") {
     let rows = examples.map { ["id": $0.id, "structure": $0.structure, "title": $0.title] as [String: Any] }
@@ -140,11 +142,7 @@ func fit(_ train: [Example]) -> BehaviorModel {
 
 // MARK: Leave one app out
 
-let floatingApps: Set<String> = [
-    "com.apple.systempreferences", "com.apple.iphonesimulator",
-    "com.apple.calculator", "com.apple.QuickTimePlayerX", "com.apple.ScreenSharing",
-    "com.apple.screencaptureui", "com.tyleryouens.tessel",
-]
+let floatingApps = WindowBehavior.floatingApps
 
 struct Outcome { var example: Example; var rule: WindowBehavior; var model: WindowBehavior; var confidence: Double }
 

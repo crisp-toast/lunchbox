@@ -1,6 +1,7 @@
 # The window classifier
 
-Results as of 2026-10-16 (branch `claude/bold-villani-c70383`). This is the first part of
+Results as of 2026-10-17, measured against Tessel's rules as of main's cbfafb9 (branch
+`claude/bold-villani-c70383`). This is the first part of
 Tessel's learning layer ([learning.md](learning.md)): a fast model that decides how each window
 should behave the moment it appears. It sits behind **Settings › Learn Where Windows Go**, which
 is off by default.
@@ -10,9 +11,9 @@ is off by default.
 | Class | What it is | What Tessel does |
 |---|---|---|
 | **document** | a document or main window | tiles |
-| **panel** | inspector, palette, Fonts or Colors, Get Info, settings window, a small companion window like a Stickies note or Calculator | floats where it is |
+| **panel** | inspector, palette, Fonts or Colors, Get Info, settings window, a small companion window like a Stickies note | floats where it is |
 | **transient** | here and gone: copy or progress windows, splash and first-run windows | floats; never shuffles the tiles |
-| **media** | Picture in Picture, a movie or camera window, a mini player | floats (floating windows already show in every Workspace) |
+| **media** | Picture in Picture, a mini player, a call's floating window | floats (floating windows already show in every Workspace) |
 | **dialog** | asking you something, including the ones the rules miss | floats, centered once |
 
 ## How it decides
@@ -34,10 +35,25 @@ is off by default.
   `Sources/TesselCore/BehaviorModelWeights.swift`, 45 KB). It's shaped like a System One model:
   the window's state in, one probability per behavior out, nothing generated.
 - **Safety floor** (`BehaviorDecision.combine`):
-  - a dialog by the old rules is always a dialog;
-  - the model only counts when it's at least 50% sure;
-  - it never tiles a window that can't be resized, or one from an app Tessel always floats
-    (System Settings, QuickTime, Calculator…).
+  - the rules decide every window Tessel never asks the classifier about:
+    - dialogs;
+    - windows that can be neither resized nor minimized, like About boxes (they float
+      centered, like dialogs);
+    - windows that aren't window-like, like a palette without every title-bar button or a
+      helper window;
+    - the always-float overlays (the screenshot UI and Tessel itself, which Tessel never
+      watches);
+  - the model only counts when it's at least 50% sure.
+
+  The old "never tile a window that can't be resized" is gone. Since cbfafb9 the rules tile a
+  fixed-size window that can be minimized (Calculator) at its own size, and that's the only kind
+  of fixed-size window the classifier is ever asked about.
+- **What the classifier owns:** for the windows it's asked about (68 of the 84 labeled ones),
+  whether each one tiles, floats where it is (panel, transient or media) or floats centered
+  (dialog). Those are:
+  - standard windows, including fixed-size ones the rules tile at their own size;
+  - "dialogs" that are windows in all but name (Little Arc);
+  - resizable windows with every title-bar button (Fonts, Colors).
 - **Your corrections** on top: Float/Tile and the double drag still teach `FloatClassifier`, and
   the classifier's call is the starting point those lessons adjust.
 
@@ -59,9 +75,13 @@ helped either.
 
 - **Data:** 84 windows from 52 apps, collected in the macOS 27 test VM with the `snapshot:` command
   and labeled by hand (`Training/windows.jsonl`). The apps are Apple's own plus Chrome, VS Code,
-  iTerm, Claude, 1Password and RustDesk. There are 47 documents, 22 panels, 10 dialogs, 3
-  transient and 2 media windows. No one's own windows: the base model is trained only on test
-  machines.
+  iTerm, Claude, 1Password and RustDesk. There are 52 documents, 19 panels, 10 dialogs, 3
+  transient windows and no media windows. No one's own windows: the base model is trained only
+  on test machines.
+- **Labels changed on 2026-10-17** to follow main's cbfafb9, which tiles Calculator (at its own
+  size), System Settings and QuickTime. Those four windows went from panel or media to document,
+  and so did Digital Color Meter's (a small app's only fixed-size window, like Calculator's).
+  The model was retrained on the new labels.
 - **Evaluation: leave-one-app-out.** Each app's windows are judged by a model that never saw that
   app, which is what a new user's apps are. Reproduce it with:
 
@@ -69,33 +89,49 @@ helped either.
   swift run -c release TesselTrain Training/windows.jsonl
   ```
 
-| | Right behavior (5 classes) | Right tile-or-not |
-|---|---|---|
-| Today's rules | 81% (68/84) | 89% (75/84) |
-| Model alone | 85% (71/84) | 93% (78/84) |
-| **Shipped** (safety floor, model when ≥ 50% sure) | **88% (74/84)** | **98% (82/84)** |
-| Shipped at a more cautious 70% | 86% | 93% |
+| | Right behavior (5 classes) | Right tile-or-not | Right placement (tile / float / float centered) |
+|---|---|---|---|
+| Today's rules | 81% (68/84) | 86% (72/84) | 83% (70/84) |
+| Model alone | 83% (70/84) | 89% (75/84) | 83% (70/84) |
+| **Shipped** (safety floor, model when ≥ 50% sure) | **85% (71/84)** | **92% (77/84)** | **87% (73/84)** |
+| Shipped at a more cautious 70% | 82% | 87% | 85% |
 
-(Since 2026-10-17, 1Password is no longer on the always-float list. That list came from
-Tessel's first commit, and the safety floor never tiles an app on it, so its main window used
-to float.)
+**Lower than before.** Until 2026-10-17 this table said 88% and 98% for the shipped decision.
+Those numbers were measured against the old rules and labels, under which Calculator, System
+Settings and QuickTime always floated. Now the rules tile them and the labels agree, so the
+rules do better on their own, and the classifier floats three windows that should tile:
+Preview's image window (as before), Digital Color Meter's and, at 51% sure, Activity Monitor's
+main window.
+
+**One thing the census didn't record:** whether a fixed-size window's minimize button is
+enabled. Since cbfafb9 that decides whether the rules tile such a window at its own size or
+center it.
+- Calculator's is enabled: main tiles it.
+- For the Settings windows of TextEdit, Finder and Safari, the numbers above assume it's enabled
+  too. That's the fallback for windows recorded before the trait existed.
+- If it isn't, the rules center those three and the classifier is never asked about them:
+  - tile-or-not becomes 89% for the rules and 93% shipped;
+  - placement becomes 83% for the rules and 85% shipped;
+  - the classifier's fixes of TextEdit's and Finder's Settings go away.
+- New `snapshot:` records note it (`minimizable`).
 
 Recall per class, for the rules, the model alone, and the shipped decision:
 
 | Class | Rules | Model alone | Shipped |
 |---|---|---|---|
-| document | 98% | 94% | 96% |
-| panel | 55% | 82% | 82% |
-| dialog | 90% | 80% | 90% |
-| transient (3 examples) | 0% | 33% | 33% |
-| media (2 examples) | 0% | 0% | 0% |
+| document (52) | 100% | 90% | 94% |
+| panel (19) | 37% | 74% | 68% |
+| dialog (10) | 90% | 80% | 90% |
+| transient (3 examples) | 0% | 33% | 0% |
+| media | no examples left | | |
 
 **What changes against the rules** (held out, shipped):
-- **Fixed (8):** Finder's three Get Info windows, Disk Utility's Info, Script Editor's Library,
-  both Stickies notes, and Chrome's first-run prompt.
-- **Broke (3):**
-  - Preview's image window now floats, the one change that really matters, since a document
-    window stops tiling.
+- **Fixed (7):** two of Finder's Get Info windows, Finder's and TextEdit's Settings, Script
+  Editor's Library, and both Stickies notes.
+- **Broke (5):**
+  - Preview's image window, Digital Color Meter's window and Activity Monitor's main window
+    float when they should tile. These are the changes that really matter, since a window you
+    work in stops tiling.
   - TextEdit's Spelling panel is called a dialog, so it gets centered once.
   - Finder's Connect to Server is called a panel instead of a dialog. It floats either way, which
     already fixes the rules' mistake of tiling it.
@@ -103,8 +139,8 @@ Recall per class, for the rules, the model alone, and the shipped decision:
 **Read these numbers with care:**
 - 84 windows is small. A difference of 5 points is about 4 windows, so it's promising, not proven.
 - The 50% threshold was picked on these same results, which flatters it a little.
-- There are too few transient and media windows to learn anything from: the model barely
-  recognizes them, and the safety floor keeps the rules there.
+- There are too few transient windows to learn anything from, and no media windows left: the
+  model barely recognizes either, and the rules decide there.
 - Every window came from one macOS version. The VMs for 14, 15 and 26 exist and run the same
   `snapshot:` command.
 
@@ -132,7 +168,7 @@ Recall per class, for the rules, the model alone, and the shipped decision:
 For agents: the `classes` command shows the panel, and `classify` writes the same report, without
 titles, to `~/Library/Application Support/Tessel/classes.json`.
 
-Live in the VM (tiling on, learning on): Finder's Get Info windows, both Stickies notes and
+Live in the VM with the first weights (2026-10-16, tiling on, learning on): Finder's Get Info windows, both Stickies notes and
 Script Editor's Library floated the moment they opened, while Finder, TextEdit, Script Editor and
 Voice Memos documents tiled. Under the old rules all of these would have tiled.
 
@@ -141,7 +177,7 @@ Voice Memos documents tiled. Under the old rules all of these would have tiled.
 1. **More labeled windows.** Run `snapshot:` in the 14, 15 and 26 VMs, and in apps people
    actually complain about: Zoom, Slack, Teams, Discord, JetBrains, Adobe, Steam, Electron
    pop-ups. Aim for 300+ windows with at least 20 per class before trusting the per-class
-   numbers.
+   numbers. Re-snapshot the 27 VM's fixed-size windows too, now that `minimizable` is recorded.
 2. **Media and transient:** capture Picture in Picture from browsers, call windows, and copy and
    install progress on slower disks.
 3. **A System One model again,** fine-tuned on windows rather than zero-shot, once there are

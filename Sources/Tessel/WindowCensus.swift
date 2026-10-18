@@ -26,7 +26,8 @@ enum WindowReader {
                        screens: [CGRect], appWindows: Int) -> WindowTraits {
         var buttons: WindowButtons = []
         if element.element(kAXCloseButtonAttribute) != nil { buttons.insert(.close) }
-        if element.element(kAXMinimizeButtonAttribute) != nil { buttons.insert(.minimize) }
+        let minimize = element.element(kAXMinimizeButtonAttribute)
+        if minimize != nil { buttons.insert(.minimize) }
         if element.element(kAXZoomButtonAttribute) != nil { buttons.insert(.zoom) }
         if element.element(kAXFullScreenButtonAttribute) != nil { buttons.insert(.fullScreen) }
         let children = element.elements(kAXChildrenAttribute).map { $0.role }
@@ -38,6 +39,7 @@ enum WindowReader {
             app: bundleID, appName: appName, appCategory: category(of: bundleID),
             role: element.role, subrole: element.subrole, identifier: element.string(kAXIdentifierAttribute),
             title: element.string(kAXTitleAttribute), buttons: buttons, resizable: element.isResizable,
+            minimizable: minimize.map { $0.bool(kAXEnabledAttribute) } ?? false,
             modal: element.bool(kAXModalAttribute),
             hasDefaultButton: element.element(kAXDefaultButtonAttribute) != nil,
             hasCancelButton: element.element(kAXCancelButtonAttribute) != nil,

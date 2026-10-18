@@ -204,7 +204,7 @@ public enum BehaviorDecision {
     public static func decide(_ t: WindowTraits, model: BehaviorModel?, meaning: [Double],
                               floatingApps: Set<String>) -> (behavior: WindowBehavior, byModel: Bool, confidence: Double) {
         let rule = WindowBehavior.byRules(t, floatingApps: floatingApps)
-        guard let model, WindowBehavior.hardRule(t) == nil else { return (WindowBehavior.hardRule(t) ?? rule, false, 1) }
+        guard let model, !floatingApps.contains(t.app), WindowBehavior.hardRule(t) == nil else { return (rule, false, 1) }
         let (behavior, confidence) = model.classify(t, meaning: meaning)
         let decided = combine(t, rule: rule, model: behavior, confidence: confidence, threshold: model.threshold,
                               floatingApps: floatingApps)
@@ -212,14 +212,18 @@ public enum BehaviorDecision {
     }
 
     /// The safety floor around what the model says:
-    /// - a dialog by the rules is a dialog;
-    /// - the model only counts when it's at least `threshold` sure;
-    /// - it never tiles a window that can't be resized, or one of an app Tessel always floats.
+    /// - the rules decide every window Tessel never asks the model about: an app's that always
+    ///   floats, and (`hardRule`) dialogs, About boxes and the like, and windows that aren't
+    ///   window-like;
+    /// - the model only counts when it's at least `threshold` sure.
+    ///
+    /// A window that can't be resized may tile: the model is only asked about one the rules
+    /// already tile at its own size (Calculator), and may float it instead.
     public static func combine(_ t: WindowTraits, rule: WindowBehavior, model: WindowBehavior, confidence: Double,
                                threshold: Double, floatingApps: Set<String>) -> WindowBehavior {
+        if floatingApps.contains(t.app) { return rule }
         if let hard = WindowBehavior.hardRule(t) { return hard }
         guard confidence >= threshold else { return rule }
-        if model == .document, !t.resizable || floatingApps.contains(t.app) { return rule }
         return model
     }
 }
