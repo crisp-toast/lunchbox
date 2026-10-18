@@ -111,7 +111,7 @@ let arrivals: [(layout: Layout, focused: WindowID?)] = [
     @Test func placeholdersAreNeverSaved() throws {
         var l = Layout(columns: [Column(windows: [1, 2], weights: [0.6, 0.4], weight: 0.7), Column(windows: [3], weight: 0.3)])
         let saved = l
-        l.insert(p1, near: 2, maxColumns: 2) // no room for a column: it stacks
+        l.insert(p1, near: 2, maxColumns: 2) // the fourth: a 2×2 grid, until it gives up
         l.insert(p2, near: 3, maxColumns: 3) // a column of its own
         #expect(l.placeholders.sorted() == [p1, p2])
         #expect(l.withoutPlaceholders() == saved)

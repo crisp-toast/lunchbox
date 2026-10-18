@@ -2,13 +2,14 @@
 
 A small, fast tiling window manager for macOS that lives in the menu bar.
 
-- One window on a screen sits centered at a comfortable 16:10 size. Two or more tile side by side.
+- One window on a screen sits centered at a comfortable 16:10 size. Two or three tile side by side;
+  the fourth makes a 2×2 grid, unless you've shown Tessel a shape you like better (see Learning).
 - Everything is driven by the **left** ⌘ key, so right ⌘ + arrows still move the text cursor.
 - Windows slide into place. Apps that can't keep up just snap, so Tessel never adds lag.
 - A new window goes straight into its tile, within a frame or two of appearing, instead of
   showing up where its app put it and gliding over. Tessel moves it the moment the app makes it,
   often before it's even on screen.
-- Three Workspaces, switched instantly from the keyboard.
+- Three Workspaces on ⌘1, ⌘2 and ⌘3, switched instantly. Add more (up to nine) from the menu.
 - Dialogs (Open, Save, alerts, password prompts) float, centered on their screen, instead of
   splitting the tiled windows apart, and stay in view when you switch Workspaces. So do small
   windows that can't be resized or minimized, like About boxes and progress windows. A "dialog"
@@ -35,28 +36,31 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + ↑ ↓ | Swap with the window above or below in a stack |
 | Left ⌘ ⇧ + plus / minus | Give the window more or less space (a lone window, or one in Focus, grows or shrinks around the center) |
 | Left ⌘ ⇧ + F | **Focus**: the window alone in the center, the rest of the Workspace on the Shelf. Again, a click on a Shelf card, ⌘ (or ⌘ ⇧) with any arrow, or a file dragged onto a Shelf card ends it |
-| Left ⌘ ⇧ + H | **Hide** the window: it always moves to Workspace 3 |
+| Left ⌘ ⇧ + H | **Hide** the window: it moves to the last Workspace (3, unless you added more) |
 | Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
-| ⌘ + Workspace key 1 / 2 / 3 | Go to that Workspace |
-| ⌘ ⇧ + Workspace key 1 / 2 / 3 | Move the focused window to that Workspace and go there with it |
-| ⇧ Space | **Summon**: open an app, file or website |
+| Left ⌘ + 1 / 2 / 3 | Go to that Workspace |
+| Left ⌘ ⌥ + 1 / 2 / 3 | Move the focused window to that Workspace and go there with it |
+| ⇧ Space | **Summon**: open an app, or go to any open window, file or website |
 | Left ⌘ ⇧ + Space | The **Cheat Sheet**: every shortcut, with search |
 
-The Workspace keys are whatever three keys you pick on first launch (menu → **Set Up Workspace Keys…**).
-On Tyler's Boop65 they're the three keys on the far right, above the right arrow.
+Workspaces are ⌘ and their number. Moving a window there is ⌥⌘, not ⌘⇧, because ⌘⇧3, ⌘⇧4 and
+⌘⇧5 are the Mac's screenshot keys. Right ⌘ and a number still reaches the app in front (a browser's
+tabs, say), and so does ⌘ and the number of a Workspace you don't have. **Add a Workspace** and
+**Remove Workspace N** are in the menu; a removed Workspace's windows move to the one before it.
+(Earlier versions had you pick three Workspace keys; a shortcut you changed back then keeps them.)
 
 ## Names
 
 | Name | What it is |
 | --- | --- |
-| **Summon** | The ⇧Space search bar: apps, then files and folders, then the web |
+| **Summon** | The ⇧Space search bar: apps, then open windows, then files and folders, then the web |
 | **Focus** | ⌘⇧F: one window centered, the rest on the Shelf |
 | **the Shelf** | The tilted cards beside a Focus window |
 | **Tidy** | ⌘⇧0: even out every split in the space |
-| **Hide** | ⌘⇧H: send the window to Workspace 3 |
+| **Hide** | ⌘⇧H: send the window to the last Workspace |
 | **Cheat Sheet** | ⌘⇧Space: every shortcut, searchable |
 | **Halo** | The blue outline around the focused window |
-| **Workspaces 1–3** | Tessel's own instant Workspaces, on your three **Workspace keys** |
+| **Workspaces 1–3** | Tessel's own instant Workspaces, on ⌘1, ⌘2 and ⌘3 (up to nine if you add them) |
 
 ## Your own shortcuts
 
@@ -80,8 +84,27 @@ Apps you open often rise to the top.
 - An app with a window you can get to (tiled in a space, minimized, or floating on screen) shows two rows: **go to its window** (switching spaces if
   needed) and **New … window** (⇧↩), which uses the app's own File › New Window and lands
   tiled and focused in the current space.
-- When no app matches, it searches Spotlight's index for files and folders, most
-  recently used first.
+- **Open windows** are found by the words in their titles: type "invoice", "lunch" or "Tiler"
+  and the window whose title has a word starting that way is listed, with its app and Workspace
+  beneath. Return goes to it wherever it is: another Workspace, another display, or minimized in
+  the Dock. A word can also be the app's name ("slack" lists each Slack window). Windows that match
+  more of what you typed come first, then the ones you used most recently. Window rows sit below
+  apps whose name you typed and above files. It's plain word matching on titles read as Summon
+  opens, so typing never waits on another app, and titles are never saved.
+- **Files and folders** come from Spotlight's index as you type (two letters or more), alongside
+  apps and windows and listed after them, with at least two rows kept for them. A name that is what
+  you typed comes first, then names that start with it, then names with a word starting each typed
+  word; among those, the Desktop, Documents and Downloads (on this Mac or in iCloud Drive) come
+  before deeper folders, then the most recently used. iCloud Drive and cloud storage folders
+  (Dropbox, Google Drive) are searched; the rest of Library, hidden files and apps aren't.
+  macOS hides the files in Desktop, Documents and Downloads from apps it hasn't let into those
+  folders, Spotlight's answers included, and only asks once an app looks inside one. Tessel never
+  looks on its own, so nothing pops up while you type: until you've answered, file searches end
+  with **Find files on your Desktop and in Documents too**. Choose it and Tessel reads those
+  folders (and iCloud Drive's Desktop and Documents) once, macOS asks whether to allow each, and
+  Summon opens again on the same search. Its second line, **Don't show this again** (⇧↩), hides
+  the row instead. Either way it never comes back, and with Full Disk Access it never shows. To
+  change an answer later, use Files & Folders in Privacy & Security.
 - Opening an app that isn't running yet (or is running with no windows), or a **New … window**,
   makes room right away, so a slow launch never looks like nothing happened: the windows here glide
   aside and a frosted **placeholder** with the app's icon, gently pulsing, holds the exact spot and
@@ -156,8 +179,8 @@ Commands: `welcome`, `welcome-<step 0…4>`, `welcomeclose`, `find:<text>` (open
 `balance`, `retile`, `displays-all`, `displays-main`, `pause`, `resume`, `expect:<bundle id>` (holds a
 placeholder for a window of that app, without opening anything, to try placeholders), `leave-app:<bundle id>` and
 `manage-app:<bundle id>` (stop and resume tiling one app's windows, for agents testing it on a
-dummy-plug display), and `dump`, which writes the current state to
-`~/Library/Application Support/Tessel/state.json`.
+dummy-plug display), the learning commands (see below), and `dump`, which writes the
+current state to `~/Library/Application Support/Tessel/state.json`.
 
 `pause` and `resume` do what the menu's **Tiling** item does. Pausing brings back windows parked in
 other spaces, stops tiling, and lets every shortcut through to apps. Both are safe to send twice.
@@ -184,6 +207,39 @@ Logs (`/usr/bin/log`, since zsh has its own `log` builtin):
 ```bash
 /usr/bin/log stream --predicate 'subsystem == "com.tyleryouens.tessel"' --info
 ```
+
+## Learning where your windows go (off by default for now)
+
+**Settings › Learn Where Windows Go** turns it on. Tessel then learns from what you do, entirely
+on this Mac ([docs/learning.md](docs/learning.md)):
+
+- **It knows what kind of window it's looking at.** A window classifier decides, as each window
+  appears, whether it's a document (tiles), a tool panel, a here-and-gone window, a video or call,
+  or a dialog the rules missed, in well under a millisecond. **What Tessel Learned › How Tessel
+  Sees Your Windows** shows its call for every open window ([docs/window-classifier.md](docs/window-classifier.md)).
+- **It floats what you'd float.** Float a window from the menu (**Float This Window**), or drag
+  it out of its tile twice in a row, and the next window like it floats by itself. A full
+  document window takes two.
+- **It opens apps in your usual arrangement.** A split you made and kept comes back when one of
+  the apps opens again beside the others, and so does the size you gave a lone window. When a
+  fourth window would make a 2×2 grid, a shape you made instead (say, Claude alone on the left at
+  full height, the rest stacked on the right) comes back whenever that app is one of the four.
+- **It sends new windows to the Workspace they belong in.** Move an app's window to a Workspace
+  and keep it there for ten minutes, and its new windows open there. Windows you open from
+  Summon or the Dock still come to you.
+
+It only decides where a new window lands (and, with a fourth window, the grid's shape), never
+takes focus, and never asks anything. Each time it acts, a quiet line at the bottom of the screen
+says what happened, and ⌘ with the number of the Workspace you were in undoes it. Undo the same thing twice and Tessel forgets it.
+**Settings › What Tessel Learned** lists every lesson in words: click one to forget it, or reset
+them all. It keeps everything in `~/Library/Application Support/Tessel/Learning`, out of
+backups, and never sends any of it anywhere.
+
+Commands: `learning-on`, `learning-off`, `classes` / `classify` (the window classifier's calls),
+`snapshot:<path>` (every window with its traits, for building the labeled set in the test VMs),
+`float` (float or tile the focused window),
+`learning-reset`, and `learning-lived:<seconds>` (counts that much window time at once, to try
+Workspace homes without waiting). `dump` adds a `learning` section.
 
 ## Website
 

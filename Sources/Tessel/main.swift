@@ -27,21 +27,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let licensing = Licensing()
     private let updater = Updater()
     private lazy var licenseWindow = LicenseWindow(licensing: licensing)
+    private let windowClasses = WindowClassesWindow()
     private var trialTimer: Timer?
     private var trustPoll: Timer?
     private var signalSource: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // The time back is read now, so the menu and the license window have it even before
+        // tiling starts (waiting for Accessibility, or after the trial ended).
+        TimeBackLedger.shared.load()
         tiler.onChange = { [weak self] in
             guard let self else { return }
             self.menu.refresh()
             self.tap.centeredFrames = self.tiler.centeredFrames
         }
+        // The quiet line names the undo key: ⌘ and the number of the Workspace you were in.
+        tiler.undoKeyName = { [weak self] space in
+            guard let self, space < Command.maxWorkspaces else { return nil }
+            return Keymap.keycaps(for: self.tap.keymap.binding(for: .goTo(space)), workspaceKeys: self.tap.spaceKeys).joined(separator: " ")
+        }
+        tap.spaceCount = tiler.spaceCount
+        tiler.onSpaceCountChange = { [weak self] count in self?.tap.spaceCount = count }
         _ = launcher // build the app list now, so the first ⇧Space already finds apps
         menu.onToggle = { [weak self] in self?.toggleTiling() }
-        menu.onTeachKeys = { [weak self] in self?.onboarding.show(at: .keys) }
         menu.onShowWelcome = { [weak self] in self?.onboarding.show() }
         menu.onShowShortcuts = { [weak self] in self?.shortcuts.show() }
+        menu.onShowWindowClasses = { [weak self] in self?.windowClasses.show() }
         menu.licensing = licensing
         menu.onEnterLicense = { [weak self] in self?.licenseWindow.show() }
         menu.onBuy = { NSWorkspace.shared.open(Licensing.buyURL) }
@@ -54,7 +65,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shortcuts.onChange = { KeymapStore.save($0) }
         help.onCustomize = { [weak self] in self?.shortcuts.show() }
         onboarding.onCustomize = { [weak self] in self?.shortcuts.show() }
-        onboarding.onSpaceKeys = { [weak self] keys in self?.saveSpaceKeys(keys) }
         onboarding.onRequestAccess = {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
             if !AXIsProcessTrustedWithOptions(options) { Self.openAccessibilitySettings() }
@@ -73,9 +83,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         listenForCommands()
 
-        // New here (or setup unfinished): the welcome window walks through
-        // Accessibility and the space keys instead of a bare system prompt.
-        let setUp = AXIsProcessTrusted() && tap.spaceKeys.count == 3
+        // New here (or setup unfinished): the welcome window walks through Accessibility and a
+        // little practice instead of a bare system prompt. (Earlier versions had you choose
+        // three Workspace keys: having them means setup was done.)
+        let setUp = AXIsProcessTrusted()
+            && (UserDefaults.standard.bool(forKey: "onboardingDone") || tap.spaceKeys.count == 3)
         if !setUp { onboarding.show() }
         if AXIsProcessTrusted() {
             begin()
@@ -92,6 +104,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         tiler.revealHiddenWindows()
+        Learning.shared.saveNow()
+        TimeBackLedger.shared.saveNow()
     }
 
     private func begin() {
@@ -122,9 +136,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             UserDefaults.standard.set(true, forKey: "loginItemConfigured")
         } else {
             LoginItem.migrate()
-        }
-        if tap.spaceKeys.count != 3, !onboarding.isVisible {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.onboarding.show(at: .keys) }
         }
     }
 
@@ -178,12 +189,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func saveSpaceKeys(_ keys: [Int64]) {
-        tap.spaceKeys = keys
-        UserDefaults.standard.set(keys.map(Int.init), forKey: "spaceKeys")
-        log.notice("space keys set to \(keys.map(String.init).joined(separator: ","), privacy: .public)")
-    }
-
     static func openAccessibilitySettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
@@ -192,8 +197,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Lets scripts drive Tessel without the keyboard, e.g.
     /// `osascript -l JavaScript -e '…postNotificationName("com.tyleryouens.tessel.command", "focus-left")…'`.
-    /// Commands: focus-/move-left|right|up|down, grow, shrink, space-1…3, send-1…3,
-    /// balance, retile, pause, resume, dump (writes the state to ~/Library/Application Support/Tessel/state.json).
+    /// Commands: focus-/move-left|right|up|down, grow, shrink, space-1…9, send-1…9, workspaces-3…9,
+    /// balance, retile, pause, resume, dump (writes the state to ~/Library/Application Support/Tessel/state.json),
+    /// timeback-add:<action>:<count>[:<days ago>].
     private func listenForCommands() {
         DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name("com.tyleryouens.tessel.command"), object: nil, queue: .main
@@ -258,6 +264,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             tiler.expectWindow(from: String(command.dropFirst(7)), another: true)
             return
         }
+        // classes shows How Tessel Sees Your Windows; classify writes the same, without titles, to
+        // ~/Library/Application Support/Tessel/classes.json, for agents checking the classifier.
+        if command == "classes" { windowClasses.show(); return }
+        if command == "classify" { writeClasses(); return }
+        // snapshot:<path> appends every window of every app (with titles) to a JSON Lines file,
+        // to build the window classifier's labeled set in the test VMs.
+        if command.hasPrefix("snapshot:") {
+            WindowCensus.write(to: String(command.dropFirst(9)), screens: Display.current().map(\.visible))
+            return
+        }
+        // learning-lived:<seconds> counts that much window time at once (trying Workspace homes).
+        if command.hasPrefix("learning-lived:") {
+            tiler.countLivedForTesting(Double(command.dropFirst(15)) ?? 0)
+            return
+        }
+        // timeback-add:<action>:<count>[:<days ago>] counts time back as if Tessel had done it
+        // (tiled, arranged, sent, restored, summoned, corrected, displayReturned), to try the
+        // menu line and the trial-end screen without a week of windows.
+        if command.hasPrefix("timeback-add:") {
+            let bits = command.dropFirst(13).split(separator: ":").map(String.init)
+            guard let action = bits.first.flatMap(TimeBackAction.init(rawValue:)) else { return }
+            let times = bits.count > 1 ? Int(bits[1]) ?? 1 : 1
+            let ago = bits.count > 2 ? Int(bits[2]) ?? 0 : 0
+            TimeBackLedger.shared.count(action, times: times, at: Date().addingTimeInterval(-Double(ago) * 86_400))
+            return
+        }
         if command.hasPrefix("help:") {
             help.show(query: String(command.dropFirst(5)))
             return
@@ -311,7 +343,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("retile", _): tiler.retile()
         case ("pause", _): setTiling(false)
         case ("resume", _): setTiling(true)
+        // Learning (Settings › Learn Where Windows Go): float or tile the focused window, switch
+        // learning on or off, forget everything it learned.
+        case ("float", _): tiler.toggleFloating()
+        case ("learning", "on"?): tiler.setLearning(true)
+        case ("learning", "off"?): tiler.setLearning(false)
+        case ("learning", "reset"?): Learning.shared.reset()
         case ("dump", _): dumpState()
+        case ("workspaces", let n?): if let n = Int(n) { tiler.setSpaceCount(n) }
         default: log.error("unknown command \(command, privacy: .public)")
         }
     }
@@ -336,13 +375,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func writeClasses() {
+        let screens = Display.current().map(\.visible)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let survey = WindowClassesWindow.survey(screens: screens)
+            let rows = survey.rows.map { r -> [String: Any] in
+                ["id": r.id, "app": r.appID, "behavior": r.behavior.rawValue, "confidence": (r.confidence * 100).rounded() / 100,
+                 "rules": r.rules.rawValue, "againstRules": r.byModel]
+            }
+            let n = Double(max(1, survey.rows.count))
+            let report: [String: Any] = ["windows": rows, "readMsPerWindow": survey.readMs / n, "decideMsPerWindow": survey.decideMs / n]
+            let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Tessel")
+            if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
+                try? data.write(to: dir.appendingPathComponent("classes.json"))
+            }
+        }
+    }
+
     private func dumpState() {
         let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Tessel")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         var state = tiler.stateDescription()
         state["spaceKeys"] = tap.spaceKeys
+        state["spaceCount"] = tiler.spaceCount
         state["launcher"] = launcher.stateDescription
         state["help"] = help.stateDescription
+        state["learning"] = Learning.shared.stateDescription
+        state["timeBack"] = TimeBackLedger.shared.stateDescription
         if let data = try? JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: dir.appendingPathComponent("state.json"))
         }

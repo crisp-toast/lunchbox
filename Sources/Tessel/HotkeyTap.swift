@@ -13,6 +13,7 @@ final class HotkeyTap {
     private struct State {
         var enabled = false
         var workspaceKeys: [Int64] = []
+        var spaces = Command.defaultWorkspaces
         var keymap = Keymap()
         var learner: ((Int64, CGEventFlags) -> Void)?
         var centered: [CGRect] = []
@@ -38,10 +39,17 @@ final class HotkeyTap {
         set { state.withLock { $0.enabled = newValue } }
     }
 
-    /// The three keys chosen for Workspaces 1, 2 and 3.
+    /// The three keys earlier versions had you choose for Workspaces 1, 2 and 3: only a
+    /// shortcut you changed back then still uses them.
     var spaceKeys: [Int64] {
         get { state.withLock { $0.workspaceKeys } }
         set { state.withLock { $0.workspaceKeys = newValue } }
+    }
+
+    /// How many Workspaces there are: ⌘ and a higher number stays the app's own.
+    var spaceCount: Int {
+        get { state.withLock { $0.spaces } }
+        set { state.withLock { $0.spaces = newValue } }
     }
 
     var keymap: Keymap {
@@ -151,7 +159,7 @@ final class HotkeyTap {
 
         var command: Command?
         if afterShiftTap { command = s.keymap.shiftTapCommand(for: code, workspaceKeys: s.workspaceKeys) }
-        if command == nil { command = s.keymap.command(for: code, flags: event.flags, workspaceKeys: s.workspaceKeys) }
+        if command == nil { command = s.keymap.command(for: code, flags: event.flags, workspaceKeys: s.workspaceKeys, spaces: s.spaces) }
         guard let command else { return pass }
 
         swallowed.insert(code)

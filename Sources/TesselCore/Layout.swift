@@ -50,6 +50,15 @@ public struct Layout: Equatable, Sendable {
     /// While set, this window sits alone in the center and the rest wait as
     /// small windows down the left edge (⌘⇧F). Any change to the layout ends it.
     public var spotlight: WindowID?
+    /// While a placeholder that made the 2×2 grid waits for its window: the columns from
+    /// before, so if the app gives up, everything goes back. Not saved, like the placeholder.
+    var beforeGrid: GridUndo?
+
+    struct GridUndo: Equatable, Sendable {
+        var placeholder: WindowID
+        var before: [Column]
+        var grid: [Column]
+    }
 
     public static let defaultSingleScale = 0.6
     public static let singleAspect = 1.6 // 16:10
@@ -86,6 +95,8 @@ public struct Layout: Equatable, Sendable {
     /// Adds a new window. It gets its own column while there is room
     /// (`maxColumns`), placed right after the focused window's column;
     /// after that it stacks into the column with the fewest windows.
+    /// The fourth window makes a 2×2 grid instead (`grid(adding:)`), when every window fits
+    /// in it.
     /// - room: the usable area and gap, with `limits`, so a window that can't be squeezed
     ///   (a minimum height, a fixed size) stacks where it fits, or gets a column of its own when
     ///   no column has the height for it and the others leave enough width.
@@ -96,6 +107,18 @@ public struct Layout: Equatable, Sendable {
         guard !columns.isEmpty else {
             columns = [Column(windows: [id])]
             return
+        }
+        if windowCount == 3 {
+            var grid = grid(adding: id)
+            // Not when a window's minimum height can't share a column with another.
+            let fits = room.map { room in
+                grid.columns.allSatisfy { Self.stackHeight($0.windows, limits: limits, gap: room.gap) <= room.area.height }
+            } ?? true
+            if fits {
+                grid.beforeGrid = Placeholder.isPlaceholder(id) ? GridUndo(placeholder: id, before: columns, grid: grid.columns) : nil
+                self = grid
+                return
+            }
         }
         let focusedPos = focused.flatMap { position(of: $0) }
         if columns.count < max(1, maxColumns) {
@@ -119,11 +142,9 @@ public struct Layout: Equatable, Sendable {
             }
         }
         if let room {
-            // Every window needs at least a sliver; windows with a minimum need that much.
-            func height(_ ids: [WindowID]) -> CGFloat {
-                ids.map { max(limits[$0]?.minHeight ?? 0, 80) }.reduce(0, +) + room.gap * CGFloat(ids.count - 1)
+            let fitting = columns.indices.filter {
+                Self.stackHeight(columns[$0].windows + [id], limits: limits, gap: room.gap) <= room.area.height
             }
-            let fitting = columns.indices.filter { height(columns[$0].windows + [id]) <= room.area.height }
             if fitting.isEmpty {
                 // Narrow columns (windows that keep their own width) can leave room beside them.
                 func width(_ col: Column) -> CGFloat {
@@ -151,6 +172,35 @@ public struct Layout: Equatable, Sendable {
         columns[target].insertWindow(id, at: row)
     }
 
+    /// The height a stack of these windows needs: every window at least a sliver, a window with
+    /// a minimum height that much.
+    static func stackHeight(_ ids: [WindowID], limits: [WindowID: SizeLimits], gap: CGFloat) -> CGFloat {
+        ids.map { max(limits[$0]?.minHeight ?? 0, 80) }.reduce(0, +) + gap * CGFloat(ids.count - 1)
+    }
+
+    /// The 2×2 grid that four windows make: this layout's three and `id`, two columns of two,
+    /// evenly. The windows already there move as little as they can: two columns with a stack
+    /// of two take the newcomer under the lone one; otherwise the first two windows (left to
+    /// right, top to bottom) make the left column and the third sits over the newcomer.
+    public func grid(adding id: WindowID) -> Layout {
+        var grid = self
+        grid.spotlight = nil
+        grid.beforeGrid = nil
+        let counts = columns.map(\.windows.count)
+        if counts == [2, 1] || counts == [1, 2] {
+            let lone = counts[0] == 1 ? 0 : 1
+            grid.columns[lone].windows.append(id)
+        } else {
+            let all = windows
+            grid.columns = [Column(windows: Array(all.prefix(2))), Column(windows: Array(all.dropFirst(2)) + [id])]
+        }
+        for c in grid.columns.indices {
+            grid.columns[c].weight = 1
+            grid.columns[c].weights = Array(repeating: 1, count: grid.columns[c].windows.count)
+        }
+        return grid
+    }
+
     /// Adds a window arriving from a neighboring display. Entering from the left
     /// edge (moving right) makes it the first column; from the right edge, the
     /// last column. Entering from above or below stacks it at that end of the
@@ -175,6 +225,15 @@ public struct Layout: Equatable, Sendable {
 
     @discardableResult
     public mutating func remove(_ id: WindowID) -> Bool {
+        // The placeholder that made the grid, and nothing changed since: back to before.
+        if let undo = beforeGrid, undo.placeholder == id {
+            beforeGrid = nil
+            if columns == undo.grid {
+                columns = undo.before
+                spotlight = nil
+                return true
+            }
+        }
         guard let (c, r) = position(of: id) else { return false }
         columns[c].removeWindow(at: r)
         if columns[c].windows.isEmpty { columns.remove(at: c) }

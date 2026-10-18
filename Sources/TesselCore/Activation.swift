@@ -12,8 +12,11 @@ public enum ForeignFocus: Equatable, Sendable {
     /// macOS handed focus over by itself (right after a close or a switch): stay put.
     case stay
 
+    /// - placedForYou: Tessel just opened this window in its app's Workspace while you stayed
+    ///   here. Its app reaching for focus isn't you asking to go there.
     public static func decide(summoned: Bool, fromDockMenu: Bool, fromDockClick: Bool,
-                              windowHere: WindowID?, settling: Bool) -> ForeignFocus {
+                              windowHere: WindowID?, settling: Bool, placedForYou: Bool = false) -> ForeignFocus {
+        if placedForYou { return .stay }
         if summoned { return .bringHere }
         if fromDockMenu { return .waitForNewWindow }
         if fromDockClick { return windowHere.map(ForeignFocus.focusHere) ?? .goThere }

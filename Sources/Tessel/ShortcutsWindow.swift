@@ -60,7 +60,7 @@ final class ShortcutsWindow: NSObject, NSWindowDelegate {
             return
         }
         var map = tap.keymap
-        if let other = map.conflict(with: binding, excluding: command, workspaceKeys: tap.spaceKeys) {
+        if let other = map.conflict(with: binding, excluding: command, workspaceKeys: tap.spaceKeys, spaces: tap.spaceCount) {
             say("That's already “\(other.title)”. Press a different shortcut, or change that one first.")
             tap.learnNextKey { [weak self] code, flags in self?.recorded(code, flags) }
             return
@@ -116,7 +116,7 @@ final class ShortcutsWindow: NSObject, NSWindowDelegate {
         let keys = tap.spaceKeys
         let showDefaults = showDefaultsBox.state == .on
         var group = ""
-        for command in Command.allCases.sorted(by: { order($0) < order($1) }) {
+        for command in Command.allCases.filter({ $0.isActive(spaces: tap.spaceCount) }).sorted(by: { order($0) < order($1) }) {
             if command.group != group {
                 group = command.group
                 let header = NSTextField(labelWithString: group.uppercased())

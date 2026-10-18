@@ -1,12 +1,16 @@
 import AppKit
 import TesselCore
 
-/// ⇧Space: a small, instant app and file launcher.
+/// ⇧Space: a small, instant app, window and file launcher.
 ///
 /// Apps are listed from the Applications folders into memory, so matching runs
 /// on every keystroke with no disk access. An app that's already open gets two
-/// rows: go to its window, or open a new one. When no app matches, Spotlight's
-/// index is searched for files and folders instead. Apps you open often rise.
+/// rows: go to its window, or open a new one. Open windows are found by the words
+/// in their titles, from a snapshot taken as the panel opens, so typing never
+/// waits on another app. Spotlight's index is searched for files and folders as
+/// you type, listed after the windows. Apps you open often rise. macOS hides the
+/// files in Desktop, Documents and Downloads until you let Tessel in, so until
+/// you've answered, file searches end with a row that asks (FolderAccess).
 final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     struct App {
         let name: String
@@ -21,21 +25,41 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         /// `newWindow`: it also has a real New Window command, offered on ⇧↩.
         /// Otherwise Return opens the app.
         case app(App, running: NSRunningApplication?, reachable: Bool, newWindow: Bool)
+        /// An open window, found by its title or app: Return goes to it, wherever it is.
+        case window(Tiler.OpenWindow)
         case file(URL)
         /// Nothing matched: search the web for the text, or open it if it's an address.
         case web(String)
+        /// Let Tessel into Desktop, Documents and Downloads, so their files show: Return
+        /// brings up macOS's prompts, ⇧↩ hides the row for good.
+        case folderAccess
 
         var path: String {
             switch self {
             case .app(let a, _, _, _): return a.url.path
             case .file(let url): return url.path
-            case .web: return ""
+            case .window, .web, .folderAccess: return ""
             }
         }
 
-        var hasNewWindowAction: Bool {
-            if case .app(_, _, true, true) = self { return true }
-            return false
+        /// The smaller second line, chosen with ⇧↩: a new window, or no more asking.
+        var secondLine: (text: String, symbol: String)? {
+            switch self {
+            case .app(let a, _, true, true): return ("New \(a.name) window", "plus.rectangle.on.rectangle")
+            case .folderAccess: return ("Don't show this again", "eye.slash")
+            default: return nil
+            }
+        }
+
+        /// Which row this is, so it stays highlighted while the list changes around it.
+        var key: String {
+            switch self {
+            case .app(let a, _, _, _): return "app " + a.url.path
+            case .window(let w): return "window \(w.id)"
+            case .file(let url): return "file " + url.path
+            case .web: return "web"
+            case .folderAccess: return "folder access"
+            }
         }
     }
 
@@ -48,9 +72,25 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     private var selected = 0
     private var apps: [App] = []
     private var appsLoadedAt: Date?
+    /// The open windows as they were when the panel opened, and the search over their words.
+    private var openWindows: [CGWindowID: Tiler.OpenWindow] = [:]
+    private var windowSearch = WindowSearch([])
+    /// What the query found, kept apart so Spotlight's files can join the list when they arrive.
+    private var appRows: [(app: Result, nameScore: Int)] = []
+    private var windowRows: [Result] = []
+    private var fileRows: [Result] = []
     private var fileQuery: NSMetadataQuery?
     private var fileSearch: DispatchWorkItem?
+    /// The files behind `fileRows`: Spotlight's answer, and a fresh process's answer for the
+    /// folders macOS let Tessel into since it started (`searchAfresh`).
+    private var spotlightPaths: [String] = []
+    private var freshPaths: [String] = []
+    private var freshSearch: Process?
+    /// Folders Tessel could read once you chose the folder offer, this time Tessel is running.
+    private var newlyAllowedFolders: [String] = []
     private var icons: [String: NSImage] = [:]
+    /// Checked as the panel opens, while the folder offer is unanswered.
+    private var fullDiskAccess = false
 
     private static let width: CGFloat = 640
     private static let fieldHeight: CGFloat = 56
@@ -83,6 +123,8 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         if appsLoadedAt.map({ Date().timeIntervalSince($0) > 30 }) ?? true { reloadApps() }
         let panel = self.panel ?? makePanel()
         field.stringValue = query
+        if folderAccessAnswer == nil { fullDiskAccess = Self.hasFullDiskAccess() }
+        snapshotWindows()
         update()
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main ?? NSScreen.screens[0]
         let height = panelHeight
@@ -99,6 +141,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         fileQuery?.stop()
         fileQuery = nil
         fileSearch?.cancel()
+        stopFreshSearch()
         panel?.orderOut(nil)
     }
 
@@ -111,7 +154,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         ["visible": isVisible, "key": panel?.isKeyWindow ?? false, "query": field.stringValue, "selected": selected,
          "results": results.map { r -> String in
              let d = describe(r)
-             return d.title + " | " + d.subtitle + " [↩]" + (r.hasNewWindowAction ? " + New window [⇧↩]" : "")
+             return d.title + " | " + d.subtitle + " [↩]" + (r.secondLine.map { " + \($0.text) [⇧↩]" } ?? "")
          }]
     }
 
@@ -169,61 +212,111 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         return found
     }
 
+    // MARK: Windows
+
+    /// Takes the open windows with the titles Tessel last read, so the first keystroke already
+    /// finds them, then reads every title again (each app on its own queue) and searches anew.
+    /// Typing itself never asks another app for anything. Fresh titles can put a window above
+    /// the top row: like new files, a row you moved to stays highlighted; otherwise the top row is.
+    private func snapshotWindows() {
+        setWindows(tiler.openWindows())
+        tiler.readWindowTitles { [weak self] in
+            guard let self, self.isVisible else { return }
+            self.setWindows(self.tiler.openWindows())
+            guard !self.field.stringValue.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+            self.update(keeping: self.selected > 0 && self.results.indices.contains(self.selected) ? self.results[self.selected].key : nil)
+        }
+    }
+
+    private func setWindows(_ list: [Tiler.OpenWindow]) {
+        openWindows = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        windowSearch = WindowSearch(list.map {
+            SearchableWindow(id: $0.id, appID: $0.appID ?? "pid.\($0.pid)", appName: $0.appName, title: $0.title)
+        })
+    }
+
     // MARK: Searching
 
     func controlTextDidChange(_ obj: Notification) { update() }
 
-    private func update() {
+    private func update(keeping key: String? = nil) {
         let query = field.stringValue.trimmingCharacters(in: .whitespaces)
         fileSearch?.cancel()
         fileQuery?.stop()
         fileQuery = nil
+        stopFreshSearch()
 
         let uses = UserDefaults.standard.dictionary(forKey: "launcherUses") as? [String: Int] ?? [:]
-        let ranked: [App]
+        let ranked: [(app: App, nameScore: Int)]
         if query.isEmpty {
             ranked = apps.filter { (uses[$0.url.path] ?? 0) > 0 }
                 .sorted { (uses[$0.url.path] ?? 0) > (uses[$1.url.path] ?? 0) }
+                .map { ($0, 0) }
         } else {
-            ranked = apps.compactMap { app -> (App, Int)? in
+            ranked = apps.compactMap { app -> (App, Int, Int)? in
                 guard let s = Fuzzy.score(query, app.name) else { return nil }
-                return (app, s + min(uses[app.url.path] ?? 0, 40) * 25)
+                return (app, s, s + min(uses[app.url.path] ?? 0, 40) * 25)
             }
-            .sorted { $0.1 > $1.1 }
-            .map(\.0)
+            .sorted { $0.2 > $1.2 }
+            .prefix(Self.maxRows)
+            .map { ($0.0, $0.1) }
         }
+        appRows = ranked.map { (row(for: $0.app), $0.nameScore) }
+        windowRows = windowSearch.find(query, listedApps: Set(ranked.compactMap(\.app.bundleID)))
+            .compactMap { openWindows[$0.id] }.map { .window($0) }
+        // Files come with every query of two letters or more, not only when no app matches.
+        // Spotlight's last answer stays while it still fits what's typed, until the new one.
+        let terms = FileSearch.terms(in: query)
+        let searchesFiles = FileSearch.searches(query)
+        let fits = { (path: String) in searchesFiles && FileSearch.matches(terms, name: (path as NSString).lastPathComponent) }
+        spotlightPaths = spotlightPaths.filter(fits)
+        freshPaths = freshPaths.filter(fits)
+        rankFiles()
+        compose(keeping: key)
 
-        let list: [Result] = ranked.prefix(Self.maxRows).map { app in
-            let running = runningApp(app)
-            let reachable = running.map { tiler.hasReachableWindow(ofApp: $0.processIdentifier) } ?? false
-            var newWindow = false
-            if reachable, let running {
-                // Only apps with a real New Window command get the ⇧↩ line; the
-                // first time, Tessel looks at the app's menus and redraws.
-                newWindow = tiler.supportsNewWindow(pid: running.processIdentifier, bundleID: app.bundleID) { [weak self] in
-                    self?.refreshKeepingSelection()
-                } ?? false
-            }
-            return .app(app, running: running, reachable: reachable, newWindow: newWindow)
-        }
-        results = list
-        if list.isEmpty, !query.isEmpty { results = [.web(query)] }
-        selected = 0
-        render()
-
-        if list.isEmpty, !query.isEmpty {
-            let work = DispatchWorkItem { [weak self] in self?.searchFiles(query) }
+        if searchesFiles {
+            let work = DispatchWorkItem { [weak self] in self?.searchFiles(terms) }
             fileSearch = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.06, execute: work)
         }
     }
 
-    /// Re-runs the search after a menu check, keeping the highlighted row.
+    private func row(for app: App) -> Result {
+        let running = runningApp(app)
+        let reachable = running.map { tiler.hasReachableWindow(ofApp: $0.processIdentifier) } ?? false
+        var newWindow = false
+        if reachable, let running {
+            // Only apps with a real New Window command get the ⇧↩ line; the
+            // first time, Tessel looks at the app's menus and redraws.
+            newWindow = tiler.supportsNewWindow(pid: running.processIdentifier, bundleID: app.bundleID) { [weak self] in
+                self?.refreshKeepingSelection()
+            } ?? false
+        }
+        return .app(app, running: running, reachable: reachable, newWindow: newWindow)
+    }
+
+    /// Puts the list together: apps named by the query, windows, files, then apps that only
+    /// loosely match, with the web when no app matched, and last the offer to find files in
+    /// Desktop, Documents and Downloads until it's answered. `key` stays highlighted if it's there.
+    private func compose(keeping key: String? = nil) {
+        let query = field.stringValue.trimmingCharacters(in: .whitespaces)
+        results = Summon.order(apps: appRows, windows: windowRows, files: fileRows, limit: Self.maxRows).map {
+            switch $0 {
+            case .app(let r), .window(let r), .file(let r): return r
+            }
+        }
+        if !query.isEmpty, appRows.isEmpty { results.append(.web(query)) }
+        if FolderAccess.offers(query: query, answer: folderAccessAnswer, fullDiskAccess: fullDiskAccess) {
+            results.append(.folderAccess)
+        }
+        selected = key.flatMap { k in results.firstIndex { $0.key == k } } ?? 0
+        render()
+    }
+
+    /// Re-runs the search after a menu check or fresh titles, keeping the highlighted row.
     private func refreshKeepingSelection() {
-        guard isVisible, results.allSatisfy({ if case .app = $0 { return true }; return false }) else { return }
-        let keep = selected
-        update()
-        select(min(keep, max(0, results.count - 1)))
+        guard isVisible else { return }
+        update(keeping: results.indices.contains(selected) ? results[selected].key : nil)
     }
 
     private func runningApp(_ app: App) -> NSRunningApplication? {
@@ -232,38 +325,129 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             .first { $0.activationPolicy == .regular && !$0.isTerminated }
     }
 
-    /// Files and folders whose name contains the query, from Spotlight's index,
-    /// most recently used first.
-    private func searchFiles(_ query: String) {
-        let cleaned = query.filter { $0 != "*" && $0 != "?" && $0 != "\"" }
-        guard !cleaned.isEmpty else { return }
+    /// Files and folders whose name has every typed word in it, from Spotlight's index,
+    /// most recently used first (FileSearch then ranks them).
+    private func searchFiles(_ terms: [String]) {
+        guard !terms.isEmpty else { return }
         let q = NSMetadataQuery()
-        q.predicate = NSPredicate(format: "%K LIKE[cd] %@", NSMetadataItemFSNameKey, "*\(cleaned)*")
+        let parts = terms.map { NSPredicate(format: "%K LIKE[cd] %@", NSMetadataItemFSNameKey, "*\($0)*") }
+        // NSMetadataQuery throws on an AND of just one predicate.
+        q.predicate = parts.count == 1 ? parts[0] : NSCompoundPredicate(andPredicateWithSubpredicates: parts)
         q.searchScopes = [NSMetadataQueryUserHomeScope, URL(fileURLWithPath: "/Volumes/Master Storage")]
         q.sortDescriptors = [NSSortDescriptor(key: "kMDItemLastUsedDate", ascending: false)]
         NotificationCenter.default.addObserver(self, selector: #selector(filesFound(_:)), name: .NSMetadataQueryDidFinishGathering, object: q)
         NotificationCenter.default.addObserver(self, selector: #selector(filesFound(_:)), name: .NSMetadataQueryDidUpdate, object: q)
         fileQuery = q
         q.start()
+        if !newlyAllowedFolders.isEmpty { searchAfresh(terms) }
+    }
+
+    /// Spotlight keeps answering a running app as it did when the app first asked, so files in a
+    /// folder macOS let Tessel into since it started stay hidden from `NSMetadataQuery` until
+    /// Tessel starts again. Until then, a new `mdfind` searches those folders, and Spotlight
+    /// answers it afresh: it's Tessel's own child, so macOS gives it Tessel's permissions.
+    private func searchAfresh(_ terms: [String]) {
+        let mdfind = Process()
+        mdfind.executableURL = URL(fileURLWithPath: "/usr/bin/mdfind")
+        mdfind.arguments = ["-0"] + newlyAllowedFolders.flatMap { ["-onlyin", $0] } + [FileSearch.mdfindQuery(terms)]
+        let out = Pipe()
+        mdfind.standardOutput = out
+        mdfind.standardError = FileHandle.nullDevice
+        guard (try? mdfind.run()) != nil else { return }
+        freshSearch = mdfind
+        DispatchQueue.global(qos: .userInitiated).async {
+            let data = out.fileHandleForReading.readDataToEndOfFile()
+            mdfind.waitUntilExit()
+            let paths = data.split(separator: 0).prefix(300).map { String(decoding: $0, as: UTF8.self) }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.freshSearch === mdfind else { return } // a newer search took over
+                self.freshSearch = nil
+                self.freshPaths = paths
+                self.showFiles()
+            }
+        }
+    }
+
+    private func stopFreshSearch() {
+        if let p = freshSearch, p.isRunning { p.terminate() }
+        freshSearch = nil
     }
 
     @objc private func filesFound(_ note: Notification) {
         guard let q = note.object as? NSMetadataQuery, q === fileQuery else { return }
         q.disableUpdates()
         defer { q.enableUpdates() }
-        let skip = ["/Library/", "/.", "/node_modules/", "/.build/", "/DerivedData/", "/Caches/", ".app/"]
-        var files: [Result] = []
-        for i in 0..<min(q.resultCount, 200) {
+        // The most recently used few dozen, without hidden, app and Library paths (iCloud Drive's
+        // Desktop and Documents are under Library, and do show), ranked by name and place.
+        let home = NSHomeDirectory()
+        var paths: [String] = []
+        for i in 0..<min(q.resultCount, 300) where paths.count < 60 {
             guard let item = q.result(at: i) as? NSMetadataItem,
                   let path = item.value(forAttribute: NSMetadataItemPathKey) as? String,
-                  !skip.contains(where: { path.contains($0) }), !path.hasSuffix(".app") else { continue }
-            files.append(.file(URL(fileURLWithPath: path)))
-            if files.count == Self.maxRows { break }
+                  !FileSearch.isHidden(path, home: home) else { continue }
+            paths.append(path)
         }
+        spotlightPaths = paths
+        showFiles()
+    }
+
+    /// Spotlight's files and the fresh search's, together, ranked by name and place.
+    private func rankFiles() {
+        let home = NSHomeDirectory()
         let query = field.stringValue.trimmingCharacters(in: .whitespaces)
-        results = files + (query.isEmpty ? [] : [.web(query)])
-        selected = 0
-        render()
+        fileRows = FileSearch.rank(FileSearch.merge(spotlightPaths, freshPaths, home: home), query: query, home: home)
+            .prefix(Self.maxRows).map { .file(URL(fileURLWithPath: $0)) }
+    }
+
+    /// New files arrived: a row you moved to stays highlighted; otherwise the top row is.
+    private func showFiles() {
+        rankFiles()
+        compose(keeping: selected > 0 && results.indices.contains(selected) ? results[selected].key : nil)
+    }
+
+    // MARK: Desktop, Documents and Downloads
+
+    /// What you did with Summon's offer to find files in Desktop, Documents and Downloads.
+    private var folderAccessAnswer: FolderAccess.Answer? {
+        get { UserDefaults.standard.string(forKey: "summonFolderAccess").flatMap(FolderAccess.Answer.init) }
+        set { UserDefaults.standard.set(newValue?.rawValue, forKey: "summonFolderAccess") }
+    }
+
+    /// Whether Tessel can read every folder (Full Disk Access): only then does macOS's own list of
+    /// permissions open for reading. Trying asks nothing.
+    private static func hasFullDiskAccess() -> Bool {
+        let fd = Darwin.open("/Library/Application Support/com.apple.TCC/TCC.db", O_RDONLY)
+        guard fd >= 0 else { return false }
+        Darwin.close(fd)
+        return true
+    }
+
+    /// Reads each folder once, which is what makes macOS ask whether Tessel may see its files,
+    /// then opens Summon on the same search again. Only choosing the row ever does this.
+    private func askForFolderAccess() {
+        let query = field.stringValue
+        folderAccessAnswer = .chosen
+        hide()
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Each read waits while macOS's prompt for its folder is up.
+            let readable = FolderAccess.folders(home: NSHomeDirectory()).filter {
+                (try? FileManager.default.contentsOfDirectory(atPath: $0)) != nil
+            }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.newlyAllowedFolders = readable
+                guard !self.isVisible else { return } // you've already moved on
+                self.show(query: query)
+            }
+        }
+    }
+
+    /// "Don't show this again": the row goes, the rest of the list stays.
+    private func dismissFolderAccess() {
+        folderAccessAnswer = .dismissed
+        let row = selected
+        compose()
+        select(min(row, results.count - 1))
     }
 
     // MARK: Opening
@@ -271,7 +455,18 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     /// Runs exactly one action: going to the app's window (Return), or a new
     /// window (Shift-Return, only offered when the app has a window to go to).
     private func open(_ result: Result, newWindow: Bool) {
+        if case .folderAccess = result {
+            // ⇧↩ (or a click on its second line) is "Don't show this again".
+            if newWindow { dismissFolderAccess() } else { askForFolderAccess() }
+            return
+        }
         hide()
+        if case .window(let w) = result {
+            // Wherever it is: another Workspace, another display, the Dock. If it closed
+            // since Summon opened, its app's most recent window instead.
+            if !tiler.goToWindow(w.id) { _ = tiler.goToWindow(ofApp: w.pid) }
+            return
+        }
         var uses = UserDefaults.standard.dictionary(forKey: "launcherUses") as? [String: Int] ?? [:]
         uses[result.path, default: 0] += 1
         UserDefaults.standard.set(uses, forKey: "launcherUses")
@@ -306,6 +501,8 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             NSWorkspace.shared.open(url)
         case .web(let text):
             if let url = Self.webURL(for: text) { openWeb(url) }
+        case .window, .folderAccess:
+            break // handled above
         }
     }
 
@@ -411,7 +608,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
 
     private var panelHeight: CGFloat {
         guard !results.isEmpty else { return Self.fieldHeight }
-        let rows = results.map { $0.hasNewWindowAction ? Self.rowHeight + ResultRow.secondaryHeight : Self.rowHeight }
+        let rows = results.map { $0.secondLine != nil ? Self.rowHeight + ResultRow.secondaryHeight : Self.rowHeight }
         return Self.fieldHeight + rows.reduce(0, +) + 12
     }
 
@@ -420,9 +617,12 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         case .app(let app, let running, let reachable, _):
             let subtitle = reachable ? "Go to its window" : (running == nil ? "Open" : "Open · running with no windows")
             return (app.name, subtitle, app.url.path)
+        case .window(let w):
+            let place = w.minimized ? "Minimized" : w.space.map { "Workspace \($0 + 1)" } ?? "Floating"
+            let subtitle = ([w.appName, place] + (w.display.map { [$0] } ?? [])).joined(separator: " · ")
+            return (w.title.isEmpty ? w.appName : w.title, subtitle, w.appURL?.path ?? "")
         case .file(let url):
-            let folder = url.deletingLastPathComponent().path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
-            return (url.lastPathComponent, folder, url.path)
+            return (url.lastPathComponent, FileSearch.folder(of: url.path, home: NSHomeDirectory()), url.path)
         case .web(let text):
             let browser = Self.defaultBrowser
             let inBrowser = browser.map { " in \($0.name)" } ?? ""
@@ -430,12 +630,20 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
                 return ("Open \(text)", "Website\(inBrowser)", browser?.path ?? "/Applications/Safari.app")
             }
             return ("Search the web for “\(text)”", "\(Self.searchEngine.name)\(inBrowser)", browser?.path ?? "/Applications/Safari.app")
+        case .folderAccess:
+            return ("Find files on your Desktop and in Documents too",
+                    "macOS will ask you to let Tessel into Desktop, Documents and Downloads", Self.desktopFolderIcon)
         }
     }
 
+    /// The Desktop folder's icon, from macOS itself: ~/Desktop's own would mean looking inside it.
+    private static let desktopFolderIcon = "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/DesktopFolderIcon.icns"
+
     private func icon(for path: String) -> NSImage {
         if let cached = icons[path] { return cached }
-        let image = NSWorkspace.shared.icon(forFile: path)
+        let image = path == Self.desktopFolderIcon
+            ? NSImage(contentsOfFile: path) ?? NSImage(named: NSImage.folderName) ?? NSImage()
+            : NSWorkspace.shared.icon(forFile: path)
         icons[path] = image
         return image
     }
@@ -444,13 +652,11 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         rowViews.forEach { $0.removeFromSuperview() }
         rowViews = results.enumerated().map { i, result in
             let d = describe(result)
-            var newWindowTitle: String?
-            if case .app(let app, _, true, true) = result { newWindowTitle = "New \(app.name) window" }
-            let row = ResultRow(title: d.title, subtitle: d.subtitle, icon: icon(for: d.icon), newWindowTitle: newWindowTitle)
+            let row = ResultRow(title: d.title, subtitle: d.subtitle, icon: icon(for: d.icon), secondLine: result.secondLine)
             row.isSelected = i == selected
-            row.onClick = { [weak self] newWindow in
+            row.onClick = { [weak self] secondLine in
                 guard let self, self.results.indices.contains(i) else { return }
-                self.open(self.results[i], newWindow: newWindow)
+                self.open(self.results[i], newWindow: secondLine)
             }
             rows.addArrangedSubview(row)
             return row
@@ -493,7 +699,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = .systemFont(ofSize: 24, weight: .regular)
-        field.placeholderString = "Summon an app, file or website"
+        field.placeholderString = "Summon an app, window, file or website"
         field.delegate = self
         field.cell?.isScrollable = true
         field.cell?.wraps = false
@@ -529,24 +735,25 @@ final class LauncherPanel: NSPanel {
 }
 
 /// One app (or file) in the list. The main line carries a ↩ keycap; an app with
-/// a window to go to gets a second, smaller line, "New … window", with ⇧↩.
+/// a window to go to gets a second, smaller line, "New … window", with ⇧↩ (and
+/// the folder offer gets "Don't show this again").
 /// Both lines are one selection, so a key press can only ever do one thing.
 private final class ResultRow: NSView {
     static let mainHeight: CGFloat = 46
     static let secondaryHeight: CGFloat = 30
 
-    var onClick: ((_ newWindow: Bool) -> Void)?
+    var onClick: ((_ secondLine: Bool) -> Void)?
     var isSelected = false { didSet { refresh() } }
     private let title = NSTextField(labelWithString: "")
     private let subtitle = NSTextField(labelWithString: "")
     private let iconView = NSImageView()
     private let returnKey = Keycap(text: "↩")
-    private var newWindowLabel: NSTextField?
+    private var secondLabel: NSTextField?
     private var shiftReturnKey: Keycap?
     private let hasSecondary: Bool
 
-    init(title text: String, subtitle detail: String, icon: NSImage, newWindowTitle: String?) {
-        hasSecondary = newWindowTitle != nil
+    init(title text: String, subtitle detail: String, icon: NSImage, secondLine: (text: String, symbol: String)?) {
+        hasSecondary = secondLine != nil
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 10
@@ -583,29 +790,29 @@ private final class ResultRow: NSView {
             returnKey.centerYAnchor.constraint(equalTo: topAnchor, constant: Self.mainHeight / 2),
         ])
 
-        if let newWindowTitle {
-            let label = NSTextField(labelWithString: newWindowTitle)
+        if let secondLine {
+            let label = NSTextField(labelWithString: secondLine.text)
             label.font = .systemFont(ofSize: 13)
             label.lineBreakMode = .byTruncatingTail
-            let plus = NSImageView(image: NSImage(systemSymbolName: "plus.rectangle.on.rectangle", accessibilityDescription: nil) ?? NSImage())
-            plus.contentTintColor = .secondaryLabelColor
+            let symbol = NSImageView(image: NSImage(systemSymbolName: secondLine.symbol, accessibilityDescription: nil) ?? NSImage())
+            symbol.contentTintColor = .secondaryLabelColor
             let key = Keycap(text: "⇧↩")
-            for v in [plus, label, key] as [NSView] {
+            for v in [symbol, label, key] as [NSView] {
                 v.translatesAutoresizingMaskIntoConstraints = false
                 addSubview(v)
             }
             NSLayoutConstraint.activate([
-                plus.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-                plus.centerYAnchor.constraint(equalTo: bottomAnchor, constant: -Self.secondaryHeight / 2 - 3),
-                plus.widthAnchor.constraint(equalToConstant: 16),
-                plus.heightAnchor.constraint(equalToConstant: 14),
-                label.leadingAnchor.constraint(equalTo: plus.trailingAnchor, constant: 7),
-                label.centerYAnchor.constraint(equalTo: plus.centerYAnchor),
+                symbol.leadingAnchor.constraint(equalTo: title.leadingAnchor),
+                symbol.centerYAnchor.constraint(equalTo: bottomAnchor, constant: -Self.secondaryHeight / 2 - 3),
+                symbol.widthAnchor.constraint(equalToConstant: 16),
+                symbol.heightAnchor.constraint(equalToConstant: 14),
+                label.leadingAnchor.constraint(equalTo: symbol.trailingAnchor, constant: 7),
+                label.centerYAnchor.constraint(equalTo: symbol.centerYAnchor),
                 label.trailingAnchor.constraint(lessThanOrEqualTo: key.leadingAnchor, constant: -10),
                 key.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-                key.centerYAnchor.constraint(equalTo: plus.centerYAnchor),
+                key.centerYAnchor.constraint(equalTo: symbol.centerYAnchor),
             ])
-            newWindowLabel = label
+            secondLabel = label
             shiftReturnKey = key
         }
         refresh()
@@ -617,7 +824,7 @@ private final class ResultRow: NSView {
         layer?.backgroundColor = isSelected ? NSColor.controlAccentColor.cgColor : NSColor.clear.cgColor
         title.textColor = isSelected ? .white : .labelColor
         subtitle.textColor = isSelected ? NSColor.white.withAlphaComponent(0.8) : .secondaryLabelColor
-        newWindowLabel?.textColor = isSelected ? NSColor.white.withAlphaComponent(0.92) : .labelColor
+        secondLabel?.textColor = isSelected ? NSColor.white.withAlphaComponent(0.92) : .labelColor
         returnKey.onAccent = isSelected
         shiftReturnKey?.onAccent = isSelected
     }

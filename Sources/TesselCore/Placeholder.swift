@@ -26,13 +26,16 @@ extension Layout {
     public mutating func fill(_ placeholder: WindowID, with window: WindowID) -> Bool {
         guard Placeholder.isPlaceholder(placeholder), replace(placeholder, with: window) else { return false }
         if spotlight == placeholder { spotlight = window }
+        if beforeGrid?.placeholder == placeholder { beforeGrid = nil }
         return true
     }
 
     /// The layout as it should be saved: placeholders only last while Tessel waits.
     public func withoutPlaceholders() -> Layout {
         var copy = self
-        for id in placeholders { copy.remove(id) }
+        // The one that made the grid goes last, so the grid can go back to how it was.
+        let grid = placeholders.filter { $0 == beforeGrid?.placeholder }
+        for id in placeholders.filter({ $0 != beforeGrid?.placeholder }) + grid { copy.remove(id) }
         copy.spotlight = placeholders.contains(spotlight ?? 0) ? nil : spotlight
         return copy
     }

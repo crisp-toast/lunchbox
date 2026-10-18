@@ -19,6 +19,9 @@ let package = Package(
             // Sparkle.framework ships inside the app, in Contents/Frameworks.
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
+        // Trains the window classifier from Training/windows.jsonl and reports how it does
+        // against the rules. A tool for this repo, never part of the app.
+        .executableTarget(name: "TesselTrain", dependencies: ["TesselCore"]),
         .testTarget(name: "TesselCoreTests", dependencies: ["TesselCore"]),
     ],
     swiftLanguageModes: [.v5]

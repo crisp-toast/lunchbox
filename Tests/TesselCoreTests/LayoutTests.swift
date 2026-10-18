@@ -95,11 +95,13 @@ func layout(_ columns: [[WindowID]]) -> Layout {
         l.insert(2, near: 1, maxColumns: 3)
         l.insert(3, near: 2, maxColumns: 3)
         #expect(l.columns.map(\.windows) == [[1], [2], [3]])
+        // The fourth makes a 2×2 grid; the fifth gets a column again, while there's room.
         l.insert(4, near: 3, maxColumns: 3)
-        #expect(l.columns.map(\.windows) == [[1], [2], [3, 4]])
+        #expect(l.columns.map(\.windows) == [[1, 2], [3, 4]])
         l.insert(5, near: 4, maxColumns: 3)
-        // Column 3 now has two windows, so the fewest-windows rule picks the last single column.
-        #expect(l.columns.map(\.windows) == [[1], [2, 5], [3, 4]])
+        #expect(l.columns.map(\.windows) == [[1, 2], [3, 4], [5]])
+        l.insert(6, near: 5, maxColumns: 3)
+        #expect(l.columns.map(\.windows) == [[1, 2], [3, 4], [5, 6]])
     }
 
     @Test func newColumnGoesRightOfFocused() {

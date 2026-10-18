@@ -6,14 +6,17 @@ import TesselCore
 enum CheatSheetContent {
     static let groupOrder = ["Windows", "Workspaces", "Summon", "Mouse", "Cheat Sheet"]
 
-    static func entries(keymap: Keymap, workspaceKeys: [Int64]) -> [CheatEntry] {
-        var all = Command.allCases.map { c in
+    /// Only the Workspaces there are: with three, ⌘4 isn't Tessel's.
+    static func entries(keymap: Keymap, workspaceKeys: [Int64],
+                        spaces: Int = Tiler.shared?.spaceCount ?? Command.defaultWorkspaces) -> [CheatEntry] {
+        var all = Command.allCases.filter { $0.isActive(spaces: spaces) }.map { c in
             CheatEntry(id: c.rawValue, keys: Keymap.keycaps(for: keymap.binding(for: c), workspaceKeys: workspaceKeys),
                        title: c.title, group: c.group, keywords: c.keywords)
         }
         all += [
-            CheatEntry(id: "summon.go", keys: ["↩"], title: "In Summon: open the app, or go to its window", group: "Summon",
-                       keywords: ["return", "enter", "open", "go to", "existing window", "launch", "select"]),
+            CheatEntry(id: "summon.go", keys: ["↩"], title: "In Summon: open the app, or go to the window", group: "Summon",
+                       keywords: ["return", "enter", "open", "go to", "existing window", "launch", "select",
+                                  "find window", "window title", "switch window", "jump to window", "other workspace"]),
             CheatEntry(id: "summon.new", keys: ["⇧", "↩"], title: "In Summon: open a new window of an app that's already open", group: "Summon",
                        keywords: ["new window", "another window", "second window", "shift return", "shift enter", "duplicate", "fresh window"]),
             CheatEntry(id: "summon.choose", keys: ["↑ ↓"], title: "In Summon: choose a result", group: "Summon",
