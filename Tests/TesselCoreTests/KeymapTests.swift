@@ -13,21 +13,28 @@ let workspaceKeys: [Int64] = [116, 121, 119]
         #expect(map.command(for: 3, flags: flags(shift: true), workspaceKeys: workspaceKeys) == .focusMode)
         #expect(map.command(for: 49, flags: flags(shift: true), workspaceKeys: workspaceKeys) == .cheatSheet)
         #expect(map.command(for: 18, flags: flags(), workspaceKeys: workspaceKeys) == .workspace1)
-        #expect(map.command(for: 20, flags: flags(option: true), workspaceKeys: workspaceKeys) == .moveToWorkspace3)
+        #expect(map.command(for: 20, flags: flags(shift: true), workspaceKeys: workspaceKeys) == .moveToWorkspace3)
+        #expect(map.command(for: 15, flags: flags(shift: true), workspaceKeys: workspaceKeys) == .resize)
         #expect(map.shiftTapCommand(for: 49, workspaceKeys: workspaceKeys) == .summon)
     }
 
     @Test func workspacesAreCommandAndTheirNumber() {
         for space in 0..<Command.maxWorkspaces {
             #expect(map.command(for: Keymap.numberKeys[space], flags: flags(), workspaceKeys: []) == .goTo(space))
-            #expect(map.command(for: Keymap.numberKeys[space], flags: flags(option: true), workspaceKeys: []) == .moveTo(space))
+            #expect(map.command(for: Keymap.numberKeys[space], flags: flags(shift: true), workspaceKeys: []) == .moveTo(space))
             #expect(Command.goTo(space).action == .switchSpace(space) && Command.moveTo(space).action == .sendToSpace(space))
         }
-        // ⌘⇧3, ⌘⇧4 and ⌘⇧5 stay the Mac's screenshots, and right ⌘ and a number stays the app's.
-        for code in Keymap.numberKeys { #expect(map.command(for: code, flags: flags(shift: true), workspaceKeys: []) == nil) }
+        // With three Workspaces, ⌘⇧4 and ⌘⇧5 stay the Mac's screenshots; right ⌘⇧3 too, and right ⌘
+        // and a number stays the app's.
+        #expect(map.command(for: 20, flags: flags(shift: true), workspaceKeys: [], spaces: 3) == .moveToWorkspace3)
+        #expect(map.command(for: 21, flags: flags(shift: true), workspaceKeys: [], spaces: 3) == nil)
+        #expect(map.command(for: 23, flags: flags(shift: true), workspaceKeys: [], spaces: 3) == nil)
+        var rightShift = flags(leftCommand: false, rightCommand: true)
+        rightShift.insert(.maskShift)
+        #expect(map.command(for: 20, flags: rightShift, workspaceKeys: [], spaces: 3) == nil)
         #expect(map.command(for: 18, flags: flags(leftCommand: false, rightCommand: true), workspaceKeys: []) == nil)
         #expect(Keymap.keycaps(for: map.binding(for: .workspace2), workspaceKeys: []) == ["Left ⌘", "2"])
-        #expect(Keymap.keycaps(for: map.binding(for: .moveToWorkspace2), workspaceKeys: []) == ["⌥", "Left ⌘", "2"])
+        #expect(Keymap.keycaps(for: map.binding(for: .moveToWorkspace2), workspaceKeys: []) == ["⇧", "Left ⌘", "2"])
         #expect(Command.workspace7.workspace == 6 && Command.moveToWorkspace7.workspace == 6 && Command.hide.workspace == nil)
     }
 

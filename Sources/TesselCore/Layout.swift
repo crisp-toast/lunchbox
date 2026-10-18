@@ -340,6 +340,40 @@ public struct Layout: Equatable, Sendable {
 
     // MARK: Sizing
 
+    /// Width or height alone (resize mode): `horizontal` changes the width, else the height;
+    /// a negative `delta` makes it smaller. A tiled window's column gets wider or narrower, or its
+    /// share of its stack taller or shorter; a centered window (alone, or in Focus) changes that
+    /// side only and stays centered. `rect` is the display's usable area, to keep the other side.
+    @discardableResult
+    public mutating func resize(_ id: WindowID, by delta: Double, horizontal: Bool, in rect: CGRect, gap: CGFloat) -> Bool {
+        guard let (c, r) = position(of: id) else { return false }
+        if windowCount == 1 || spotlight == id {
+            let usable = rect.insetBy(dx: gap, dy: gap)
+            guard usable.width > 0, usable.height > 0 else { return false }
+            let now = centeredFrame(id, in: usable)
+            var scale = Double(now.width / usable.width), height = Double(now.height / usable.height)
+            if horizontal {
+                scale = min(Self.singleScaleRange.upperBound, max(Self.singleScaleRange.lowerBound, scale + delta))
+            } else {
+                height = min(Self.singleHeightRange.upperBound, max(Self.singleHeightRange.lowerBound, height + delta))
+            }
+            let changed = singleOwner != id || abs(scale - singleScale) > 0.0001 || abs(height - (singleHeight ?? -1)) > 0.0001
+            singleOwner = id
+            singleScale = scale
+            singleHeight = height
+            return changed
+        }
+        if horizontal {
+            guard columns.count > 1 else { return false }
+            var widths = columns.map(\.weight)
+            guard Self.adjust(&widths, index: c, delta: delta) else { return false }
+            for i in columns.indices { columns[i].weight = widths[i] }
+            return true
+        }
+        guard columns[c].windows.count > 1 else { return false }
+        return Self.adjust(&columns[c].weights, index: r, delta: delta)
+    }
+
     /// Gives a window more (positive `delta`) or less space. A lone window grows
     /// or shrinks around the screen center; a tiled window changes both its
     /// column's width and its height within the stack, where it has neighbors.

@@ -229,7 +229,8 @@ final class QuietLineView {
     private var label: NSTextField?
     private var hide: DispatchWorkItem?
 
-    func show(_ text: String, on display: Display?) {
+    /// - seconds: how long it stays (the usual couple of seconds by default).
+    func show(_ text: String, on display: Display?, seconds: Double? = nil) {
         let panel = self.panel ?? makePanel()
         guard let label else { return }
         label.stringValue = text
@@ -257,7 +258,19 @@ final class QuietLineView {
             })
         }
         hide = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Etiquette.lineSeconds, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + (seconds ?? Etiquette.lineSeconds), execute: work)
+    }
+
+    /// Takes the line away now.
+    func dismiss() {
+        hide?.cancel()
+        guard let panel, panel.isVisible else { return }
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = reduceMotion ? 0 : 0.25
+            panel.animator().alphaValue = 0
+        }, completionHandler: {
+            if panel.alphaValue == 0 { panel.orderOut(nil) }
+        })
     }
 
     private func makePanel() -> NSPanel {

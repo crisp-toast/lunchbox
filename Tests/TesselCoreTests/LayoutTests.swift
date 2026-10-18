@@ -336,3 +336,42 @@ func layout(_ columns: [[WindowID]]) -> Layout {
         #expect(l.spotlight == 1)
     }
 }
+
+@Suite struct ResizingOneSide {
+    @Test func aTiledWindowGetsWiderOrTallerAlone() throws {
+        var l = layout([[1, 2], [3]])
+        let a0 = try #require(l.frames(in: screen, gap: gap)[1]), b0 = try #require(l.frames(in: screen, gap: gap)[2])
+        let wider = l.resize(1, by: 0.05, horizontal: true, in: screen, gap: gap)
+        #expect(wider)
+        let a1 = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(a1.width > a0.width && a1.height == a0.height) // only the width changed
+        let taller = l.resize(1, by: 0.05, horizontal: false, in: screen, gap: gap)
+        #expect(taller)
+        let a2 = try #require(l.frames(in: screen, gap: gap)[1]), b2 = try #require(l.frames(in: screen, gap: gap)[2])
+        #expect(a2.height > a0.height && b2.height < b0.height) // its stack-mate gave it room
+    }
+
+    @Test func nothingToGiveWhenAloneInItsColumnOrRow() {
+        var l = layout([[1], [2]])
+        let taller = l.resize(1, by: 0.05, horizontal: false, in: screen, gap: gap)
+        #expect(!taller) // already the full height
+        var one = layout([[1, 2]])
+        let wider = one.resize(1, by: 0.05, horizontal: true, in: screen, gap: gap)
+        #expect(!wider) // already the full width
+    }
+
+    @Test func aCenteredWindowChangesOneSideAndStaysCentered() throws {
+        var l = layout([[1]])
+        let before = try #require(l.frames(in: screen, gap: gap)[1])
+        let grew = l.resize(1, by: 0.05, horizontal: false, in: screen, gap: gap)
+        #expect(grew)
+        let taller = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(taller.height > before.height && abs(taller.width - before.width) <= 1)
+        #expect(abs(taller.midX - before.midX) <= 1 && abs(taller.midY - before.midY) <= 1)
+        let shrank = l.resize(1, by: -0.05, horizontal: true, in: screen, gap: gap)
+        #expect(shrank)
+        let narrower = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(narrower.width < taller.width && abs(narrower.height - taller.height) <= 1)
+        #expect(abs(narrower.midX - before.midX) <= 1)
+    }
+}

@@ -16,8 +16,13 @@ final class HotkeyTap {
         var spaces = Command.defaultWorkspaces
         var keymap = Keymap()
         var learner: ((Int64, CGEventFlags) -> Void)?
-        var centered: [CGRect] = []
+        var centered: [(id: CGWindowID, frame: CGRect)] = []
+        /// Resize mode lasts until this moment (each resize key extends it).
+        var resizeUntil: CFTimeInterval = 0
     }
+
+    /// How long resize mode waits for the next key before it ends by itself.
+    static let resizeModeSeconds: CFTimeInterval = 5
 
     private let state = OSAllocatedUnfairLock(initialState: State())
     private let onAction: (KeyAction) -> Void
@@ -29,6 +34,10 @@ final class HotkeyTap {
     private var chord = ShiftTapChord()
     /// A drag on a centered window's edge is under way; tap thread only.
     private var stretching = false
+    /// A press just inside a centered window's edge: it's a resize only if the window starts
+    /// changing size as the drag goes. The window, its size at the press, and where the press
+    /// was; tap thread only.
+    private var maybeStretching: (id: CGWindowID, size: CGSize, at: CGPoint)?
 
     init(onAction: @escaping (KeyAction) -> Void) {
         self.onAction = onAction
@@ -57,9 +66,9 @@ final class HotkeyTap {
         set { state.withLock { $0.keymap = newValue } }
     }
 
-    /// Where the centered windows are (top-left coordinates, like the mouse events): a drag
-    /// starting just outside one of their edges resizes from the center.
-    var centeredFrames: [CGRect] {
+    /// The centered windows and where they are (top-left coordinates, like the mouse events):
+    /// a drag on one of their edges resizes from the center.
+    var centeredWindows: [(id: CGWindowID, frame: CGRect)] {
         get { state.withLock { $0.centered } }
         set { state.withLock { $0.centered = newValue } }
     }
@@ -106,8 +115,17 @@ final class HotkeyTap {
         return created
     }
 
-    /// How far outside a window's edge a press still starts a resize.
+    /// How far outside (or inside) a window's edge a press can start a resize.
     static let edgeReach: CGFloat = 7
+
+    /// Where the window server has a window right now: cheap enough to ask on every drag event.
+    private func windowBounds(_ id: CGWindowID) -> CGRect? {
+        var raw = UnsafeRawPointer(bitPattern: UInt(id))
+        guard let array = CFArrayCreate(nil, &raw, 1, nil),
+              let info = (CGWindowListCreateDescriptionFromArray(array) as? [[String: Any]])?.first,
+              let bounds = info[kCGWindowBounds as String] as? NSDictionary else { return nil }
+        return CGRect(dictionaryRepresentation: bounds)
+    }
 
     private func handle(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
         let pass = Unmanaged.passUnretained(event)
@@ -122,20 +140,40 @@ final class HotkeyTap {
             chord.flagsChanged(event.flags)
             return pass
         case .leftMouseDown:
-            // Just outside the edge is where macOS starts a resize; ⌥ makes it stretch both sides.
-            // Not when another modifier is held (⇧ keeps the shape, ⌘ moves without activating).
+            // macOS starts a resize from just outside a window's edge, or just inside it. ⌥ makes
+            // it stretch both sides. Not when another modifier is held (⇧ keeps the shape, ⌘
+            // moves without activating).
+            stretching = false
+            maybeStretching = nil
             let (on, centered) = state.withLock { ($0.enabled, $0.centered) }
+            guard on, event.flags.isDisjoint(with: [.maskShift, .maskCommand, .maskControl, .maskAlternate]) else { return pass }
             let p = event.location
-            stretching = on && event.flags.isDisjoint(with: [.maskShift, .maskCommand, .maskControl, .maskAlternate])
-                && centered.contains { $0.insetBy(dx: -Self.edgeReach, dy: -Self.edgeReach).contains(p) && !$0.contains(p) }
-            if stretching { event.flags.insert(.maskAlternate) }
+            if centered.contains(where: { $0.frame.insetBy(dx: -Self.edgeReach, dy: -Self.edgeReach).contains(p) && !$0.frame.contains(p) }) {
+                // Outside the window: nothing there but its edge.
+                stretching = true
+                event.flags.insert(.maskAlternate)
+            } else if let w = centered.first(where: { $0.frame.contains(p) && !$0.frame.insetBy(dx: Self.edgeReach, dy: Self.edgeReach).contains(p) }),
+                      let size = windowBounds(w.id)?.size {
+                // Inside: it may be the edge, or something in the window near it (a scroll bar, text).
+                // Only a press that starts resizing the window gets ⌥, as soon as it does.
+                maybeStretching = (w.id, size, p)
+            }
             return pass
         case .leftMouseDragged:
+            if let maybe = maybeStretching {
+                if let now = windowBounds(maybe.id)?.size, abs(now.width - maybe.size.width) > 1 || abs(now.height - maybe.size.height) > 1 {
+                    stretching = true
+                    maybeStretching = nil
+                } else if hypot(event.location.x - maybe.at.x, event.location.y - maybe.at.y) > 40 {
+                    maybeStretching = nil // dragging something in the window, not its edge
+                }
+            }
             if stretching { event.flags.insert(.maskAlternate) }
             return pass
         case .leftMouseUp:
             if stretching { event.flags.insert(.maskAlternate) }
             stretching = false
+            maybeStretching = nil
             return pass
         case .keyDown:
             break
@@ -157,12 +195,36 @@ final class HotkeyTap {
         let afterShiftTap = chord.keyDown(code: code, flags: event.flags, isRepeat: isRepeat)
         guard s.enabled else { return pass }
 
+        // Resize mode (⌘⇧R): the arrows change one side only, = and − both; held, they keep
+        // going. Return, Esc or ⌘⇧R ends it; any other key ends it and does what it always does.
+        let now = CACurrentMediaTime()
+        if now < s.resizeUntil {
+            let along: [Int64: Direction] = [124: .right, 123: .left, 126: .up, 125: .down]
+            var step: KeyAction?
+            if let direction = along[code] { step = .resizeAlong(direction) }
+            else if code == 24 { step = .grow } else if code == 27 { step = .shrink }
+            if let step {
+                state.withLock { $0.resizeUntil = now + Self.resizeModeSeconds }
+                swallowed.insert(code)
+                DispatchQueue.main.async { [onAction] in onAction(step) }
+                return nil
+            }
+            state.withLock { $0.resizeUntil = 0 }
+            DispatchQueue.main.async { [onAction] in onAction(.resizeMode(false)) }
+            let ends = [36, 76, 53].contains(code) || s.keymap.command(for: code, flags: event.flags, workspaceKeys: s.workspaceKeys) == .resize
+            if ends {
+                swallowed.insert(code)
+                return nil
+            }
+        }
+
         var command: Command?
         if afterShiftTap { command = s.keymap.shiftTapCommand(for: code, workspaceKeys: s.workspaceKeys) }
         if command == nil { command = s.keymap.command(for: code, flags: event.flags, workspaceKeys: s.workspaceKeys, spaces: s.spaces) }
         guard let command else { return pass }
 
         swallowed.insert(code)
+        if command == .resize { state.withLock { $0.resizeUntil = now + Self.resizeModeSeconds } }
         let action = command.action
         DispatchQueue.main.async { [onAction] in onAction(action) }
         return nil

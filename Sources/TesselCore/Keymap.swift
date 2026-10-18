@@ -4,7 +4,7 @@ import CoreGraphics
 public enum Command: String, CaseIterable, Codable, Sendable {
     case focusLeft, focusRight, focusUp, focusDown
     case moveLeft, moveRight, moveUp, moveDown
-    case grow, shrink, focusMode, tidy, close
+    case grow, shrink, resize, focusMode, tidy, close
     case workspace1, workspace2, workspace3, workspace4, workspace5, workspace6, workspace7, workspace8, workspace9
     case moveToWorkspace1, moveToWorkspace2, moveToWorkspace3, moveToWorkspace4, moveToWorkspace5, moveToWorkspace6,
          moveToWorkspace7, moveToWorkspace8, moveToWorkspace9, hide
@@ -46,6 +46,7 @@ public enum Command: String, CaseIterable, Codable, Sendable {
         case .moveDown: return .move(.down)
         case .grow: return .grow
         case .shrink: return .shrink
+        case .resize: return .resizeMode(true)
         case .focusMode: return .spotlight
         case .tidy: return .normalize
         case .hide: return .hide
@@ -81,6 +82,7 @@ public enum Command: String, CaseIterable, Codable, Sendable {
         case .moveDown: return "Move the window down in its stack"
         case .grow: return "Give the window more space"
         case .shrink: return "Give the window less space"
+        case .resize: return "Resize: then → wider, ← narrower, ↑ taller, ↓ shorter"
         case .focusMode: return "Focus: this window centered, the rest on the Shelf"
         case .tidy: return "Tidy: even out every window in this Workspace"
         case .hide: return "Hide: send the window to the last Workspace and stay here"
@@ -118,6 +120,8 @@ public enum Command: String, CaseIterable, Codable, Sendable {
                             "taller", "more space", "zoom in", "plus", "make bigger", "widen"]
         case .shrink: return ["shrink", "smaller", "reduce", "decrease", "resize", "size", "narrower", "less space",
                               "zoom out", "minus", "make smaller", "narrow"]
+        case .resize: return ["resize", "resize mode", "width", "height", "wider", "narrower", "taller", "shorter",
+                              "stretch", "tall", "wide", "dimensions", "vertical", "horizontal", "size"]
         case .focusMode: return ["focus", "focus mode", "focus view", "spotlight", "center", "centre", "isolate",
                                  "concentrate", "zen", "distraction free", "maximize", "maximise", "fullscreen",
                                  "full screen", "one window", "solo", "single", "presentation", "shelf",
@@ -203,23 +207,24 @@ public struct Keymap: Equatable, Sendable {
     /// The number keys 1 to 9, for Workspaces 1 to 9.
     public static let numberKeys: [Int64] = [18, 19, 20, 21, 23, 22, 26, 28, 25]
 
-    /// Workspaces are ⌘ and their number, and ⌥⌘ and the number carries the window there
-    /// (⌘⇧3, ⌘⇧4 and ⌘⇧5 are the Mac's screenshots). Left ⌘ only, like every Tessel
-    /// shortcut, so right ⌘ and a number still does what it does in the app in front (a
-    /// browser's tabs, say).
+    /// Workspaces are ⌘ and their number, and ⌘⇧ and the number carries the window there,
+    /// like ⌘⇧ and an arrow moves it. Left ⌘ only, like every Tessel shortcut, so right ⌘ and
+    /// a number still does what it does in the app in front (a browser's tabs, say), and right
+    /// ⌘⇧3, ⌘⇧4 and ⌘⇧5 still take screenshots; and only for Workspaces you have, so with three,
+    /// ⌘⇧4 and ⌘⇧5 are the Mac's on either side.
     public static let defaults: [Command: KeyBinding] = {
         let leftCmd = { (code: Int64) in KeyBinding(.code(code), command: true, leftCommandOnly: true) }
         let leftCmdShift = { (code: Int64) in KeyBinding(.code(code), command: true, shift: true, leftCommandOnly: true) }
         var map: [Command: KeyBinding] = [
             .focusLeft: leftCmd(123), .focusRight: leftCmd(124), .focusDown: leftCmd(125), .focusUp: leftCmd(126),
             .moveLeft: leftCmdShift(123), .moveRight: leftCmdShift(124), .moveDown: leftCmdShift(125), .moveUp: leftCmdShift(126),
-            .grow: leftCmdShift(24), .shrink: leftCmdShift(27), .focusMode: leftCmdShift(3), .tidy: leftCmdShift(29),
+            .grow: leftCmdShift(24), .shrink: leftCmdShift(27), .resize: leftCmdShift(15), .focusMode: leftCmdShift(3), .tidy: leftCmdShift(29),
             .hide: leftCmdShift(4), .close: leftCmdShift(51), .cheatSheet: leftCmdShift(49),
             .summon: KeyBinding(.code(49), shift: true, shiftTap: true),
         ]
         for (space, code) in numberKeys.enumerated() {
             map[.goTo(space)] = leftCmd(code)
-            map[.moveTo(space)] = KeyBinding(.code(code), command: true, option: true, leftCommandOnly: true)
+            map[.moveTo(space)] = leftCmdShift(code)
         }
         return map
     }()

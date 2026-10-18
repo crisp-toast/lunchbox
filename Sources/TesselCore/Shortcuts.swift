@@ -5,6 +5,10 @@ public enum KeyAction: Equatable, Sendable {
     case move(Direction)
     case grow
     case shrink
+    /// Resize mode on or off: while it's on, arrows change only the width or only the height.
+    case resizeMode(Bool)
+    /// One side only: right is wider, left narrower, up taller, down shorter.
+    case resizeAlong(Direction)
     case close
     /// Hides the focused window by moving it to space 3.
     case hide

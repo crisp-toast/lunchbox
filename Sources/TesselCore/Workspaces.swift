@@ -2,7 +2,7 @@ import Foundation
 
 /// "Sends new windows to the Workspace they belong in": where you keep each app.
 ///
-/// An app gets a home when you move one of its windows to a Workspace yourself (⌥⌘ and the
+/// An app gets a home when you move one of its windows to a Workspace yourself (⌘⇧ and the
 /// Workspace's number), and Tessel trusts that home once the app's windows have spent ten
 /// minutes there, all told, and nine tenths of their time since the move. Moving one of its
 /// windows somewhere else starts over from there. Hiding a window (to the last Workspace) is

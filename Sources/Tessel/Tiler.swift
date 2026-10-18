@@ -2264,6 +2264,10 @@ final class Tiler {
         case .move(let direction): if !leaveFocusMode() { move(direction) }
         case .grow: resize(by: Self.resizeStep)
         case .shrink: resize(by: -Self.resizeStep)
+        case .resizeMode(let on): resizeMode(on)
+        case .resizeAlong(let direction):
+            resize(by: direction == .right || direction == .up ? Self.sideStep : -Self.sideStep,
+                   horizontal: direction == .left || direction == .right)
         case .switchSpace(let i): switchSpace(to: i, focusing: nil)
         case .sendToSpace(let i): send(toSpace: i, follow: true)
         case .close: closeFocused()
@@ -2329,6 +2333,42 @@ final class Tiler {
         if uuid != place(of: id)?.display { noteArranged(space: space, display: uuid) }
         let after = place(of: id).flatMap { spaces[$0.space][$0.display]?.columns.map(\.windows) } ?? []
         log.notice("move \(direction.rawValue, privacy: .public): window \(id) (\(self.windows[id]?.handle.app.bundleID ?? "?", privacy: .public)) \(String(describing: before), privacy: .public) -> \(String(describing: after), privacy: .public)")
+        showRing(on: id)
+    }
+
+    /// How much one arrow press in resize mode changes a side (a share of the screen).
+    static let sideStep = 0.05
+
+    private static let resizeHelp = "Resize:  →  wider   ←  narrower   ↑  taller   ↓  shorter   ↩  done"
+
+    /// Resize mode on (⌘⇧R) or off: the line says what the arrows do while it's on.
+    private func resizeMode(_ on: Bool) {
+        guard on else { quietLine.dismiss(); return }
+        guard let id = focusedID, place(of: id) != nil else { quietLine.show("Resize: focus a tiled window first", on: focusedDisplay); return }
+        quietLine.show(Self.resizeHelp, on: focusedDisplay, seconds: HotkeyTap.resizeModeSeconds)
+        showRing(on: id)
+    }
+
+    /// The display the focused window is on.
+    private var focusedDisplay: Display? {
+        focusedID.flatMap { id in windows[id].flatMap { w in displays.first { $0.frame.contains((w.target ?? w.frame).center) } } }
+    }
+
+    /// Width or height alone, for resize mode.
+    private func resize(by delta: Double, horizontal: Bool) {
+        guard let id = focusedID, let (space, uuid) = place(of: id), space == currentSpace,
+              var layout = spaces[space][uuid], let d = activeDisplays.first(where: { $0.uuid == uuid }) else { return }
+        if layout.resize(id, by: delta, horizontal: horizontal, in: d.visible, gap: Self.gap) {
+            spaces[space][uuid] = layout
+            relayout(animated: true)
+            persist()
+            noteArranged(space: space, display: uuid, shaped: true)
+            quietLine.show(Self.resizeHelp, on: d, seconds: HotkeyTap.resizeModeSeconds)
+        } else {
+            // A window alone in its column already has the full height; one column, the full width.
+            quietLine.show(horizontal ? "Resize: it already has the full width here" : "Resize: it already has the full height here",
+                           on: d, seconds: HotkeyTap.resizeModeSeconds)
+        }
         showRing(on: id)
     }
 
@@ -3146,13 +3186,13 @@ final class Tiler {
 
     /// The windows sitting centered right now, alone on a display or in Focus: dragging one's
     /// edge stretches both sides (`HotkeyTap`).
-    var centeredFrames: [CGRect] {
+    var centeredWindows: [(id: CGWindowID, frame: CGRect)] {
         guard enabled else { return [] }
         return activeDisplays.compactMap { d in
             guard let layout = spaces[currentSpace][d.uuid],
                   let id = layout.spotlight ?? (layout.windowCount == 1 ? layout.windows.first : nil),
                   !Placeholder.isPlaceholder(id), let w = windows[id], !w.hidden else { return nil }
-            return w.target ?? w.frame
+            return (id, w.target ?? w.frame)
         }
     }
 
