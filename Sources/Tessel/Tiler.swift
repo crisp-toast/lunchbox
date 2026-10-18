@@ -176,7 +176,7 @@ final class Tiler {
         // only believed for a window of the same app at the same size (`consider`).
         let saved = defaults.string(forKey: "limits").flatMap { try? JSONDecoder().decode(SavedLimits.self, from: Data($0.utf8)) }
         limits = [:]
-        savedLimits = saved?.boot == Self.bootTime ? saved!.windows : [:]
+        savedLimits = saved?.boot == Self.bootTime && saved?.version == SavedLimits.currentVersion ? saved!.windows : [:]
     }
 
     // MARK: Lifecycle
@@ -1175,6 +1175,10 @@ final class Tiler {
 
     private struct SavedLimits: Codable {
         struct Entry: Codable { let app: String; let width: CGFloat; let height: CGFloat; let limits: SizeLimits }
+        /// Saves from before version 2 may hold limits learned from windows macOS had held to the
+        /// screen (a size-then-move bug, 2026-10-18), so they're dropped.
+        static let currentVersion = 2
+        var version = currentVersion
         let boot: Double
         let windows: [String: Entry]
     }
@@ -3026,6 +3030,18 @@ final class Tiler {
     }
 
     // MARK: Menu commands
+
+    /// The windows sitting centered right now, alone on a display or in Focus: dragging one's
+    /// edge stretches both sides (`HotkeyTap`).
+    var centeredFrames: [CGRect] {
+        guard enabled else { return [] }
+        return activeDisplays.compactMap { d in
+            guard let layout = spaces[currentSpace][d.uuid],
+                  let id = layout.spotlight ?? (layout.windowCount == 1 ? layout.windows.first : nil),
+                  !Placeholder.isPlaceholder(id), let w = windows[id], !w.hidden else { return nil }
+            return w.target ?? w.frame
+        }
+    }
 
     /// Whether a display in the Workspace being viewed is in Focus.
     var focusModeIsOn: Bool { activeDisplays.contains { spaces[currentSpace][$0.uuid]?.spotlight != nil } }

@@ -36,7 +36,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The time back is read now, so the menu and the license window have it even before
         // tiling starts (waiting for Accessibility, or after the trial ended).
         TimeBackLedger.shared.load()
-        tiler.onChange = { [weak self] in self?.menu.refresh() }
+        tiler.onChange = { [weak self] in
+            guard let self else { return }
+            self.menu.refresh()
+            self.tap.centeredFrames = self.tiler.centeredFrames
+        }
         // The quiet line names the undo key: ⌘ and the number of the Workspace you were in.
         tiler.undoKeyName = { [weak self] space in
             guard let self, space < Command.maxWorkspaces else { return nil }
