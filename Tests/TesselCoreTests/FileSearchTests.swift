@@ -80,4 +80,59 @@ import Testing
         #expect(!FileSearch.matches(["lunch", "dinner"], name: "Lunch plans.txt"))
         #expect(!FileSearch.matches([], name: "anything"))
     }
+
+    @Test func mdfindAsksForEveryWord() {
+        #expect(FileSearch.mdfindQuery(["lunch"]) == #"kMDItemFSName == "*lunch*"cd"#)
+        #expect(FileSearch.mdfindQuery(FileSearch.terms(in: "lunch \"plans\"")) ==
+            #"kMDItemFSName == "*lunch*"cd && kMDItemFSName == "*plans*"cd"#)
+    }
+
+    @Test func twoAnswersMergeWithoutRepeats() {
+        let desktop = Self.home + "/Desktop/Lunch.txt", projects = Self.home + "/Projects/Lunch plan.txt"
+        let hidden = Self.home + "/Desktop/.Lunch.swp"
+        #expect(FileSearch.merge([projects], [desktop, projects, hidden], home: Self.home) == [projects, desktop])
+        #expect(FileSearch.merge([], [desktop], home: Self.home) == [desktop])
+    }
+
+    @Test func filesAreSearchedFromTwoLetters() {
+        #expect(!FileSearch.searches(""))
+        #expect(!FileSearch.searches("b"))
+        #expect(!FileSearch.searches(" b  "))
+        #expect(!FileSearch.searches("**"))
+        #expect(FileSearch.searches("bu"))
+        #expect(FileSearch.searches("lunch plans"))
+    }
+}
+
+@Suite struct FolderAccessOffer {
+    @Test func offeredOnFileSearchesUntilAnswered() {
+        #expect(FolderAccess.offers(query: "budget", answer: nil, fullDiskAccess: false))
+        #expect(!FolderAccess.offers(query: "budget", answer: .chosen, fullDiskAccess: false))
+        #expect(!FolderAccess.offers(query: "budget", answer: .dismissed, fullDiskAccess: false))
+    }
+
+    @Test func notWhileNoFilesAreSearched() {
+        // An empty field or one letter searches no files, so the row never shows on its own.
+        #expect(!FolderAccess.offers(query: "", answer: nil, fullDiskAccess: false))
+        #expect(!FolderAccess.offers(query: "b", answer: nil, fullDiskAccess: false))
+    }
+
+    @Test func notWithFullDiskAccess() {
+        // Tessel can already read Desktop, Documents and Downloads: nothing to ask.
+        #expect(!FolderAccess.offers(query: "budget", answer: nil, fullDiskAccess: true))
+    }
+
+    @Test func answersAreKeptByName() {
+        // UserDefaults keeps the raw value; a value Tessel doesn't know means not answered.
+        #expect(FolderAccess.Answer(rawValue: "chosen") == .chosen)
+        #expect(FolderAccess.Answer(rawValue: "dismissed") == .dismissed)
+        #expect(FolderAccess.Answer(rawValue: "later") == nil)
+    }
+
+    @Test func foldersRead() {
+        let home = "/Users/tyler", cloud = home + "/Library/Mobile Documents/com~apple~CloudDocs"
+        #expect(FolderAccess.folders(home: home) == [
+            home + "/Desktop", home + "/Documents", home + "/Downloads", cloud + "/Desktop", cloud + "/Documents",
+        ])
+    }
 }
