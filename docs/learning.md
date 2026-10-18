@@ -4,12 +4,12 @@ Design and status, 2026-10-16. Tessel's headline: **a smart window manager that'
 annoying about it.** It learns from what you do, on your Mac, with no account and no setup,
 and it never moves anything you're looking at.
 
-**Status.** Built on branch `claude/bold-villani-c70383` behind **Settings › Learn Where Windows
-Go**, off by default until Tyler has lived with it. All three proofs below work on real windows
+**Status.** In main since 2026-10-18 (built on branch `claude/bold-villani-c70383`), behind
+**Settings › Learn Where Windows Go**, off by default until Tyler has lived with it. All three proofs below work on real windows
 in the test VM (macOS 27), including undo, "undo twice and it forgets", relaunch and Forget.
-`swift test`: 182 tests pass (with the time-back count, on branch `claude/keen-agnesi-7eeb29`).
+`swift test`: 245 tests pass (with the time-back count and Summon's window and file search).
 
-**Try it:** build and install from the branch (`./scripts/build.sh --install`), then turn on
+**Try it:** build and install (`./scripts/build.sh --install`), then turn on
 Settings › Learn Where Windows Go. Then:
 - Float a small tool window from the menu (**Float This Window**), or drag a window out of its
   tile twice in a row. The next window like it floats by itself.
@@ -284,7 +284,7 @@ you.
 
 ## Tested
 
-- **Unit tests** (`swift test`, 182 in all). New suites: `FloatClassifierLearns`, `WindowKinds`,
+- **Unit tests** (`swift test`, 245 in all). New suites: `FloatClassifierLearns`, `WindowKinds`,
   `UsualArrangements`, `WorkspaceHomes`, `NotAnnoying`, `EventLogStaysSmallAndLocal`,
   `NothingLeavesThisMac`, and for the time back `TimeBackCounts`, `TimeBackStaysOnThisMac` and
   `TimeBackInWords`.

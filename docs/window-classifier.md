@@ -1,7 +1,7 @@
 # The window classifier
 
-Results as of 2026-10-17, measured against Tessel's rules as of main's cbfafb9 (branch
-`claude/bold-villani-c70383`). This is the first part of
+Results as of 2026-10-17, measured against Tessel's rules as of main's cbfafb9 (built on branch
+`claude/bold-villani-c70383`, in main since 2026-10-18). This is the first part of
 Tessel's learning layer ([learning.md](learning.md)): a fast model that decides how each window
 should behave the moment it appears. It sits behind **Settings › Learn Where Windows Go**, which
 is off by default.

@@ -19,7 +19,7 @@ because it really saves them time.
    - turn learning on by default;
    - count the time Tessel gives back, honestly, and show it in the menu and on the
      trial-end screen (**built**, see [Item 1, as built](#item-1-as-built-2026-10-17));
-   - let Summon jump to any window by a word in its title;
+   - let Summon jump to any window by a word in its title (**built**, see 4 below);
    - sell "you never set it up" against the free tiling managers, which make you write rules.
 
 ## 1. Accuracy, as you'd see it
@@ -174,7 +174,10 @@ It used to say only "Your free trial has ended." Instead (proposed wording):
 
 ### 4. Let Summon jump to any window
 
-- **Today:** Summon (⇧Space) finds apps and files, not windows.
+**Built on 2026-10-17** (branch `claude/interesting-mendel-480f1d`, in main since 2026-10-18):
+typing a word from a window's title lists that window, and ↩ goes to it.
+
+- **Before:** Summon (⇧Space) found apps and files, not windows.
 - **The change:** add the open windows' titles to its matching, so typing "invoice", "lunch" or
   "Tiler" goes straight to that window, in any Workspace, on any display.
 - **Why plain matching:** the probe above says it's enough (15 of 15 on title words). It adds
@@ -203,7 +206,7 @@ copy, not published (site copy stays yours):
 |---|---|---|---|
 | 1 | The time-back ledger, its menu line and the trial-end screen | The biggest effect on paying | **Built 2026-10-17** (below) |
 | 2 | Learning on by default | Without it, a trial user never sees any of this | One line, plus a few days on your Mac |
-| 3 | Window search in Summon | The power-tool feel, and it feeds the ledger | About a day: Launcher, plus the titles Tiler already reads |
+| 3 | Window search in Summon | The power-tool feel, and it feeds the ledger | **Built 2026-10-17** |
 | 4 | The onboarding step that shows learning once | Value in the first five minutes | Already proposed as a follow-up |
 | 5 | A fresh census of 300+ windows | Whether decisions really reach 95% (92% today), and the data any fine-tune needs | Already proposed as a follow-up |
 | – | Laya or Julia 1 | Not now | – |
@@ -221,7 +224,8 @@ copy, not published (site copy stays yours):
 ## Item 1, as built (2026-10-17)
 
 Built on branch `claude/keen-agnesi-7eeb29`, on top of the learning branch
-(`claude/bold-villani-c70383`, merged through 121416b). `swift test`: 182 pass.
+(`claude/bold-villani-c70383`, merged through 121416b). In main since 2026-10-18, with
+Summon's window search and the classifier retrained against main's rules. `swift test`: 245 pass.
 
 ### The count
 
@@ -235,7 +239,7 @@ else, and the menu's "how it's counted" line is made from them, so it can't drif
 | An app opening into its usual spot and share | 2 | The same two places, when the usual spot was used: a lone window's shape, or a learned four-window shape (`.anchored`) instead of the 2×2 grid |
 | A new window sent to its Workspace | 3 | `Learning.placed`, from `placedInHome` |
 | A window put back | 2 | `welcomeBackDisplays`, when a display really comes back (plugged in, or awake again), and `insert`, for windows back in their Workspace and spot after Tessel starts again |
-| A jump to a window from Summon | 1 | `goToWindow` (only Summon calls it), when it took you somewhere: another window, another Workspace, or out of the Dock |
+| A jump to a window from Summon | 1 | `bringForward`, behind both of Summon's jumps (to an app, and to a window by its title), when it took you somewhere: another window, another Workspace, or out of the Dock |
 | A correction or an undo | −3 | `Learning.corrected` (Float/Tile This Window, the double drag) and `Learning.undone` (the undo key) |
 
 - **Each window counts once,** as the most specific thing: a window sent home isn't also
