@@ -205,8 +205,7 @@ final class Playground: NSView {
             if let id = focused { layout.resize(id, by: -0.08) }
         case .resizeAlong(let direction):
             if let id = focused {
-                layout.resize(id, by: direction == .right || direction == .up ? 0.05 : -0.05,
-                              horizontal: direction == .left || direction == .right, in: usable, gap: Self.gap)
+                layout.resize(id, toward: direction, by: 0.05, in: usable, gap: Self.gap)
             }
         case .resizeMode:
             break // the pretend screen has no line to show; the arrows just work

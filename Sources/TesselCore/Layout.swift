@@ -340,6 +340,47 @@ public struct Layout: Equatable, Sendable {
 
     // MARK: Sizing
 
+    /// Resize mode's arrows: an arrow pushes the window's edge on that side, so what it does
+    /// depends on where the window is. Toward a neighbor, the edge they share moves that way and
+    /// the window grows; against the screen's edge, its other edge moves that way and it shrinks.
+    /// So in the right column ← widens it, in the left column →; at the top of a stack ↓ makes
+    /// it taller, at the bottom ↑. Only that one edge moves; nothing else shifts. A centered
+    /// window has no neighbors: → and ↑ grow it, ← and ↓ shrink it, around its center.
+    @discardableResult
+    public mutating func resize(_ id: WindowID, toward direction: Direction, by step: Double, in rect: CGRect, gap: CGFloat) -> Bool {
+        guard let (c, r) = position(of: id) else { return false }
+        let horizontal = direction == .left || direction == .right
+        if windowCount == 1 || spotlight == id {
+            return resize(id, by: direction == .right || direction == .up ? step : -step, horizontal: horizontal, in: rect, gap: gap)
+        }
+        let forward = direction == .right || direction == .down
+        func push(_ shares: inout [Double], at i: Int) -> Bool {
+            guard shares.count > 1 else { return false }
+            let toward = forward ? i + 1 : i - 1
+            if shares.indices.contains(toward) { return Self.shift(&shares, to: i, from: toward, by: step) }
+            return Self.shift(&shares, to: forward ? i - 1 : i + 1, from: i, by: step)
+        }
+        if horizontal {
+            var widths = columns.map(\.weight)
+            guard push(&widths, at: c) else { return false }
+            for i in columns.indices { columns[i].weight = widths[i] }
+            return true
+        }
+        return push(&columns[c].weights, at: r)
+    }
+
+    /// Moves the edge between two neighbors: `to` gets `step` of the whole more and `from` that
+    /// much less, without either going under its smallest share.
+    static func shift(_ shares: inout [Double], to: Int, from: Int, by step: Double) -> Bool {
+        let total = shares.reduce(0, +)
+        guard total > 0 else { return false }
+        let moved = min(step * total, shares[from] - minFraction * total)
+        guard moved > 0.0001 * total else { return false }
+        shares[to] += moved
+        shares[from] -= moved
+        return true
+    }
+
     /// Width or height alone (resize mode): `horizontal` changes the width, else the height;
     /// a negative `delta` makes it smaller. A tiled window's column gets wider or narrower, or its
     /// share of its stack taller or shorter; a centered window (alone, or in Focus) changes that

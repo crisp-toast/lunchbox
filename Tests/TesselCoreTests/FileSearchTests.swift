@@ -135,4 +135,26 @@ import Testing
             home + "/Desktop", home + "/Documents", home + "/Downloads", cloud + "/Desktop", cloud + "/Documents",
         ])
     }
+
+    @Test func onlyWhatYoudLookForWhereYouKeepYourThings() {
+        let home = "/Users/t"
+        let shown = { (p: String, folder: Bool) in FileSearch.isWorthShowing(p, isFolder: folder, home: home) }
+        // Documents, pictures and downloads in Desktop, Documents and Downloads, and in iCloud Drive.
+        #expect(shown("/Users/t/Documents/Taxes/2026 return.pdf", false))
+        #expect(shown("/Users/t/Desktop/Screenshot 2026-10-18.png", false))
+        #expect(shown("/Users/t/Downloads/Tessel.dmg", false))
+        #expect(shown("/Users/t/Library/Mobile Documents/com~apple~CloudDocs/Desktop/Plan.pages", false))
+        #expect(shown("/Users/t/Library/CloudStorage/Dropbox/Contracts/lease.docx", false))
+        #expect(shown("/Users/t/Documents/Taxes", true))
+        // Not what programs and agents leave behind (the "simulator" search that showed only these).
+        #expect(!shown("/Users/t/Storage Audit 2026-09-13/simulator-cleanup.json", false))
+        #expect(!shown("/Volumes/Master Storage/Code/nellia-stuff/nellia/simulator-aliases.sh", false))
+        #expect(!shown("/Users/t/Library/Mobile Documents/com~apple~CloudDocs/Documents/Codex/2026-09-07/my-macbook-is-out-of-space/outputs/simulator-review.json", false))
+        #expect(!shown("/Users/t/code.pre-move-2026-10-13/deltabinder/build/testflight-1.0-12/image-regression/simulator-settled.png", false))
+        #expect(!shown("/Users/t/Documents/Codex/2026-09-17/use-x20/work/simulator-devices.json", false))
+        // Too deep, even a document; code and data, even on the Desktop.
+        #expect(!shown("/Users/t/Documents/a/b/c/d/notes.pdf", false))
+        #expect(!shown("/Users/t/Desktop/server.py", false))
+        #expect(!shown("/Users/t/Desktop/config.json", false))
+    }
 }

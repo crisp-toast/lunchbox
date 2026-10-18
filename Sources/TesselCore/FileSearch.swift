@@ -49,6 +49,39 @@ public enum FileSearch {
         return false
     }
 
+    /// The folders Summon shows files from: Desktop, Documents and Downloads, iCloud Drive (where
+    /// Desktop and Documents live when they sync), and cloud folders (Dropbox, Google Drive, OneDrive).
+    public static func roots(home: String) -> [String] {
+        [home + "/Desktop", home + "/Documents", home + "/Downloads", iCloudDrive(home), home + "/Library/CloudStorage"]
+    }
+
+    /// Kinds of files people look for by name: documents, pictures, video, music and downloads.
+    /// Not what programs and agents leave behind: data (.json, .plist), scripts, code and logs.
+    static let documentKinds: Set<String> = [
+        "pdf", "doc", "docx", "rtf", "rtfd", "txt", "md", "markdown", "pages", "numbers", "key", "xls", "xlsx", "csv",
+        "ppt", "pptx", "odt", "ods", "odp", "epub", "ics", "vcf", "webloc",
+        "png", "jpg", "jpeg", "heic", "heif", "gif", "webp", "tif", "tiff", "bmp", "svg", "dng", "cr2", "cr3", "nef", "arw",
+        "psd", "ai", "sketch", "fig", "afdesign", "afphoto", "pxd",
+        "mov", "mp4", "m4v", "avi", "mkv", "webm", "mp3", "m4a", "wav", "aif", "aiff", "flac", "aac",
+        "zip", "dmg", "pkg", "rar", "7z",
+    ]
+
+    /// Whether Summon offers a file or folder at all: something you'd look for, where you keep
+    /// your things. It has to be in one of `roots`, at most three folders in (two for a folder),
+    /// and a file has to be a kind people open (`documentKinds`).
+    public static func isWorthShowing(_ path: String, isFolder: Bool, home: String) -> Bool {
+        guard !isHidden(path, home: home) else { return false }
+        var depth: Int?
+        for root in roots(home: home) where path.hasPrefix(root + "/") {
+            var rest = path.dropFirst(root.count + 1).split(separator: "/")
+            if root.hasSuffix("/CloudStorage") { rest = Array(rest.dropFirst()) } // Dropbox's own folder is the top
+            depth = rest.count - 1
+            break
+        }
+        guard let depth, depth >= 0, depth <= (isFolder ? 2 : 3) else { return false }
+        return isFolder || documentKinds.contains((path as NSString).pathExtension.lowercased())
+    }
+
     /// The folder a path is in, as Summon shows it: iCloud Drive by name, your home as ~.
     public static func folder(of path: String, home: String) -> String {
         let dir = (path as NSString).deletingLastPathComponent
@@ -111,6 +144,9 @@ public enum FileSearch {
 
 /// Summon's list, put together.
 public enum Summon {
+    /// The most files Summon lists: a few likely ones, never a page of near misses.
+    public static let maxFiles = 3
+
     /// One row in Summon's list.
     public enum Row<App, Window, File> {
         case app(App)
@@ -119,8 +155,8 @@ public enum Summon {
     }
 
     /// Summon's order: apps whose name matches what you typed (the whole name, its start, a
-    /// word's start or the initials), then windows, then files, then apps that only loosely
-    /// match, like "lunch" in Launchpad. Files keep at least two rows when Spotlight found any,
+    /// word's start or the initials), then windows, then at most `maxFiles` files, then apps that
+    /// only loosely match, like "lunch" in Launchpad. Files keep one row when there are any,
     /// however many apps and windows match.
     ///
     /// `apps` in the order they should show, each with its `Fuzzy.score` for the name alone.
@@ -129,7 +165,28 @@ public enum Summon {
         let named = apps.filter { Fuzzy.matchesName($0.nameScore) }.map { Row<App, Window, File>.app($0.app) }
         let loose = apps.filter { !Fuzzy.matchesName($0.nameScore) }.map { Row<App, Window, File>.app($0.app) }
         let head = named + windows.map { .window($0) }
-        let room = max(0, limit - min(2, files.count))
-        return Array((Array(head.prefix(room)) + files.map { .file($0) } + loose).prefix(limit))
+        let few = files.prefix(maxFiles)
+        let room = max(0, limit - min(1, few.count))
+        return Array((Array(head.prefix(room)) + few.map { .file($0) } + loose).prefix(limit))
+    }
+}
+
+/// Other names people know some apps by: what an app used to be called, or what's inside it now.
+public enum AppNames {
+    static let aliases: [String: [String]] = [
+        "com.apple.dt.Devices": ["Simulator", "iOS Simulator"], // Xcode 27 put Simulator into Device Hub
+        "com.apple.systempreferences": ["System Preferences"],
+        "com.apple.Music": ["iTunes"],
+        "com.apple.iCal": ["iCal"],
+        "com.apple.AddressBook": ["Address Book"],
+        "com.apple.ActivityMonitor": ["Task Manager"],
+        "com.apple.Photos": ["iPhoto"],
+    ]
+
+    public static func aliases(forBundleID id: String?) -> [String] { id.flatMap { aliases[$0] } ?? [] }
+
+    /// How well a query matches an app by its name or any other name it goes by.
+    public static func score(_ query: String, name: String, bundleID: String?) -> Int? {
+        ([name] + aliases(forBundleID: bundleID)).compactMap { Fuzzy.score(query, $0) }.max()
     }
 }

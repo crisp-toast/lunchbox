@@ -2265,9 +2265,7 @@ final class Tiler {
         case .grow: resize(by: Self.resizeStep)
         case .shrink: resize(by: -Self.resizeStep)
         case .resizeMode(let on): resizeMode(on)
-        case .resizeAlong(let direction):
-            resize(by: direction == .right || direction == .up ? Self.sideStep : -Self.sideStep,
-                   horizontal: direction == .left || direction == .right)
+        case .resizeAlong(let direction): resize(toward: direction)
         case .switchSpace(let i): switchSpace(to: i, focusing: nil)
         case .sendToSpace(let i): send(toSpace: i, follow: true)
         case .close: closeFocused()
@@ -2339,7 +2337,7 @@ final class Tiler {
     /// How much one arrow press in resize mode changes a side (a share of the screen).
     static let sideStep = 0.05
 
-    private static let resizeHelp = "Resize:  →  wider   ←  narrower   ↑  taller   ↓  shorter   ↩  done"
+    private static let resizeHelp = "Resize:  the arrows push the window's edges   ↩  done"
 
     /// Resize mode on (⌘⇧R) or off: the line says what the arrows do while it's on.
     private func resizeMode(_ on: Bool) {
@@ -2354,11 +2352,12 @@ final class Tiler {
         focusedID.flatMap { id in windows[id].flatMap { w in displays.first { $0.frame.contains((w.target ?? w.frame).center) } } }
     }
 
-    /// Width or height alone, for resize mode.
-    private func resize(by delta: Double, horizontal: Bool) {
+    /// Resize mode's arrows: they push the window's edge on their side (`Layout.resize(_:toward:)`).
+    private func resize(toward direction: Direction) {
+        let horizontal = direction == .left || direction == .right
         guard let id = focusedID, let (space, uuid) = place(of: id), space == currentSpace,
               var layout = spaces[space][uuid], let d = activeDisplays.first(where: { $0.uuid == uuid }) else { return }
-        if layout.resize(id, by: delta, horizontal: horizontal, in: d.visible, gap: Self.gap) {
+        if layout.resize(id, toward: direction, by: Self.sideStep, in: d.visible, gap: Self.gap) {
             spaces[space][uuid] = layout
             relayout(animated: true)
             persist()

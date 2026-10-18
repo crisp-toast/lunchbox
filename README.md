@@ -39,7 +39,7 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + ← → | Move the window one step sideways: first it stacks with its neighbor, a second press moves it past |
 | Left ⌘ ⇧ + ↑ ↓ | Swap with the window above or below in a stack |
 | Left ⌘ ⇧ + plus / minus | Give the window more or less space (a lone window, or one in Focus, grows or shrinks around the center) |
-| Left ⌘ ⇧ + R | **Resize**: then → wider, ← narrower, ↑ taller, ↓ shorter (hold to keep going); Return or Esc when done |
+| Left ⌘ ⇧ + R | **Resize**: then the arrows push the window's edges (hold to keep going); Return or Esc when done |
 | Left ⌘ ⇧ + F | **Focus**: the window alone in the center, the rest of the Workspace on the Shelf. Again, a click on a Shelf card, ⌘ (or ⌘ ⇧) with any arrow, or a file dragged onto a Shelf card ends it |
 | Left ⌘ ⇧ + H | **Hide** the window: it moves to the last Workspace (3, unless you added more) |
 | Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
@@ -48,10 +48,12 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | ⇧ Space | **Summon**: open an app, or go to any open window, file or website |
 | Left ⌘ ⇧ + Space | The **Cheat Sheet**: every shortcut, with search |
 
-**Resize mode** (Left ⌘ ⇧ + R) changes the width or the height alone: a tiled window's column gets
-wider or narrower, or its share of its stack taller or shorter, and a centered window (alone, or in
-Focus) changes just that side and stays centered. A line at the bottom of the screen says what the
-arrows do; it ends with Return, Esc, any other key, or after five seconds without one.
+**Resize mode** (Left ⌘ ⇧ + R): an arrow pushes the window's edge on its side, so it works the way
+the window sits. In the right column ← makes it wider and → narrower; in the left column the other
+way round; at the top of a stack ↓ makes it taller, at the bottom ↑. Only the edge it shares with
+its neighbor moves. A centered window (alone, or in Focus) grows with → and ↑ and shrinks with ←
+and ↓, around its center. A line at the bottom of the screen says it's on; it ends with Return,
+Esc, any other key, or after five seconds without one.
 
 Workspaces are ⌘ and their number, and ⌘⇧ and the number takes the window along, like ⌘⇧ and an
 arrow moves it. Right ⌘ and a number still reaches the app in front (a browser's tabs, say), right
@@ -102,12 +104,16 @@ Apps you open often rise to the top.
   more of what you typed come first, then the ones you used most recently. Window rows sit below
   apps whose name you typed and above files. It's plain word matching on titles read as Summon
   opens, so typing never waits on another app, and titles are never saved.
-- **Files and folders** come from Spotlight's index as you type (two letters or more), alongside
-  apps and windows and listed after them, with at least two rows kept for them. A name that is what
-  you typed comes first, then names that start with it, then names with a word starting each typed
-  word; among those, the Desktop, Documents and Downloads (on this Mac or in iCloud Drive) come
-  before deeper folders, then the most recently used. iCloud Drive and cloud storage folders
-  (Dropbox, Google Drive) are searched; the rest of Library, hidden files and apps aren't.
+- **Files and folders** come from Spotlight's index as you type (two letters or more), after apps
+  and windows, three at most. Only things you'd look for: documents, pictures, video, music and
+  downloads (not data, scripts, code or logs that programs leave behind), in your Desktop,
+  Documents and Downloads, iCloud Drive and cloud folders (Dropbox, Google Drive), at most three
+  folders in. A name that is what you typed comes first, then names that start with it, then names
+  with a word starting each typed word; among those, the most recently used.
+- **Apps go by their other names too**: "simulator" finds Device Hub (Xcode 27 put Simulator in
+  it), "system preferences" finds System Settings, "itunes" finds Music. Xcode's own tools are
+  found wherever that version of Xcode keeps them, and so are apps in another drive's
+  Applications folder.
   macOS hides the files in Desktop, Documents and Downloads from apps it hasn't let into those
   folders, Spotlight's answers included, and only asks once an app looks inside one. Tessel never
   looks on its own, so nothing pops up while you type: until you've answered, file searches end

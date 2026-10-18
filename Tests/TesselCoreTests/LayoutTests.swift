@@ -375,3 +375,63 @@ func layout(_ columns: [[WindowID]]) -> Layout {
         #expect(abs(narrower.midX - before.midX) <= 1)
     }
 }
+
+@Suite struct ArrowsPushEdges {
+    func frame(_ l: Layout, _ id: WindowID) throws -> CGRect { try #require(l.frames(in: screen, gap: gap)[id]) }
+
+    @Test func inTheRightColumnLeftWidensAndRightNarrows() throws {
+        var l = layout([[1], [2]])
+        let before = try frame(l, 2)
+        let wider = l.resize(2, toward: .left, by: 0.05, in: screen, gap: gap)
+        #expect(wider)
+        let after = try frame(l, 2)
+        #expect(after.width > before.width && after.minX < before.minX && after.maxX == before.maxX) // its left edge moved left
+        let narrower = l.resize(2, toward: .right, by: 0.05, in: screen, gap: gap)
+        #expect(narrower)
+        #expect(try frame(l, 2).width < after.width)
+    }
+
+    @Test func inTheLeftColumnRightWidensAndLeftNarrows() throws {
+        var l = layout([[1], [2]])
+        let before = try frame(l, 1)
+        let wider = l.resize(1, toward: .right, by: 0.05, in: screen, gap: gap)
+        #expect(wider)
+        let after = try frame(l, 1)
+        #expect(after.width > before.width && after.minX == before.minX) // its right edge moved right
+        let narrower = l.resize(1, toward: .left, by: 0.05, in: screen, gap: gap)
+        #expect(narrower)
+        #expect(try frame(l, 1).width < after.width)
+    }
+
+    @Test func atTheTopDownIsTallerAtTheBottomUpIs() throws {
+        var l = layout([[1, 2], [3]])
+        let top = try frame(l, 1), bottom = try frame(l, 2)
+        let topTaller = l.resize(1, toward: .down, by: 0.05, in: screen, gap: gap)
+        #expect(topTaller)
+        #expect(try frame(l, 1).height > top.height)
+        var m = layout([[1, 2], [3]])
+        let bottomTaller = m.resize(2, toward: .up, by: 0.05, in: screen, gap: gap)
+        #expect(bottomTaller)
+        let b = try #require(m.frames(in: screen, gap: gap)[2])
+        #expect(b.height > bottom.height && b.maxY == bottom.maxY) // its top edge moved up
+    }
+
+    @Test func onlyTheSharedEdgeMoves() throws {
+        // Three columns: the middle one grows right; the left column doesn't move at all.
+        var l = layout([[1], [2], [3]])
+        let left = try frame(l, 1)
+        let grew = l.resize(2, toward: .right, by: 0.05, in: screen, gap: gap)
+        #expect(grew)
+        #expect(try frame(l, 1) == left)
+        let right = try frame(l, 3), rightBefore = try frame(layout([[1], [2], [3]]), 3)
+        #expect(right.width < rightBefore.width)
+    }
+
+    @Test func aCenteredWindowStillGrowsWithRightAndUp() throws {
+        var l = layout([[1]])
+        let before = try frame(l, 1)
+        let grew = l.resize(1, toward: .right, by: 0.05, in: screen, gap: gap)
+        #expect(grew)
+        #expect(try frame(l, 1).width > before.width)
+    }
+}

@@ -177,11 +177,16 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         var roots = [
             "/Applications", "/Applications/Utilities", "/System/Applications", "/System/Applications/Utilities",
             "/System/Library/CoreServices/Applications", NSHomeDirectory() + "/Applications",
-            "/Volumes/Master Storage/Applications",
         ]
-        // Xcode's own tools (Simulator, Instruments, …).
+        // Apps kept on another drive, in its own Applications folder.
+        for volume in (try? fm.contentsOfDirectory(atPath: "/Volumes")) ?? [] where !volume.hasPrefix(".") {
+            roots.append("/Volumes/\(volume)/Applications")
+        }
+        // Xcode's own tools: Contents/Applications from Xcode 27 (Device Hub, which has Simulator,
+        // Instruments, …), Contents/Developer/Applications before it.
         if let xcodes = try? fm.contentsOfDirectory(atPath: "/Applications") {
             for x in xcodes where x.hasPrefix("Xcode") && x.hasSuffix(".app") {
+                roots.append("/Applications/\(x)/Contents/Applications")
                 roots.append("/Applications/\(x)/Contents/Developer/Applications")
             }
         }
@@ -254,7 +259,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
                 .map { ($0, 0) }
         } else {
             ranked = apps.compactMap { app -> (App, Int, Int)? in
-                guard let s = Fuzzy.score(query, app.name) else { return nil }
+                guard let s = AppNames.score(query, name: app.name, bundleID: app.bundleID) else { return nil }
                 return (app, s, s + min(uses[app.url.path] ?? 0, 40) * 25)
             }
             .sorted { $0.2 > $1.2 }
@@ -333,7 +338,9 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         let parts = terms.map { NSPredicate(format: "%K LIKE[cd] %@", NSMetadataItemFSNameKey, "*\($0)*") }
         // NSMetadataQuery throws on an AND of just one predicate.
         q.predicate = parts.count == 1 ? parts[0] : NSCompoundPredicate(andPredicateWithSubpredicates: parts)
-        q.searchScopes = [NSMetadataQueryUserHomeScope, URL(fileURLWithPath: "/Volumes/Master Storage")]
+        // Only where you keep your things (Desktop, Documents, Downloads, iCloud Drive, cloud folders).
+        q.searchScopes = FileSearch.roots(home: NSHomeDirectory()).filter { FileManager.default.fileExists(atPath: $0) }
+            .map { URL(fileURLWithPath: $0) }
         q.sortDescriptors = [NSSortDescriptor(key: "kMDItemLastUsedDate", ascending: false)]
         NotificationCenter.default.addObserver(self, selector: #selector(filesFound(_:)), name: .NSMetadataQueryDidFinishGathering, object: q)
         NotificationCenter.default.addObserver(self, selector: #selector(filesFound(_:)), name: .NSMetadataQueryDidUpdate, object: q)
@@ -358,7 +365,12 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         DispatchQueue.global(qos: .userInitiated).async {
             let data = out.fileHandleForReading.readDataToEndOfFile()
             mdfind.waitUntilExit()
-            let paths = data.split(separator: 0).prefix(300).map { String(decoding: $0, as: UTF8.self) }
+            let home = NSHomeDirectory()
+            let paths = data.split(separator: 0).prefix(300).map { String(decoding: $0, as: UTF8.self) }.filter { path in
+                var folder: ObjCBool = false
+                FileManager.default.fileExists(atPath: path, isDirectory: &folder)
+                return FileSearch.isWorthShowing(path, isFolder: folder.boolValue, home: home)
+            }
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.freshSearch === mdfind else { return } // a newer search took over
                 self.freshSearch = nil
@@ -383,9 +395,9 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         var paths: [String] = []
         for i in 0..<min(q.resultCount, 300) where paths.count < 60 {
             guard let item = q.result(at: i) as? NSMetadataItem,
-                  let path = item.value(forAttribute: NSMetadataItemPathKey) as? String,
-                  !FileSearch.isHidden(path, home: home) else { continue }
-            paths.append(path)
+                  let path = item.value(forAttribute: NSMetadataItemPathKey) as? String else { continue }
+            let isFolder = (item.value(forAttribute: NSMetadataItemContentTypeKey) as? String) == "public.folder"
+            if FileSearch.isWorthShowing(path, isFolder: isFolder, home: home) { paths.append(path) }
         }
         spotlightPaths = paths
         showFiles()
@@ -396,7 +408,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         let home = NSHomeDirectory()
         let query = field.stringValue.trimmingCharacters(in: .whitespaces)
         fileRows = FileSearch.rank(FileSearch.merge(spotlightPaths, freshPaths, home: home), query: query, home: home)
-            .prefix(Self.maxRows).map { .file(URL(fileURLWithPath: $0)) }
+            .prefix(Summon.maxFiles).map { .file(URL(fileURLWithPath: $0)) }
     }
 
     /// New files arrived: a row you moved to stays highlighted; otherwise the top row is.

@@ -7,7 +7,7 @@ public enum KeyAction: Equatable, Sendable {
     case shrink
     /// Resize mode on or off: while it's on, arrows change only the width or only the height.
     case resizeMode(Bool)
-    /// One side only: right is wider, left narrower, up taller, down shorter.
+    /// Resize mode's arrow: pushes the window's edge on that side (see `Layout.resize(_:toward:)`).
     case resizeAlong(Direction)
     case close
     /// Hides the focused window by moving it to space 3.

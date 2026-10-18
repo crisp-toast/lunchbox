@@ -82,7 +82,7 @@ public enum Command: String, CaseIterable, Codable, Sendable {
         case .moveDown: return "Move the window down in its stack"
         case .grow: return "Give the window more space"
         case .shrink: return "Give the window less space"
-        case .resize: return "Resize: then → wider, ← narrower, ↑ taller, ↓ shorter"
+        case .resize: return "Resize: then the arrows push the window's edges"
         case .focusMode: return "Focus: this window centered, the rest on the Shelf"
         case .tidy: return "Tidy: even out every window in this Workspace"
         case .hide: return "Hide: send the window to the last Workspace and stay here"

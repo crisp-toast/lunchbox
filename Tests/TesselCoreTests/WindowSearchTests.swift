@@ -162,15 +162,23 @@ import Testing
             == ["file:Lunch menu.pdf", "app:Launchpad"])
     }
 
-    @Test func filesKeepTwoRowsWhateverElseMatches() {
+    @Test func filesKeepOneRowAndNeverMoreThanThree() {
         let windows = (1...10).map { "Notes \($0)" }
         let rows = order("notes", apps: ["Notes"], windows: windows, files: ["a.txt", "b.txt", "c.txt"], limit: 8)
         #expect(rows.count == 8)
         #expect(rows.first == "app:Notes")
-        #expect(rows.suffix(2) == ["file:a.txt", "file:b.txt"])
-        // With room to spare, files take it.
-        #expect(order("notes", apps: ["Notes"], windows: [], files: ["a.txt", "b.txt", "c.txt"])
+        #expect(rows.last == "file:a.txt")
+        // With room to spare, three at most.
+        #expect(order("notes", apps: ["Notes"], windows: [], files: ["a.txt", "b.txt", "c.txt", "d.txt", "e.txt"])
             == ["app:Notes", "file:a.txt", "file:b.txt", "file:c.txt"])
+    }
+
+    @Test func appsGoByTheirOtherNamesToo() {
+        // Xcode 27 has no Simulator app: it's in Device Hub.
+        #expect(AppNames.score("simulator", name: "DeviceHub", bundleID: "com.apple.dt.Devices") != nil)
+        #expect(Fuzzy.matchesName(AppNames.score("simulator", name: "DeviceHub", bundleID: "com.apple.dt.Devices")!))
+        #expect(AppNames.score("system pref", name: "System Settings", bundleID: "com.apple.systempreferences") != nil)
+        #expect(AppNames.score("simulator", name: "Notes", bundleID: "com.apple.Notes") == nil)
     }
 
     @Test func theListStopsAtTheLimit() {
