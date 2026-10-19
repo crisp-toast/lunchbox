@@ -1302,18 +1302,26 @@ final class Tiler {
                 // (a tile planned now would be one of a layout about to change again).
                 if !self.isBursting(app.pid) { self.prePlace(info, app: app) }
                 self.scheduleScan(app, after: [0, 0.4])
-                if !isOnScreen(info.id) { self.scanWhenOnScreen(info.id, app: app, until: CACurrentMediaTime() + 2) }
+                // Some apps make their window seconds before they show it, while they start (Claude
+                // and other Electron apps): one that will tile is watched for longer, so it still
+                // gets its tile when it shows.
+                if !isOnScreen(info.id) {
+                    let now = CACurrentMediaTime()
+                    self.scanWhenOnScreen(info.id, app: app, since: now, until: now + (info.tileable ? 30 : 2))
+                }
             }
         }
     }
 
-    /// Looks every few milliseconds until a window that was just made is on screen.
-    private func scanWhenOnScreen(_ id: CGWindowID, app: AppHandle, until deadline: CFTimeInterval) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.008) { [weak self, weak app] in
+    /// Looks every few milliseconds until a window that was just made is on screen: every 8 ms
+    /// for its first 2 s, then every 50 ms until `deadline`.
+    private func scanWhenOnScreen(_ id: CGWindowID, app: AppHandle, since start: CFTimeInterval, until deadline: CFTimeInterval) {
+        let wait = CACurrentMediaTime() - start < 2 ? 0.008 : 0.05
+        DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self, weak app] in
             guard let self, let app, self.enabled, self.apps[app.pid] === app else { return }
             if isOnScreen(id) { self.scheduleScan(app, after: [0]); return }
             guard CACurrentMediaTime() < deadline else { return }
-            self.scanWhenOnScreen(id, app: app, until: deadline)
+            self.scanWhenOnScreen(id, app: app, since: start, until: deadline)
         }
     }
 
@@ -1674,6 +1682,22 @@ final class Tiler {
         }
         for app in stale.values { scheduleScan(app) }
         reparkStrays()
+        rescanUntiled(onScreen: onScreen)
+    }
+
+    /// The other way round: a window that arrived in the last two minutes and is on screen, but
+    /// never got a tile, is looked at again (every 2 s at most). An app may make a window long
+    /// before it shows it, or only make it a normal window later, without telling anyone.
+    private func rescanUntiled(onScreen: Set<CGWindowID>) {
+        let now = CACurrentMediaTime()
+        var apps: [pid_t: AppHandle] = [:]
+        for w in windows.values where now - w.seenAt < 120 && w.standard && !w.hidden && !w.minimized
+            && onScreen.contains(w.id) && place(of: w.id) == nil && !offDisplay.contains(w.id)
+            && !leftAloneApps.contains(w.handle.app.bundleID ?? "") && !Self.floatingApps.contains(w.handle.app.bundleID ?? "") {
+            guard (rechecked[w.id].map { now - $0 >= 2 } ?? true), recheck(w.id) else { continue }
+            apps[w.pid] = w.handle.app
+        }
+        for app in apps.values { scheduleScan(app) }
     }
 
     /// macOS 27 now and then pulls a parked window back into view, sometimes in front
@@ -1704,6 +1728,20 @@ final class Tiler {
         appActivated(front)
     }
 
+    /// Windows that took focus without a tile, and when they were last looked at again.
+    private var rechecked: [CGWindowID: CFTimeInterval] = [:]
+
+    /// Whether to look again at a known window that took focus without a tile: not one you
+    /// floated or a dialog (they float on purpose), and at most once a second each.
+    private func recheck(_ id: CGWindowID) -> Bool {
+        guard windows[id] != nil, !userFloating.contains(id), !centeredDialogs.contains(id) else { return false }
+        let now = CACurrentMediaTime()
+        if let last = rechecked[id], now - last < 1 { return false }
+        if rechecked.count > 500 { rechecked = rechecked.filter { now - $0.value < 60 } }
+        rechecked[id] = now
+        return true
+    }
+
     private func focusChanged(to id: CGWindowID, app: AppHandle) {
         guard enabled else { return }
         checkForGhosts()
@@ -1712,7 +1750,9 @@ final class Tiler {
             // may have been tiled only after it got focus), so focus goes back there after.
             if let tile = focusedID, place(of: tile)?.space == currentSpace { lastFocused[currentSpace] = tile }
             focusedID = id
-            if windows[id] == nil { scheduleScan(app) }
+            // One LunchboxWM doesn't know yet, or knows but never tiled: an app that showed its
+            // window long after making it (Claude, while it starts) has it ready only now.
+            if windows[id] == nil || recheck(id) { scheduleScan(app) }
             return
         }
         let now = CACurrentMediaTime()
