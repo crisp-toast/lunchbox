@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>LunchboxWM</title>
-<meta name="description" content="Break free from the pile of windows. LunchboxWM tiles every window as it opens: dialogs float, fixed-size apps keep their size, and there's no config file. Try it free for 7 days, then $9.99 once.">
+<meta name="description" content="Break free from the pile of windows. LunchboxWM tiles every window as it opens: dialogs float, fixed-size apps keep their size, and there's no config file. $4.99 once.">
 <link rel="icon" href="logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -45,7 +45,7 @@ h2 { font-size: clamp(30px, 4.6vw, 46px); font-weight: 600; line-height: 1.06; l
 h3 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
 p { margin: 0; }
 .lede { color: var(--muted); font-size: 18px; max-width: 34em; margin-inline: auto; }
-.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+.eyebrow { font: 600 15px/1.2 var(--text); letter-spacing: -0.005em; color: var(--accent); }
 
 /* Nav: floats as a pill once you scroll */
 .nav {
@@ -64,6 +64,7 @@ p { margin: 0; }
 .brand svg { width: 28px; height: 28px; }
 /* The name: LunchboxWM, with WM in the brand blue. */
 .wm { color: var(--accent); }
+.btn.dark .wm { color: inherit; }
 .nav-links { display: flex; gap: 28px; font-size: 14.5px; color: #4b525b; }
 .nav-links a { text-decoration: none; }
 .nav-links a:hover { color: var(--ink); }
@@ -82,7 +83,8 @@ p { margin: 0; }
 .btn.dark .price { font-weight: 500; color: rgba(255,255,255,.78); }
 .btn svg { width: 16px; height: 16px; }
 .btn.small { height: 38px; padding: 0 14px; font-size: 14px; border-radius: 11px; }
-.buy-note { font-size: 13px; color: var(--accent-deep); min-height: 1.4em; }
+.buy-note { font-size: 13px; color: var(--accent-deep); }
+.buy-note:empty { display: none; }
 
 /* Hero: colored glass breaking behind the headline, then holding mid-fall */
 .hero {
@@ -497,7 +499,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   <div class="nav-inner">
     <a class="brand" href="#top"><svg><use href="#logo"/></svg><span>Lunchbox<span class="wm">WM</span></span></a>
     <div class="nav-links"><a href="#why">Features</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></div>
-    <a class="btn dark small" href="download/LunchboxWM.dmg">Try it free</a>
+    <a class="btn dark small" href="#pricing">Buy · $4.99</a>
   </div>
 </nav>
 
@@ -512,10 +514,10 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     <h1>Break free from the <br><span class="bad">pile of windows</span>.</h1>
     <p class="lede">Lunchbox is the ultimate window manager for Mac. Every window opens neatly based on what it is. No account, no backend, no complexity.</p>
     <div class="actions">
-      <a class="btn dark" href="download/LunchboxWM.dmg">Try free for 7 days</a>
-      <a class="btn" href="#pricing">Buy once · $9.99</a>
+      <a class="btn dark" href="#pricing">Buy once · $4.99</a>
+      <a class="btn" href="#how">See how it works</a>
     </div>
-    <div class="meta"><span>No account, no card to try<sup class="fn"><a href="#fn-trial" aria-label="Footnote 1">1</a></sup></span><span>One-time purchase, lifetime updates<sup class="fn"><a href="#fn-lifetime" aria-label="Footnote 2">2</a></sup></span><span>macOS 14 or later, Apple silicon<sup class="fn"><a href="#fn-silicon" aria-label="Footnote 3">3</a></sup></span></div>
+    <div class="meta"><span>No subscription, no account</span><span>One-time purchase, lifetime updates<sup class="fn"><a href="#fn-lifetime" aria-label="Footnote 1">1</a></sup></span><span>macOS 14 or later, Apple silicon<sup class="fn"><a href="#fn-silicon" aria-label="Footnote 2">2</a></sup></span></div>
     </div>
   </section>
 
@@ -621,12 +623,12 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     <div style="display:grid;gap:14px">
       <span class="eyebrow">Pricing</span>
       <h2>One price.<br>Every version after it.</h2>
-      <p class="lede"><strong>No subscription.</strong> No account. Pay $9.99 once, and every Lunchbox we ever ship is yours.</p>
+      <p class="lede"><strong>No subscription.</strong> No account. Pay $4.99 once, and every Lunchbox we ever ship is yours.</p>
     </div>
     <div class="price-card">
       <div class="price-top"><svg><use href="#logo"/></svg><div><b>Lunchbox<span class="wm">WM</span></b><small>For your Mac, for good</small></div></div>
-      <div class="amount"><strong>$9.99</strong><sup class="fn"><a href="#fn-price" aria-label="Footnote 4">4</a></sup><span>USD, one-time</span></div>
-      <div class="pills"><span class="lifetime">No subscription, ever</span><span class="lifetime">Lifetime updates included<sup class="fn"><a href="#fn-lifetime" aria-label="Footnote 2">2</a></sup></span></div>
+      <div class="amount"><strong>$4.99</strong><sup class="fn"><a href="#fn-price" aria-label="Footnote 3">3</a></sup><span>USD, one-time</span></div>
+      <div class="pills"><span class="lifetime">No subscription, ever</span><span class="lifetime">Lifetime updates included<sup class="fn"><a href="#fn-lifetime" aria-label="Footnote 1">1</a></sup></span></div>
       <ul class="checks">
         <li>Automatic tiling that knows dialogs and fixed-size apps</li>
         <li>Focus, Tidy, Resize and instant Workspaces (three to start, up to nine)</li>
@@ -638,12 +640,11 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       </ul>
       <form class="buy-form" id="buy-form" method="post" action="api/checkout">
         <input type="hidden" name="attempt" id="attempt" value="">
-        <button class="btn dark" type="submit" id="buy-button"><span>Buy Lunchbox<span class="wm">WM</span> · $9.99</span></button>
+        <button class="btn dark" type="submit" id="buy-button"><span>Buy Lunchbox<span class="wm">WM</span> · $4.99</span></button>
       </form>
-      <a class="btn" href="download/LunchboxWM.dmg">Try free for 7 days</a>
       <p class="buy-note" id="buy-note" aria-live="polite"></p>
-      <p class="fine">Try it free for 7 days,<sup class="fn"><a href="#fn-trial" aria-label="Footnote 1">1</a></sup> then pay $9.99 once to keep tiling. No subscription. Refunds within 14 days, no questions.</p>
-      <p class="fine">macOS 14 Sonoma or later · Apple silicon<sup class="fn"><a href="#fn-silicon" aria-label="Footnote 3">3</a></sup></p>
+      <p class="fine">Pay once, then download it and enter your license. No subscription. Refunds within 14 days, no questions.</p>
+      <p class="fine">macOS 14 Sonoma or later · Apple silicon<sup class="fn"><a href="#fn-silicon" aria-label="Footnote 2">2</a></sup></p>
       <p class="fine"><a href="recover.html">Already bought it? Get your license again</a></p>
     </div>
   </section>
@@ -651,9 +652,9 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   <section class="faq" id="faq">
     <h2>Frequent Questions</h2>
     <div>
-      <details><summary>Why pay when there are free tiling window managers?</summary><p>Free tilers are great if you enjoy configuring them. Lunchbox is for everyone else: dialogs, fixed-size apps and new windows are handled from the start, Workspaces are instant without turning anything off in macOS, and there's no config file. Try it free for 7 days and see if it's worth $9.99 to you.</p></details>
-      <details><summary>Is there a subscription?</summary><p>No, and there never will be. You pay $9.99 once and Lunchbox is yours, including every future version. Nothing renews and you're never charged again.</p></details>
-      <details><summary>Can I try it before I buy?</summary><p>Yes. Download it and every feature works for 7 days, with no email or card needed. If you buy and change your mind, you have 14 days for a full refund.</p></details>
+      <details><summary>Why pay when there are free tiling window managers?</summary><p>Free tilers are great if you enjoy configuring them. Lunchbox is for everyone else: dialogs, fixed-size apps and new windows are handled from the start, Workspaces are instant without turning anything off in macOS, and there's no config file. And if it isn't for you, you get your $4.99 back within 14 days.</p></details>
+      <details><summary>Is there a subscription?</summary><p>No, and there never will be. You pay $4.99 once and Lunchbox is yours, including every future version. Nothing renews and you're never charged again.</p></details>
+      <details><summary>Is there a free trial?</summary><p>No. Lunchbox is $4.99, paid once, up front. The recording and the walkthrough above show exactly how it works, and if it isn't right for you, you get a full refund within 14 days, no questions asked.</p></details>
       <details><summary><span>What does Lunchbox need permission for?</span></summary><p><strong>Accessibility</strong> is required: it's how Lunchbox moves and resizes other apps' windows and hears its shortcuts. <strong>Screen Recording</strong> is asked the first time the Focus Shelf appears, so the Shelf can show live previews of your windows instead of app icons. <strong>Browser control</strong> is asked the first time Summon sends a web search to Safari, Chrome, Arc, Edge, Brave or Vivaldi, so the page opens as a tab in the Workspace you're in; say no and links open the usual way. There are no folder prompts: Summon doesn't search your files.</p></details>
       <details><summary>Will it take over my keyboard?</summary><p>Only a handful of combinations, all with the left ⌘ key, plus ⇧ then Space for Summon (tapped one after the other, so typing a capital and a space never opens it). Right ⌘ keeps doing what it always did: ⌘← still jumps to the start of a line, and ⌘1 still picks a browser tab.</p></details>
       <details><summary>Can I change the shortcuts?</summary><p>Yes, every one. Open Keyboard Shortcuts from the menu bar, click a command and press the keys you want. Lunchbox turns down combinations that would get in the way of typing or that another command already uses, and Restore All Defaults puts everything back.</p></details>
@@ -669,13 +670,12 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     <svg class="icon"><use href="#logo"/></svg>
     <h2>Go on, open another window.</h2>
     <p class="lede">It already knows where to go.</p>
-    <div class="actions"><a class="btn dark" href="download/LunchboxWM.dmg">Try free for 7 days</a><a class="btn" href="#pricing">Buy once · $9.99</a></div>
+    <div class="actions"><a class="btn dark" href="#pricing">Buy once · $4.99</a><a class="btn" href="#how">See how it works</a></div>
     <p class="fine">One-time purchase · No subscription · Lifetime updates</p>
   </section>
 
   <section class="footnotes" id="footnotes" aria-label="Footnotes">
     <ol>
-      <li id="fn-trial">The free trial lasts 7 days from the first time you open Lunchbox<span class="wm">WM</span>, with every feature. No email or card needed to try it. When it ends, tiling pauses (your windows stay where they are) until you enter a license.</li>
       <li id="fn-lifetime">Every future version of Lunchbox<span class="wm">WM</span> we release is included at no extra charge. See the <a href="terms.html">Terms of Sale</a>.</li>
       <li id="fn-silicon">Requires a Mac with Apple silicon (M1 or later) and macOS 14 Sonoma or later. Lunchbox<span class="wm">WM</span> doesn't run on Intel-based Macs.</li>
       <li id="fn-price">Price in US dollars. Sales tax or VAT is added at checkout where it applies.</li>
@@ -711,7 +711,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     buyLabel.textContent = "Opening secure checkout…";
   });
   // Back from Stripe with the browser's Back button: the button works again.
-  addEventListener("pageshow", () => { buyButton.disabled = false; buyLabel.innerHTML = 'Buy Lunchbox<span class="wm">WM</span> · $9.99'; });
+  addEventListener("pageshow", () => { buyButton.disabled = false; buyLabel.innerHTML = 'Buy Lunchbox<span class="wm">WM</span> · $4.99'; });
   if (new URLSearchParams(location.search).get("checkout") === "unavailable") {
     buyNote.textContent = "Checkout didn't open, and you weren't charged. Please try again in a minute.";
   }
@@ -948,9 +948,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     { title: "Move focus", hint: "left ⌘ + arrows", steps: [
       { win: four, focus: "A", keys: [], cap: "Hold the left ⌘ key and point with the arrows." },
       { win: four, focus: "C", keys: ["Left ⌘", "→"], cap: "Focus jumps to the window on the right." },
-      { win: four, focus: "D", keys: ["Left ⌘", "↓"], cap: "Down to the one below." },
-      { win: four, focus: "B", keys: ["Left ⌘", "←"], cap: "And back to the left." },
-      { win: four, focus: "A", keys: ["Left ⌘", "↑"], cap: "Right ⌘ is left alone, so it still moves your text cursor." },
+      { win: four, focus: "D", keys: ["Left ⌘", "↓"], cap: "Down to the one below. Right ⌘ still moves your text cursor." },
     ]},
     { title: "Move windows", hint: "⇧ + left ⌘ + arrows", steps: [
       { win: four, focus: "D", keys: [], cap: "Add ⇧ to carry the focused window with you." },

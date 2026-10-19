@@ -16,7 +16,7 @@ a { color: inherit; }
 .brand img { width: 28px; height: 28px; }
 /* The name: LunchboxWM, with WM in the brand blue. */
 .wm { color: var(--accent, #2f6bff); }
-.btn.dark .wm { color: #8fb2ff; }
+.btn.dark .wm { color: inherit; }
 main { padding-block: 28px 64px; display: grid; gap: 22px; }
 h1 { font: 600 clamp(30px, 6vw, 42px)/1.08 var(--display); letter-spacing: -0.04em; margin: 0; text-wrap: balance; }
 h2 { font: 600 21px/1.25 var(--display); letter-spacing: -0.02em; margin: 26px 0 6px; }

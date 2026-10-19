@@ -8,9 +8,9 @@ the steps below need your accounts, so they're yours to do.
 1. **Try:** anyone downloads `download/LunchboxWM.dmg`. Every feature works for **7 days** from the
    first launch (`Trial.days` in `Sources/LunchboxCore/License.swift`). Then tiling pauses, windows
    stay put, and LunchboxWM offers Buy and Enter License.
-2. **Buy:** the pricing card's **Buy LunchboxWM · $9.99** posts to `/api/checkout`, which opens
+2. **Buy:** the pricing card's **Buy LunchboxWM · $4.99** posts to `/api/checkout`, which opens
    Stripe's hosted checkout:
-   - one LunchboxWM at $9.99 USD, with Stripe Tax adding sales tax or VAT;
+   - one LunchboxWM at $4.99 USD, with Stripe Tax adding sales tax or VAT;
    - the system requirements on the pay button;
    - a required Terms checkbox, which also records EU/UK consent to immediate delivery.
 
@@ -53,7 +53,7 @@ leak it and anyone can.
    - Activate the account as Sentient Donut LLC.
    - Public details: support email `support@sentientdonut.com`; Terms, Privacy and Refund URLs
      on the store domain.
-   - Add a product "LunchboxWM" with a **$9.99 one-time** price, tax behavior **exclusive** and tax
+   - Add a product "LunchboxWM" with a **$4.99 one-time** price, tax behavior **exclusive** and tax
      code `txcd_10202000` (downloadable software, personal use). Put its `price_…` id in
      `wrangler.toml`.
    - **Stripe Tax:** turn it on and add your registrations. Texas taxes software. Selling to

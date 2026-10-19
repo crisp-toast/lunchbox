@@ -80,7 +80,7 @@ Focused Window" now enters real Focus.
     `scripts/release.sh 1.0`.
 13. **Stripe.** In this order:
     - activate the account as Sentient Donut LLC;
-    - add the $9.99 product (tax code `txcd_10202000`);
+    - add the $4.99 product (tax code `txcd_10202000`);
     - turn on Stripe Tax with a Texas registration;
     - either register for EU and UK VAT, or block those countries until you do;
     - create the restricted key and the webhook for its 4 events;
