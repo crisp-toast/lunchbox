@@ -1,16 +1,14 @@
 import AppKit
 import LunchboxCore
 
-/// ⇧Space: a small, instant app, window and file launcher.
+/// ⇧Space: a small, instant app and window launcher.
 ///
 /// Apps are listed from the Applications folders into memory, so matching runs
 /// on every keystroke with no disk access. An app that's already open gets two
 /// rows: go to its window, or open a new one. Open windows are found by the words
 /// in their titles, from a snapshot taken as the panel opens, so typing never
-/// waits on another app. Spotlight's index is searched for files and folders as
-/// you type, listed after the windows. Apps you open often rise. macOS hides the
-/// files in Desktop, Documents and Downloads until you let LunchboxWM in, so until
-/// you've answered, file searches end with a row that asks (FolderAccess).
+/// waits on another app. Apps you open often rise. Summon doesn't search files: that
+/// would need macOS's permission prompts for Desktop, Documents and Downloads.
 final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     struct App {
         let name: String
@@ -27,26 +25,20 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         case app(App, running: NSRunningApplication?, reachable: Bool, newWindow: Bool)
         /// An open window, found by its title or app: Return goes to it, wherever it is.
         case window(Tiler.OpenWindow)
-        case file(URL)
         /// Nothing matched: search the web for the text, or open it if it's an address.
         case web(String)
-        /// Let LunchboxWM into Desktop, Documents and Downloads, so their files show: Return
-        /// brings up macOS's prompts, ⇧↩ hides the row for good.
-        case folderAccess
 
         var path: String {
             switch self {
             case .app(let a, _, _, _): return a.url.path
-            case .file(let url): return url.path
-            case .window, .web, .folderAccess: return ""
+            case .window, .web: return ""
             }
         }
 
-        /// The smaller second line, chosen with ⇧↩: a new window, or no more asking.
+        /// The smaller second line, chosen with ⇧↩: a new window.
         var secondLine: (text: String, symbol: String)? {
             switch self {
             case .app(let a, _, true, true): return ("New \(a.name) window", "plus.rectangle.on.rectangle")
-            case .folderAccess: return ("Don't show this again", "eye.slash")
             default: return nil
             }
         }
@@ -56,9 +48,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             switch self {
             case .app(let a, _, _, _): return "app " + a.url.path
             case .window(let w): return "window \(w.id)"
-            case .file(let url): return "file " + url.path
             case .web: return "web"
-            case .folderAccess: return "folder access"
             }
         }
     }
@@ -75,22 +65,10 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     /// The open windows as they were when the panel opened, and the search over their words.
     private var openWindows: [CGWindowID: Tiler.OpenWindow] = [:]
     private var windowSearch = WindowSearch([])
-    /// What the query found, kept apart so Spotlight's files can join the list when they arrive.
+    /// What the query found, kept apart until they're put in order.
     private var appRows: [(app: Result, nameScore: Int)] = []
     private var windowRows: [Result] = []
-    private var fileRows: [Result] = []
-    private var fileQuery: NSMetadataQuery?
-    private var fileSearch: DispatchWorkItem?
-    /// The files behind `fileRows`: Spotlight's answer, and a fresh process's answer for the
-    /// folders macOS let LunchboxWM into since it started (`searchAfresh`).
-    private var spotlightPaths: [String] = []
-    private var freshPaths: [String] = []
-    private var freshSearch: Process?
-    /// Folders LunchboxWM could read once you chose the folder offer, this time LunchboxWM is running.
-    private var newlyAllowedFolders: [String] = []
     private var icons: [String: NSImage] = [:]
-    /// Checked as the panel opens, while the folder offer is unanswered.
-    private var fullDiskAccess = false
 
     private static let width: CGFloat = 640
     private static let fieldHeight: CGFloat = 56
@@ -123,7 +101,6 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         if appsLoadedAt.map({ Date().timeIntervalSince($0) > 30 }) ?? true { reloadApps() }
         let panel = self.panel ?? makePanel()
         field.stringValue = query
-        if folderAccessAnswer == nil { fullDiskAccess = Self.hasFullDiskAccess() }
         snapshotWindows()
         update()
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main ?? NSScreen.screens[0]
@@ -138,10 +115,6 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     }
 
     func hide() {
-        fileQuery?.stop()
-        fileQuery = nil
-        fileSearch?.cancel()
-        stopFreshSearch()
         panel?.orderOut(nil)
     }
 
@@ -246,11 +219,6 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
 
     private func update(keeping key: String? = nil) {
         let query = field.stringValue.trimmingCharacters(in: .whitespaces)
-        fileSearch?.cancel()
-        fileQuery?.stop()
-        fileQuery = nil
-        stopFreshSearch()
-
         let uses = UserDefaults.standard.dictionary(forKey: "launcherUses") as? [String: Int] ?? [:]
         let ranked: [(app: App, nameScore: Int)]
         if query.isEmpty {
@@ -269,21 +237,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         appRows = ranked.map { (row(for: $0.app), $0.nameScore) }
         windowRows = windowSearch.find(query, listedApps: Set(ranked.compactMap(\.app.bundleID)))
             .compactMap { openWindows[$0.id] }.map { .window($0) }
-        // Files come with every query of two letters or more, not only when no app matches.
-        // Spotlight's last answer stays while it still fits what's typed, until the new one.
-        let terms = FileSearch.terms(in: query)
-        let searchesFiles = FileSearch.searches(query)
-        let fits = { (path: String) in searchesFiles && FileSearch.matches(terms, name: (path as NSString).lastPathComponent) }
-        spotlightPaths = spotlightPaths.filter(fits)
-        freshPaths = freshPaths.filter(fits)
-        rankFiles()
         compose(keeping: key)
-
-        if searchesFiles {
-            let work = DispatchWorkItem { [weak self] in self?.searchFiles(terms) }
-            fileSearch = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.06, execute: work)
-        }
     }
 
     private func row(for app: App) -> Result {
@@ -300,20 +254,16 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         return .app(app, running: running, reachable: reachable, newWindow: newWindow)
     }
 
-    /// Puts the list together: apps named by the query, windows, files, then apps that only
-    /// loosely match, with the web when no app matched, and last the offer to find files in
-    /// Desktop, Documents and Downloads until it's answered. `key` stays highlighted if it's there.
+    /// Puts the list together: apps named by the query, windows, then apps that only loosely
+    /// match, with the web when no app matched. `key` stays highlighted if it's there.
     private func compose(keeping key: String? = nil) {
         let query = field.stringValue.trimmingCharacters(in: .whitespaces)
-        results = Summon.order(apps: appRows, windows: windowRows, files: fileRows, limit: Self.maxRows).map {
+        results = Summon.order(apps: appRows, windows: windowRows, limit: Self.maxRows).map {
             switch $0 {
-            case .app(let r), .window(let r), .file(let r): return r
+            case .app(let r), .window(let r): return r
             }
         }
         if !query.isEmpty, appRows.isEmpty { results.append(.web(query)) }
-        if FolderAccess.offers(query: query, answer: folderAccessAnswer, fullDiskAccess: fullDiskAccess) {
-            results.append(.folderAccess)
-        }
         selected = key.flatMap { k in results.firstIndex { $0.key == k } } ?? 0
         render()
     }
@@ -330,148 +280,11 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             .first { $0.activationPolicy == .regular && !$0.isTerminated }
     }
 
-    /// Files and folders whose name has every typed word in it, from Spotlight's index,
-    /// most recently used first (FileSearch then ranks them).
-    private func searchFiles(_ terms: [String]) {
-        guard !terms.isEmpty else { return }
-        let q = NSMetadataQuery()
-        let parts = terms.map { NSPredicate(format: "%K LIKE[cd] %@", NSMetadataItemFSNameKey, "*\($0)*") }
-        // NSMetadataQuery throws on an AND of just one predicate.
-        q.predicate = parts.count == 1 ? parts[0] : NSCompoundPredicate(andPredicateWithSubpredicates: parts)
-        // Only where you keep your things (Desktop, Documents, Downloads, iCloud Drive, cloud folders).
-        q.searchScopes = FileSearch.roots(home: NSHomeDirectory()).filter { FileManager.default.fileExists(atPath: $0) }
-            .map { URL(fileURLWithPath: $0) }
-        q.sortDescriptors = [NSSortDescriptor(key: "kMDItemLastUsedDate", ascending: false)]
-        NotificationCenter.default.addObserver(self, selector: #selector(filesFound(_:)), name: .NSMetadataQueryDidFinishGathering, object: q)
-        NotificationCenter.default.addObserver(self, selector: #selector(filesFound(_:)), name: .NSMetadataQueryDidUpdate, object: q)
-        fileQuery = q
-        q.start()
-        if !newlyAllowedFolders.isEmpty { searchAfresh(terms) }
-    }
-
-    /// Spotlight keeps answering a running app as it did when the app first asked, so files in a
-    /// folder macOS let LunchboxWM into since it started stay hidden from `NSMetadataQuery` until
-    /// LunchboxWM starts again. Until then, a new `mdfind` searches those folders, and Spotlight
-    /// answers it afresh: it's LunchboxWM's own child, so macOS gives it LunchboxWM's permissions.
-    private func searchAfresh(_ terms: [String]) {
-        let mdfind = Process()
-        mdfind.executableURL = URL(fileURLWithPath: "/usr/bin/mdfind")
-        mdfind.arguments = ["-0"] + newlyAllowedFolders.flatMap { ["-onlyin", $0] } + [FileSearch.mdfindQuery(terms)]
-        let out = Pipe()
-        mdfind.standardOutput = out
-        mdfind.standardError = FileHandle.nullDevice
-        guard (try? mdfind.run()) != nil else { return }
-        freshSearch = mdfind
-        DispatchQueue.global(qos: .userInitiated).async {
-            let data = out.fileHandleForReading.readDataToEndOfFile()
-            mdfind.waitUntilExit()
-            let home = NSHomeDirectory()
-            let paths = data.split(separator: 0).prefix(300).map { String(decoding: $0, as: UTF8.self) }.filter { path in
-                var folder: ObjCBool = false
-                FileManager.default.fileExists(atPath: path, isDirectory: &folder)
-                return FileSearch.isWorthShowing(path, isFolder: folder.boolValue, home: home)
-            }
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.freshSearch === mdfind else { return } // a newer search took over
-                self.freshSearch = nil
-                self.freshPaths = paths
-                self.showFiles()
-            }
-        }
-    }
-
-    private func stopFreshSearch() {
-        if let p = freshSearch, p.isRunning { p.terminate() }
-        freshSearch = nil
-    }
-
-    @objc private func filesFound(_ note: Notification) {
-        guard let q = note.object as? NSMetadataQuery, q === fileQuery else { return }
-        q.disableUpdates()
-        defer { q.enableUpdates() }
-        // The most recently used few dozen, without hidden, app and Library paths (iCloud Drive's
-        // Desktop and Documents are under Library, and do show), ranked by name and place.
-        let home = NSHomeDirectory()
-        var paths: [String] = []
-        for i in 0..<min(q.resultCount, 300) where paths.count < 60 {
-            guard let item = q.result(at: i) as? NSMetadataItem,
-                  let path = item.value(forAttribute: NSMetadataItemPathKey) as? String else { continue }
-            let isFolder = (item.value(forAttribute: NSMetadataItemContentTypeKey) as? String) == "public.folder"
-            if FileSearch.isWorthShowing(path, isFolder: isFolder, home: home) { paths.append(path) }
-        }
-        spotlightPaths = paths
-        showFiles()
-    }
-
-    /// Spotlight's files and the fresh search's, together, ranked by name and place.
-    private func rankFiles() {
-        let home = NSHomeDirectory()
-        let query = field.stringValue.trimmingCharacters(in: .whitespaces)
-        fileRows = FileSearch.rank(FileSearch.merge(spotlightPaths, freshPaths, home: home), query: query, home: home)
-            .prefix(Summon.maxFiles).map { .file(URL(fileURLWithPath: $0)) }
-    }
-
-    /// New files arrived: a row you moved to stays highlighted; otherwise the top row is.
-    private func showFiles() {
-        rankFiles()
-        compose(keeping: selected > 0 && results.indices.contains(selected) ? results[selected].key : nil)
-    }
-
-    // MARK: Desktop, Documents and Downloads
-
-    /// What you did with Summon's offer to find files in Desktop, Documents and Downloads.
-    private var folderAccessAnswer: FolderAccess.Answer? {
-        get { UserDefaults.standard.string(forKey: "summonFolderAccess").flatMap(FolderAccess.Answer.init) }
-        set { UserDefaults.standard.set(newValue?.rawValue, forKey: "summonFolderAccess") }
-    }
-
-    /// Whether LunchboxWM can read every folder (Full Disk Access): only then does macOS's own list of
-    /// permissions open for reading. Trying asks nothing.
-    private static func hasFullDiskAccess() -> Bool {
-        let fd = Darwin.open("/Library/Application Support/com.apple.TCC/TCC.db", O_RDONLY)
-        guard fd >= 0 else { return false }
-        Darwin.close(fd)
-        return true
-    }
-
-    /// Reads each folder once, which is what makes macOS ask whether LunchboxWM may see its files,
-    /// then opens Summon on the same search again. Only choosing the row ever does this.
-    private func askForFolderAccess() {
-        let query = field.stringValue
-        folderAccessAnswer = .chosen
-        hide()
-        DispatchQueue.global(qos: .userInitiated).async {
-            // Each read waits while macOS's prompt for its folder is up.
-            let readable = FolderAccess.folders(home: NSHomeDirectory()).filter {
-                (try? FileManager.default.contentsOfDirectory(atPath: $0)) != nil
-            }
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.newlyAllowedFolders = readable
-                guard !self.isVisible else { return } // you've already moved on
-                self.show(query: query)
-            }
-        }
-    }
-
-    /// "Don't show this again": the row goes, the rest of the list stays.
-    private func dismissFolderAccess() {
-        folderAccessAnswer = .dismissed
-        let row = selected
-        compose()
-        select(min(row, results.count - 1))
-    }
-
     // MARK: Opening
 
     /// Runs exactly one action: going to the app's window (Return), or a new
     /// window (Shift-Return, only offered when the app has a window to go to).
     private func open(_ result: Result, newWindow: Bool) {
-        if case .folderAccess = result {
-            // ⇧↩ (or a click on its second line) is "Don't show this again".
-            if newWindow { dismissFolderAccess() } else { askForFolderAccess() }
-            return
-        }
         hide()
         if case .window(let w) = result {
             // Wherever it is: another Workspace, another display, the Dock. If it closed
@@ -490,8 +303,6 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             // A window is surely on its way (the app's first, or a new one): hold its
             // spot right now, so even a slow launch shows something happening.
             if let id = app.bundleID { tiler.expectWindow(from: id, another: newWindow && canNew) }
-        case .file(let url):
-            tiler.prepareForOpening(with: NSWorkspace.shared.urlForApplication(toOpen: url).flatMap { Bundle(url: $0)?.bundleIdentifier })
         case .web:
             tiler.prepareForOpening(with: Self.defaultBrowser.flatMap { Bundle(path: $0.path)?.bundleIdentifier })
         default:
@@ -509,11 +320,9 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             }
         case .app(let app, _, _, _):
             launch(app)
-        case .file(let url):
-            NSWorkspace.shared.open(url)
         case .web(let text):
             if let url = Self.webURL(for: text) { openWeb(url) }
-        case .window, .folderAccess:
+        case .window:
             break // handled above
         }
     }
@@ -633,8 +442,6 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             let place = w.minimized ? "Minimized" : w.space.map { "Workspace \($0 + 1)" } ?? "Floating"
             let subtitle = ([w.appName, place] + (w.display.map { [$0] } ?? [])).joined(separator: " · ")
             return (w.title.isEmpty ? w.appName : w.title, subtitle, w.appURL?.path ?? "")
-        case .file(let url):
-            return (url.lastPathComponent, FileSearch.folder(of: url.path, home: NSHomeDirectory()), url.path)
         case .web(let text):
             let browser = Self.defaultBrowser
             let inBrowser = browser.map { " in \($0.name)" } ?? ""
@@ -642,20 +449,12 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
                 return ("Open \(text)", "Website\(inBrowser)", browser?.path ?? "/Applications/Safari.app")
             }
             return ("Search the web for “\(text)”", "\(Self.searchEngine.name)\(inBrowser)", browser?.path ?? "/Applications/Safari.app")
-        case .folderAccess:
-            return ("Find files on your Desktop and in Documents too",
-                    "macOS will ask you to let LunchboxWM into Desktop, Documents and Downloads", Self.desktopFolderIcon)
         }
     }
 
-    /// The Desktop folder's icon, from macOS itself: ~/Desktop's own would mean looking inside it.
-    private static let desktopFolderIcon = "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/DesktopFolderIcon.icns"
-
     private func icon(for path: String) -> NSImage {
         if let cached = icons[path] { return cached }
-        let image = path == Self.desktopFolderIcon
-            ? NSImage(contentsOfFile: path) ?? NSImage(named: NSImage.folderName) ?? NSImage()
-            : NSWorkspace.shared.icon(forFile: path)
+        let image = NSWorkspace.shared.icon(forFile: path)
         icons[path] = image
         return image
     }
@@ -711,7 +510,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = .systemFont(ofSize: 24, weight: .regular)
-        field.placeholderString = "Summon an app, window, file or website"
+        field.placeholderString = "Summon an app, window or website"
         field.delegate = self
         field.cell?.isScrollable = true
         field.cell?.wraps = false
@@ -746,7 +545,7 @@ final class LauncherPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// One app (or file) in the list. The main line carries a ↩ keycap; an app with
+/// One app (or window, or web search) in the list. The main line carries a ↩ keycap; an app with
 /// a window to go to gets a second, smaller line, "New … window", with ⇧↩ (and
 /// the folder offer gets "Don't show this again").
 /// Both lines are one selection, so a key press can only ever do one thing.

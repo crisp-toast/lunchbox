@@ -87,7 +87,7 @@ public enum Command: String, CaseIterable, Codable, Sendable {
         case .tidy: return "Tidy: even out every window in this Workspace"
         case .hide: return "Hide: send the window to the last Workspace and stay here"
         case .close: return "Close the window"
-        case .summon: return "Summon: open an app, window, file or website"
+        case .summon: return "Summon: open an app, window or website"
         case .cheatSheet: return "Open this Cheat Sheet"
         default: return rawValue
         }
@@ -134,7 +134,7 @@ public enum Command: String, CaseIterable, Codable, Sendable {
         case .close: return ["close", "quit window", "kill", "dismiss", "exit window", "remove", "delete window",
                              "get rid", "shut"]
         case .summon: return ["summon", "launcher", "launch", "open app", "open", "search", "find", "spotlight search",
-                              "alfred", "raycast", "run", "start", "application", "app", "file", "folder", "web",
+                              "alfred", "raycast", "run", "start", "application", "app", "web",
                               "google", "website", "url", "new window", "quick open", "command bar", "palette",
                               "find window", "window title", "switch window", "witch", "contexts"]
         case .cheatSheet: return ["cheat sheet", "help", "shortcuts", "keys", "keyboard", "list", "reference",

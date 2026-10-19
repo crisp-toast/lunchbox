@@ -560,7 +560,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       <div class="pills"><span class="lifetime">No subscription, ever</span><span class="lifetime">Lifetime updates included<sup class="fn" data-fn="lifetime"><a href="#fn-lifetime" aria-label="Footnote 1">1</a></sup></span></div>
       <ul class="checks">
         <li>Automatic tiling, Focus, Tidy and three instant Workspaces</li>
-        <li>Summon (⇧ then Space) for apps, files, the web and new windows</li>
+        <li>Summon (⇧ then Space) for apps, open windows, the web and new windows</li>
         <li>Every shortcut rebindable, with Restore Defaults one click away</li>
         <li>The Cheat Sheet: every shortcut, searchable in plain words</li>
         <li>Multi-display support, or main display only</li>
@@ -846,7 +846,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     mac.launcher.hidden = !L;
     if (L) {
       const rows = (L.rows || []).map((r, i) => `<div class="row ${i === (L.sel ?? 0) ? "sel" : ""}"><span class="ic" style="${r.ic || ""}"></span><span class="t">${r.t}</span><span class="mini-kc ret">↩</span><span class="s">${r.s}</span>${r.sub ? `<div class="sub"><span>＋ ${r.sub}</span><span class="mini-kc">⇧↩</span></div>` : ""}</div>`).join("");
-      mac.launcher.innerHTML = `<div class="q">${L.q ? L.q : '<span class="ph">Summon an app, file or website</span>'}<span class="caret"></span></div>${rows}`;
+      mac.launcher.innerHTML = `<div class="q">${L.q ? L.q : '<span class="ph">Summon an app, window or website</span>'}<span class="caret"></span></div>${rows}`;
     }
     const H = step.help;
     mac.help.hidden = !H;
@@ -854,7 +854,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       const all = [
         ["WINDOWS", [["Left ⌘", "←→"], "Focus the next window", "select switch"], [["⇧ Left ⌘", "←→"], "Move the window", "arrange swap"], [["⇧ Left ⌘", "F"], "Focus", "maximize fullscreen center"], [["⇧ Left ⌘", "0"], "Tidy", "reset even balance"]],
         ["WORKSPACES", [["⌘", "Page Up"], "Go to Workspace 1", "desktop space switch"], [["⇧⌘", "Page Down"], "Move the window to Workspace 2", "send desktop space"], [["⇧ Left ⌘", "H"], "Hide in Workspace 3", "stash tuck minimize away"]],
-        ["SUMMON", [["⇧ then", "Space"], "Summon an app, file or website", "launcher open search spotlight"]],
+        ["SUMMON", [["⇧ then", "Space"], "Summon an app, window or website", "launcher open search spotlight"]],
       ];
       const q = (H.q || "").toLowerCase();
       let html = `<div class="q">${H.q || '<span class="ph">Search shortcuts</span>'}<span class="caret"></span></div>`;
@@ -873,7 +873,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   ];
   const notesRows = [
     { t: "Notes", s: "Open", ic: "background:linear-gradient(135deg,#ffe58a,#f5c542)" },
-    { t: "Notebook.md", s: "Documents", ic: "background:linear-gradient(135deg,#e9ecf1,#b9c0cc)" },
+    { t: "Notes — Groceries", s: "Notes · Workspace 2", ic: "background:linear-gradient(135deg,#ffe58a,#f5c542)" },
   ];
   const webRows = [
     { t: "Search the web for “best desk lamp”", s: "Google, in your browser", ic: "background:linear-gradient(135deg,#7aa6ff,#2f6bff)" },
@@ -883,7 +883,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     { title: "Open with Summon", hint: "⇧ then Space", steps: [
       { win: {}, keys: [], cap: "Every window starts the same way: with Summon." },
       { win: {}, keys: ["⇧", "then", "Space"], launcher: { q: "", rows: [] }, cap: "Tap ⇧, then Space, and Summon is there instantly." },
-      { win: {}, keys: ["N", "O", "T"], launcher: { q: "not", rows: notesRows, sel: 0 }, cap: "Type a few letters. Apps come first, then files, then the web." },
+      { win: {}, keys: ["N", "O", "T"], launcher: { q: "not", rows: notesRows, sel: 0 }, cap: "Type a few letters. Apps come first, then open windows, then the web." },
       { win: { A: R.single }, focus: "A", keys: ["↩"], cap: "↩ opens it, already tiled and focused." },
     ]},
     { title: "It tiles itself", hint: "just open windows", steps: [

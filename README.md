@@ -47,7 +47,7 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
 | Left ⌘ + 1 / 2 / 3 | Go to that Workspace |
 | Left ⌘ ⇧ + 1 / 2 / 3 | Move the focused window to that Workspace and go there with it |
-| ⇧ Space | **Summon**: open an app, or go to any open window, file or website |
+| ⇧ Space | **Summon**: open an app, or go to any open window or website |
 | Left ⌘ ⇧ + Space | The **Cheat Sheet**: every shortcut, with search |
 
 **Resize mode** (Left ⌘ ⇧ + R): an arrow pushes the window's edge on its side, so it works the way
@@ -74,7 +74,7 @@ is left alone, so with three Workspaces ⌘⇧4 and ⌘⇧5 are the Mac's screen
 
 | Name | What it is |
 | --- | --- |
-| **Summon** | The ⇧Space search bar: apps, then open windows, then files and folders, then the web |
+| **Summon** | The ⇧Space search bar: apps, then open windows, then the web |
 | **Focus** | ⌘⇧F: one window centered, the rest on the Shelf |
 | **the Shelf** | The tilted cards beside a Focus window |
 | **Tidy** | ⌘⇧0: even out every split in the space |
@@ -110,26 +110,14 @@ Apps you open often rise to the top.
   beneath. Return goes to it wherever it is: another Workspace, another display, or minimized in
   the Dock. A word can also be the app's name ("slack" lists each Slack window). Windows that match
   more of what you typed come first, then the ones you used most recently. Window rows sit below
-  apps whose name you typed and above files. It's plain word matching on titles read as Summon
+  apps whose name you typed. It's plain word matching on titles read as Summon
   opens, so typing never waits on another app, and titles are never saved.
-- **Files and folders** come from Spotlight's index as you type (two letters or more), after apps
-  and windows, three at most. Only things you'd look for: documents, pictures, video, music and
-  downloads (not data, scripts, code or logs that programs leave behind), in your Desktop,
-  Documents and Downloads, iCloud Drive and cloud folders (Dropbox, Google Drive), at most three
-  folders in. A name that is what you typed comes first, then names that start with it, then names
-  with a word starting each typed word; among those, the most recently used.
 - **Apps go by their other names too**: "simulator" finds Device Hub (Xcode 27 put Simulator in
   it), "system preferences" finds System Settings, "itunes" finds Music. Xcode's own tools are
   found wherever that version of Xcode keeps them, and so are apps in another drive's
   Applications folder.
-  macOS hides the files in Desktop, Documents and Downloads from apps it hasn't let into those
-  folders, Spotlight's answers included, and only asks once an app looks inside one. LunchboxWM never
-  looks on its own, so nothing pops up while you type: until you've answered, file searches end
-  with **Find files on your Desktop and in Documents too**. Choose it and LunchboxWM reads those
-  folders (and iCloud Drive's Desktop and Documents) once, macOS asks whether to allow each, and
-  Summon opens again on the same search. Its second line, **Don't show this again** (⇧↩), hides
-  the row instead. Either way it never comes back, and with Full Disk Access it never shows. To
-  change an answer later, use Files & Folders in Privacy & Security.
+- **No files.** Summon doesn't search files: that would need macOS's permission prompts for
+  Desktop, Documents and Downloads. Spotlight (⌘Space) is right there for files.
 - Opening an app that isn't running yet (or is running with no windows), or a **New … window**,
   makes room right away, so a slow launch never looks like nothing happened: the windows here glide
   aside and a frosted **placeholder** with the app's icon, gently pulsing, holds the exact spot and

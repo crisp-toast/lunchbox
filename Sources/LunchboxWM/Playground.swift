@@ -624,7 +624,7 @@ private final class FakeSummon: NSView {
 
     func render() {
         if query.isEmpty {
-            field.attributedStringValue = NSAttributedString(string: "Summon an app, window, file or website",
+            field.attributedStringValue = NSAttributedString(string: "Summon an app, window or website",
                                                              attributes: [.foregroundColor: panelPlaceholder, .font: NSFont.systemFont(ofSize: 18)])
         } else {
             field.attributedStringValue = NSAttributedString(string: query + "▏",
