@@ -59,6 +59,10 @@ around the window and a line at the bottom of the screen say it's on; it ends wi
 Esc, any other key (⌘ and an arrow ends it and moves focus, as usual), or after five seconds
 without one.
 
+Shrinking stops where the window does. A window that won't go any smaller (most apps have a
+minimum size) takes no more ⌘⇧− or arrow presses, so the next press to grow it always shows.
+The same goes for growing a window that's as big as it gets.
+
 Workspaces are ⌘ and their number, and ⌘⇧ and the number takes the window along, like ⌘⇧ and an
 arrow moves it. Right ⌘ and a number still reaches the app in front (a browser's tabs, say), right
 ⌘⇧3, ⌘⇧4 and ⌘⇧5 still take screenshots, and ⌘ (or ⌘⇧) and the number of a Workspace you don't have

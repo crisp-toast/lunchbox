@@ -346,6 +346,14 @@ public struct Layout: Equatable, Sendable {
     /// So in the right column ← widens it, in the left column →; at the top of a stack ↓ makes
     /// it taller, at the bottom ↑. Only that one edge moves; nothing else shifts. A centered
     /// window has no neighbors: → and ↑ grow it, ← and ↓ shrink it, around its center.
+    ///
+    /// With `limits`, a press only counts when the window changes on screen (see `visibly`).
+    @discardableResult
+    public mutating func resize(_ id: WindowID, toward direction: Direction, by step: Double, in rect: CGRect, gap: CGFloat,
+                                limits: [WindowID: SizeLimits]) -> Bool {
+        visibly(id, step, in: rect, gap: gap, limits: limits) { $0.resize(id, toward: direction, by: $1, in: rect, gap: gap) }
+    }
+
     @discardableResult
     public mutating func resize(_ id: WindowID, toward direction: Direction, by step: Double, in rect: CGRect, gap: CGFloat) -> Bool {
         guard let (c, r) = position(of: id) else { return false }
@@ -413,6 +421,80 @@ public struct Layout: Equatable, Sendable {
         }
         guard columns[c].windows.count > 1 else { return false }
         return Self.adjust(&columns[c].weights, index: r, delta: delta)
+    }
+
+    /// ⌘⇧+ and ⌘⇧−, counting only what shows (see `visibly`): a window at its smallest doesn't
+    /// take another shrink, so the next grow always grows it. Width and height each stop at
+    /// their own limit. `rect`, `gap` and `limits` as for `frames`.
+    @discardableResult
+    public mutating func resize(_ id: WindowID, by delta: Double, in rect: CGRect, gap: CGFloat,
+                                limits: [WindowID: SizeLimits]) -> Bool {
+        guard let (c, r) = position(of: id) else { return false }
+        if windowCount == 1 || spotlight == id {
+            return visibly(id, delta, in: rect, gap: gap, limits: limits) { $0.resize(id, by: $1) }
+        }
+        var changed = false
+        if columns.count > 1 {
+            changed = visibly(id, delta, in: rect, gap: gap, limits: limits) { layout, d in
+                var widths = layout.columns.map(\.weight)
+                guard Self.adjust(&widths, index: c, delta: d) else { return false }
+                for i in layout.columns.indices { layout.columns[i].weight = widths[i] }
+                return true
+            }
+        }
+        if columns[c].windows.count > 1 {
+            changed = visibly(id, delta, in: rect, gap: gap, limits: limits) { Self.adjust(&$0.columns[c].weights, index: r, delta: $1) }
+                || changed
+        }
+        return changed
+    }
+
+    /// Takes a resize step (`apply` with `delta`) only as far as the window `id` actually changes.
+    /// A window that's reached its minimum (or maximum, or a neighbor's) stays that size however
+    /// small its share gets, so a step past that point would change nothing you can see, and the
+    /// step back would then do nothing either. So:
+    /// - a step that wouldn't change the window doesn't happen;
+    /// - a step that reaches a limit partway stops where the window stops;
+    /// - a share already past where the window stops (shrunk before Tessel knew its minimum) is
+    ///   skipped over, so the step starts where the window starts moving.
+    mutating func visibly(_ id: WindowID, _ delta: Double, in rect: CGRect, gap: CGFloat, limits: [WindowID: SizeLimits],
+                          apply: (inout Layout, Double) -> Bool) -> Bool {
+        guard delta != 0 else { return false }
+        let base = self
+        func size(_ t: Double) -> CGSize? {
+            var layout = base
+            if t > 0 { _ = apply(&layout, delta * t) }
+            return layout.frames(in: rect, gap: gap, limits: limits)[id]?.size
+        }
+        func same(_ a: CGSize?, _ b: CGSize?) -> Bool {
+            guard let a, let b else { return a == b }
+            return abs(a.width - b.width) < 1 && abs(a.height - b.height) < 1
+        }
+        let now = size(0)
+        // Past this every share is at its bound.
+        let reach = max(1, 1 / abs(delta))
+        var start = 0.0
+        if same(size(1), now) {
+            guard !same(size(reach), now) else { return false }
+            var low = 1.0, high = reach
+            for _ in 0..<20 {
+                let mid = (low + high) / 2
+                if same(size(mid), now) { low = mid } else { high = mid }
+            }
+            start = low
+        }
+        let end = start + 1, target = size(end)
+        var low = start, high = end
+        for _ in 0..<20 {
+            let mid = (low + high) / 2
+            if same(size(mid), target) { high = mid } else { low = mid }
+        }
+        // A step that ends within a few points of a limit (or none at all) is taken whole.
+        if end - high < 0.05 { high = end }
+        var next = base
+        guard apply(&next, delta * high), next != base else { return false }
+        self = next
+        return true
     }
 
     /// Gives a window more (positive `delta`) or less space. A lone window grows

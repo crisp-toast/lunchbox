@@ -231,3 +231,110 @@ import Testing
         #expect(Layout.distribute(1000, weights: [1, 1], mins: [0, 0], maxs: [200, 300]) == [200, 300])
     }
 }
+
+/// ⌘⇧− on a window with a minimum size stops when the window does, so the next ⌘⇧+ always
+/// shows; the same for resize mode's arrows.
+@Suite struct ResizingStopsAtTheLimit {
+    let wide = SizeLimits(minWidth: 1000, minHeight: 500) // won't go narrower than 1000 or shorter than 500
+
+    func width(_ l: Layout, _ id: WindowID, _ limits: [WindowID: SizeLimits]) -> CGFloat {
+        l.frames(in: screen, gap: gap, limits: limits)[id]?.width ?? 0
+    }
+
+    /// Shrinks until a press is refused; every press that counted made the window smaller.
+    func shrinkAll(_ l: inout Layout, _ id: WindowID, _ limits: [WindowID: SizeLimits]) -> Int {
+        var presses = 0
+        while presses < 30 {
+            let before = l.frames(in: screen, gap: gap, limits: limits)[id]!.size
+            guard l.resize(id, by: -0.08, in: screen, gap: gap, limits: limits) else { break }
+            let after = l.frames(in: screen, gap: gap, limits: limits)[id]!.size
+            #expect(after.width < before.width - 1 || after.height < before.height - 1)
+            presses += 1
+        }
+        return presses
+    }
+
+    @Test func aTiledWindowStopsShrinkingAtItsMinimumAndGrowsRightBack() {
+        let limits: [WindowID: SizeLimits] = [1: wide]
+        var l = layout([[1], [2]])
+        let presses = shrinkAll(&l, 1, limits)
+        #expect(presses >= 1 && presses < 10)
+        #expect(width(l, 1, limits) == 1000)
+        let held = l
+        let r1 = l.resize(1, by: -0.08, in: screen, gap: gap, limits: limits)
+        #expect(!r1)
+        #expect(l == held) // the refused press changed nothing, not even on paper
+        let r2 = l.resize(1, by: 0.08, in: screen, gap: gap, limits: limits)
+        #expect(r2)
+        #expect(width(l, 1, limits) > 1150) // a whole step, not one spent getting back to the minimum
+    }
+
+    @Test func aStackedWindowStopsAtItsMinimumHeight() throws {
+        let limits: [WindowID: SizeLimits] = [1: SizeLimits(minHeight: 600)]
+        var l = layout([[1, 2], [3]])
+        _ = shrinkAll(&l, 1, limits)
+        let f = try #require(l.frames(in: screen, gap: gap, limits: limits)[1])
+        #expect(f.height == 600)
+        let r3 = l.resize(1, by: 0.08, in: screen, gap: gap, limits: limits)
+        #expect(r3)
+        #expect(try #require(l.frames(in: screen, gap: gap, limits: limits)[1]).height > 650)
+    }
+
+    @Test func aLoneWindowStopsShrinkingAtItsMinimum() throws {
+        let limits: [WindowID: SizeLimits] = [1: SizeLimits(minWidth: 900, minHeight: 600)]
+        var l = layout([[1]])
+        _ = shrinkAll(&l, 1, limits)
+        let small = try #require(l.frames(in: screen, gap: gap, limits: limits)[1])
+        #expect(small.size == CGSize(width: 900, height: 600))
+        let r4 = l.resize(1, by: 0.08, in: screen, gap: gap, limits: limits)
+        #expect(r4)
+        let grown = try #require(l.frames(in: screen, gap: gap, limits: limits)[1])
+        #expect(grown.width > 900 && grown.height > 600)
+    }
+
+    @Test func aShareShrunkBeforeTheMinimumWasKnownIsSkipped() {
+        // Shrunk to a fifth of the screen before Tessel learned the window won't go under 1000.
+        var l = layout([[1], [2]])
+        l.columns[0].weight = 0.2
+        l.columns[1].weight = 0.8
+        let limits: [WindowID: SizeLimits] = [1: wide]
+        #expect(width(l, 1, limits) == 1000)
+        let r5 = l.resize(1, by: 0.08, in: screen, gap: gap, limits: limits)
+        #expect(r5)
+        #expect(width(l, 1, limits) > 1150)
+    }
+
+    @Test func aWindowAtItsLargestTakesNoMoreGrowing() {
+        let limits: [WindowID: SizeLimits] = [2: SizeLimits(maxWidth: 430, maxHeight: 932)]
+        var l = layout([[1], [2]])
+        let held = l
+        let r6 = l.resize(2, by: 0.08, in: screen, gap: gap, limits: limits)
+        #expect(!r6)
+        #expect(l == held)
+        let r7 = l.resize(1, by: -0.08, in: screen, gap: gap, limits: limits) // its neighbor can't take the room
+        #expect(!r7)
+    }
+
+    @Test func withoutLimitsItIsThePlainStep() {
+        for ids in [[[1], [2]], [[1, 2], [3]], [[1]]] as [[[WindowID]]] {
+            for delta in [0.08, -0.08] {
+                var a = layout(ids), b = layout(ids)
+                let ra = a.resize(1, by: delta), rb = b.resize(1, by: delta, in: screen, gap: gap, limits: [:])
+                #expect(ra == rb)
+                #expect(a == b)
+            }
+        }
+    }
+
+    @Test func resizeModesArrowsStopAtTheMinimumToo() {
+        // In the right column → pushes the window's right edge in: it gets narrower.
+        let limits: [WindowID: SizeLimits] = [2: wide]
+        var l = layout([[1], [2]])
+        var presses = 0
+        while presses < 40, l.resize(2, toward: .right, by: 0.05, in: screen, gap: gap, limits: limits) { presses += 1 }
+        #expect(width(l, 2, limits) == 1000)
+        let r8 = l.resize(2, toward: .left, by: 0.05, in: screen, gap: gap, limits: limits)
+        #expect(r8)
+        #expect(width(l, 2, limits) > 1080)
+    }
+}

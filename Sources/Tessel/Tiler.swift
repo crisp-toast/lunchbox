@@ -2404,12 +2404,15 @@ final class Tiler {
         let horizontal = direction == .left || direction == .right
         guard let id = focusedID, let (space, uuid) = place(of: id), space == currentSpace,
               var layout = spaces[space][uuid], let d = activeDisplays.first(where: { $0.uuid == uuid }) else { return }
-        if layout.resize(id, toward: direction, by: Self.sideStep, in: d.visible, gap: Self.gap) {
+        if layout.resize(id, toward: direction, by: Self.sideStep, in: d.visible, gap: Self.gap, limits: limits) {
             spaces[space][uuid] = layout
             relayout(animated: true)
             persist()
             noteArranged(space: space, display: uuid, shaped: true)
             quietLine.show(Self.resizeHelp, on: d, seconds: HotkeyTap.resizeModeSeconds)
+        } else if layout.resize(id, toward: direction, by: Self.sideStep, in: d.visible, gap: Self.gap) {
+            // The shares could move, but the window (or its neighbor) is as small or as big as it goes.
+            quietLine.show("Resize: it won't go any further that way", on: d, seconds: HotkeyTap.resizeModeSeconds)
         } else {
             // A window alone in its column already has the full height; one column, the full width.
             quietLine.show(horizontal ? "Resize: it already has the full width here" : "Resize: it already has the full height here",
@@ -2421,8 +2424,9 @@ final class Tiler {
     private func resize(by delta: Double) {
         if resizingWindow != nil { keepResizeModeOn() }
         guard let id = focusedID, let (space, uuid) = place(of: id), space == currentSpace,
-              var layout = spaces[space][uuid] else { return }
-        if layout.resize(id, by: delta) {
+              var layout = spaces[space][uuid], let d = activeDisplays.first(where: { $0.uuid == uuid }) else { return }
+        // Only steps that show: a window already at its smallest takes no more shrinks.
+        if layout.resize(id, by: delta, in: d.visible, gap: Self.gap, limits: limits) {
             spaces[space][uuid] = layout
             relayout(animated: true)
             persist()
