@@ -2139,7 +2139,7 @@ final class Tiler {
         case .switchSpace(let i): switchSpace(to: i, focusing: nil)
         case .sendToSpace(let i): send(toSpace: i, follow: true)
         case .close: closeFocused()
-        case .hide: send(toSpace: spaceCount - 1, caption: "Hidden in Workspace \(spaceCount)", follow: false)
+        case .hide: hideFocused()
         case .spotlight: toggleSpotlight()
         case .normalize: normalize()
         case .launcher, .help: break // handled by the app delegate
@@ -2349,6 +2349,29 @@ final class Tiler {
             focusDesktop()
         }
         badge.show(space: index, count: spaceCount, on: display)
+    }
+
+    /// Hide (⌘⇧H): the focused window goes out of view, minimized to the Dock and still open. The
+    /// windows here close the gap at once. Clicking it in the Dock, or Summoning it, brings it back,
+    /// tiled wherever you are then.
+    private func hideFocused() {
+        guard enabled, let id = focusedID, let w = windows[id], !w.hidden, !w.minimized else { return }
+        let frame = visibleFrames()[id] ?? w.target ?? w.frame
+        let element = w.handle.element, app = w.handle.app
+        quietFocus()
+        if place(of: id) != nil {
+            removeFromLayouts(id)
+            w.target = nil
+            relayout(animated: true)
+            persist()
+        }
+        w.minimized = true
+        app.queue.async { [weak self] in
+            let done = AXUIElementSetAttributeValue(element, kAXMinimizedAttribute as CFString, kCFBooleanTrue) == .success
+            // A window that can't be minimized goes back to its tile.
+            if !done { DispatchQueue.main.async { self?.scheduleScan(app) } }
+        }
+        focusNearest(to: frame, excluding: id)
     }
 
     /// Moves the focused window to another space. With `follow`, you go along

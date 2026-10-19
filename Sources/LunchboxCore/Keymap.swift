@@ -60,7 +60,6 @@ public enum Command: String, CaseIterable, Codable, Sendable {
     public var group: String {
         if workspace != nil { return "Workspaces" }
         switch self {
-        case .hide: return "Workspaces"
         case .summon: return "Summon"
         case .cheatSheet: return "Cheat Sheet"
         default: return "Windows"
@@ -85,7 +84,7 @@ public enum Command: String, CaseIterable, Codable, Sendable {
         case .resize: return "Resize: then the arrows push the window's edges"
         case .focusMode: return "Focus: this window centered, the rest on the Shelf"
         case .tidy: return "Tidy: even out every window in this Workspace"
-        case .hide: return "Hide: send the window to the last Workspace and stay here"
+        case .hide: return "Hide: minimize the window to the Dock, still open"
         case .close: return "Close the window"
         case .summon: return "Summon: open an app, window or website"
         case .cheatSheet: return "Open this Cheat Sheet"
@@ -130,7 +129,7 @@ public enum Command: String, CaseIterable, Codable, Sendable {
                             "cleanup", "organize", "organise", "arrange", "fix layout", "default size", "50/50",
                             "fifty", "align", "restore", "evenly", "auto arrange"]
         case .hide: return ["hide", "stash", "minimize", "minimise", "put away", "tuck", "park", "send away",
-                             "declutter", "out of the way", "last workspace", "later", "hidden"] + workspace
+                             "declutter", "out of the way", "dock", "later", "hidden"]
         case .close: return ["close", "quit window", "kill", "dismiss", "exit window", "remove", "delete window",
                              "get rid", "shut"]
         case .summon: return ["summon", "launcher", "launch", "open app", "open", "search", "find", "spotlight search",

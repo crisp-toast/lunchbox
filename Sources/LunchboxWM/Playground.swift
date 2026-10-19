@@ -220,7 +220,12 @@ final class Playground: NSView {
                 focused = layout.windows.last
             }
         case .hide:
-            send(to: 2, follow: false, layout: &layout)
+            // Minimized to the Dock: out of view, still open.
+            if let id = focused {
+                layout.remove(id)
+                windows[id]?.opacity = 0
+                focused = layout.windows.last
+            }
         case .sendToSpace(let i):
             send(to: i, follow: true, layout: &layout)
             return

@@ -43,7 +43,7 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + plus / minus | Give the window more or less space (a lone window, or one in Focus, grows or shrinks around the center) |
 | Left ⌘ ⇧ + R | **Resize**: then the arrows push the window's edges (hold to keep going); Return or Esc when done |
 | Left ⌘ ⇧ + F | **Focus**: the window alone in the center, the rest of the Workspace on the Shelf. Again, a click on a Shelf card, ⌘ (or ⌘ ⇧) with any arrow, or a file dragged onto a Shelf card ends it |
-| Left ⌘ ⇧ + H | **Hide** the window: it moves to the last Workspace (3, unless you added more) |
+| Left ⌘ ⇧ + H | **Hide** the window: it's minimized to the Dock, still open, and the others close the gap |
 | Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
 | Left ⌘ + 1 / 2 / 3 | Go to that Workspace |
 | Left ⌘ ⇧ + 1 / 2 / 3 | Move the focused window to that Workspace and go there with it |
@@ -78,7 +78,7 @@ is left alone, so with three Workspaces ⌘⇧4 and ⌘⇧5 are the Mac's screen
 | **Focus** | ⌘⇧F: one window centered, the rest on the Shelf |
 | **the Shelf** | The tilted cards beside a Focus window |
 | **Tidy** | ⌘⇧0: even out every split in the space |
-| **Hide** | ⌘⇧H: send the window to the last Workspace |
+| **Hide** | ⌘⇧H: minimize the window to the Dock; click it there (or Summon it) to bring it back, tiled where you are |
 | **Cheat Sheet** | ⌘⇧Space: every shortcut, searchable |
 | **Halo** | The blue outline around the focused window |
 | **Workspaces 1–3** | LunchboxWM's own instant Workspaces, on ⌘1, ⌘2 and ⌘3 (up to nine if you add them) |
