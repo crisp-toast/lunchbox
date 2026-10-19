@@ -16,8 +16,8 @@ public enum TimeBackAction: String, Codable, CaseIterable, Sendable {
     case summoned
     /// You corrected what LunchboxWM did, or undid it.
     case corrected
-    /// A display came back. Counted for the words on the trial-end screen only: the windows
-    /// that went back to it count as `restored`.
+    /// A display came back. Still counted, though no words use it since the trial-end screen
+    /// went with the free trial: the windows that went back to it count as `restored`.
     case displayReturned
 
     /// Seconds each saves you (or costs you, for a correction).
@@ -169,8 +169,8 @@ public struct TimeBackFile {
     }
 }
 
-/// The words wherever the time back shows: the menu, What LunchboxWM Learned and the trial-end
-/// screen. Never a notification or a popup (Etiquette).
+/// The words wherever the time back shows: the menu and What LunchboxWM Learned. Never a
+/// notification or a popup (Etiquette).
 public enum TimeBackWords {
     /// "23 minutes back", "under a minute back", or "no time back yet".
     public static func back(_ tally: TimeBack.Tally) -> String {
@@ -208,52 +208,6 @@ public enum TimeBackWords {
         }
     }
 
-    /// From this many days left, the trial line carries the minutes too.
-    public static let trialDaysWithMinutes = 2
-
-    /// The menu's trial line: "Free trial: 5 days left", or in its last two days,
-    /// "Free trial: 2 days left · 21 minutes back so far".
-    public static func trialLine(daysLeft: Int, soFar: TimeBack.Tally) -> String {
-        let line = "Free trial: \(count(daysLeft, "day")) left"
-        guard daysLeft <= trialDaysWithMinutes, soFar.minutes >= 1 else { return line }
-        return "\(line) · \(count(soFar.minutes, "minute")) back so far"
-    }
-
-    /// The trial-end screen, in the words docs/worth-paying-for.md proposes.
-    public struct TrialEnd: Equatable, Sendable {
-        /// Above the heading, when the heading is about the week: why the window opened.
-        public var eyebrow: String?
-        public var heading: String
-        /// What LunchboxWM did this week and what it learned, when it did anything.
-        public var summary: String?
-        public var keep: String
-        public var stays: String
-    }
-
-    public static func trialEnded(week: TimeBack.Tally, lessons: Int) -> TrialEnd {
-        let ended = "Your free trial has ended"
-        var did: [String] = []
-        if week.windowsPlaced > 0 { did.append("placed \(count(week.windowsPlaced, "window"))") }
-        let arranged = week[.arranged]
-        if arranged > 0 { did.append("put \(count(arranged, "app")) back the way you like \(arranged == 1 ? "it" : "them")") }
-        let sent = week[.sent]
-        if sent > 0 { did.append("sent \(count(sent, "window")) to \(sent == 1 ? "its" : "their") Workspace") }
-        let returns = week[.displayReturned]
-        if returns == 1 { did.append("put everything back when your display came back") }
-        if returns > 1 { did.append("put everything back the \(returns.formatted()) times your display came back") }
-        var sentences: [String] = []
-        if !did.isEmpty { sentences.append("It \(list(did)).") }
-        if lessons > 0 { sentences.append("It learned \(count(lessons, "thing")) about how you work.") }
-        let gaveBack = week.minutes >= 1
-        return TrialEnd(
-            eyebrow: gaveBack ? ended : nil,
-            heading: gaveBack ? "This week, LunchboxWM gave you back \(count(week.minutes, "minute"))." : ended,
-            summary: sentences.isEmpty ? nil : sentences.joined(separator: " "),
-            keep: "Keep LunchboxWM: $9.99, once.",
-            stays: lessons > 0 ? "What it learned stays on your Mac either way." : "Your windows stay right where they are either way."
-        )
-    }
-
     // MARK: Words
 
     static func count(_ n: Int, _ noun: String) -> String {
@@ -263,15 +217,5 @@ public enum TimeBackWords {
     /// "2", or "−3" with a real minus sign.
     static func signed(_ n: Int) -> String {
         n < 0 ? "\u{2212}\(-n)" : "\(n)"
-    }
-
-    /// "a", "a and b", "a, b, and c".
-    static func list(_ items: [String]) -> String {
-        switch items.count {
-        case 0: ""
-        case 1: items[0]
-        case 2: "\(items[0]) and \(items[1])"
-        default: items.dropLast().joined(separator: ", ") + ", and " + items.last!
-        }
     }
 }

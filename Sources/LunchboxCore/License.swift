@@ -66,21 +66,6 @@ public struct License: Equatable, Sendable {
     }
 }
 
-/// The free trial: every feature for 7 days from the first time LunchboxWM is opened.
-public enum Trial: Equatable, Sendable {
-    case active(daysLeft: Int)
-    case ended
-
-    public static let days = 7
-
-    /// Where the trial stands. Setting the clock back before the first launch doesn't
-    /// stretch it past its full length.
-    public static func state(firstLaunch: Date, now: Date, days: Int = Trial.days) -> Trial {
-        let left = Double(days) - max(0, now.timeIntervalSince(firstLaunch)) / 86_400
-        return left > 0 ? .active(daysLeft: Int(left.rounded(.up))) : .ended
-    }
-}
-
 extension Data {
     /// base64url, with or without padding.
     init?(base64URL text: String) {

@@ -77,7 +77,7 @@ public struct SupportSummary: Sendable {
     public var app: String
     /// "macOS 15.7.1 (24G231), Mac16,10".
     public var system: String
-    /// "licensed", "free trial, 5 days left"…
+    /// "licensed" or "not licensed".
     public var license: String
     /// Short "name: value" facts, like "tiling: on".
     public var settings: [String]

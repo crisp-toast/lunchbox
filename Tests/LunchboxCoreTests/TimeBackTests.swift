@@ -198,38 +198,4 @@ private func scratchFolder() -> URL {
             "2 corrections and undos × \u{2212}3 s",
         ])
     }
-
-    @Test func theTrialLineCarriesTheMinutesInItsLastTwoDays() {
-        let soFar = tally([.tiled: 630]) // 21 minutes
-        #expect(TimeBackWords.trialLine(daysLeft: 5, soFar: soFar) == "Free trial: 5 days left")
-        #expect(TimeBackWords.trialLine(daysLeft: 3, soFar: soFar) == "Free trial: 3 days left")
-        #expect(TimeBackWords.trialLine(daysLeft: 2, soFar: soFar) == "Free trial: 2 days left · 21 minutes back so far")
-        #expect(TimeBackWords.trialLine(daysLeft: 1, soFar: soFar) == "Free trial: 1 day left · 21 minutes back so far")
-        #expect(TimeBackWords.trialLine(daysLeft: 1, soFar: tally([.tiled: 10])) == "Free trial: 1 day left")
-    }
-
-    @Test func theTrialEndScreenInTheProposedWords() {
-        // docs/worth-paying-for.md: 26 minutes, 412 windows, 9 apps, 41 sent, 6 displays, 14 lessons.
-        let week = tally([.tiled: 332, .arranged: 9, .sent: 41, .restored: 30, .summoned: 700, .displayReturned: 6])
-        #expect(week.minutes == 26)
-        let words = TimeBackWords.trialEnded(week: week, lessons: 14)
-        #expect(words.eyebrow == "Your free trial has ended")
-        #expect(words.heading == "This week, LunchboxWM gave you back 26 minutes.")
-        #expect(words.summary == "It placed 412 windows, put 9 apps back the way you like them, sent 41 windows to their Workspace, and put everything back the 6 times your display came back. It learned 14 things about how you work.")
-        #expect(words.keep == "Keep LunchboxWM: $9.99, once.")
-        #expect(words.stays == "What it learned stays on your Mac either way.")
-    }
-
-    @Test func theTrialEndScreenOnlySaysWhatHappened() {
-        let words = TimeBackWords.trialEnded(week: tally([.tiled: 40, .sent: 1, .displayReturned: 1]), lessons: 1)
-        #expect(words.heading == "This week, LunchboxWM gave you back 1 minute.")
-        #expect(words.summary == "It placed 41 windows, sent 1 window to its Workspace, and put everything back when your display came back. It learned 1 thing about how you work.")
-        let quiet = TimeBackWords.trialEnded(week: tally([.tiled: 3]), lessons: 0)
-        #expect(quiet.eyebrow == nil)
-        #expect(quiet.heading == "Your free trial has ended")
-        #expect(quiet.summary == "It placed 3 windows.")
-        #expect(quiet.stays == "Your windows stay right where they are either way.")
-        let nothing = TimeBackWords.trialEnded(week: TimeBack.Tally(), lessons: 0)
-        #expect(nothing.summary == nil)
-    }
 }

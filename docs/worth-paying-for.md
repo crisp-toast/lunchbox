@@ -1,5 +1,9 @@
 # Making LunchboxWM worth $9.99
 
+> **Update, 2026-10-19:** LunchboxWM is now $4.99, paid up front, with no free trial. The trial
+> line in the menu and the trial-end screen this doc proposed were removed with the trial; the
+> weekly time-back line in the menu stays.
+
 For Tyler, 2026-10-17. The question: get window decisions above 95% correct, or use Laya or
 Julia 1 some other way, so that LunchboxWM feels like a power tool that people want to pay for
 because it really saves them time.

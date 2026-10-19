@@ -5,9 +5,10 @@ the steps below need your accounts, so they're yours to do.
 
 ## How it works
 
-1. **Try:** anyone downloads `download/LunchboxWM.dmg`. Every feature works for **7 days** from the
-   first launch (`Trial.days` in `Sources/LunchboxCore/License.swift`). Then tiling pauses, windows
-   stay put, and LunchboxWM offers Buy and Enter License.
+1. **Paid up front, no free trial** (since 2026-10-19). Anyone can download
+   `download/LunchboxWM.dmg`, but without a license nothing tiles: the welcome window's setup and
+   practice screen work, then LunchboxWM asks for a key, with Buy and Enter License
+   (`Licensing.canTile`). The site sells first and links the download from the thank-you page.
 2. **Buy:** the pricing card's **Buy LunchboxWM · $4.99** posts to `/api/checkout`, which opens
    Stripe's hosted checkout:
    - one LunchboxWM at $4.99 USD, with Stripe Tax adding sales tax or VAT;
@@ -105,7 +106,7 @@ To ship version X:
 
 ## Tests
 
-`swift test` covers the license format and trial. `node --test store/test/*.test.mjs` covers
+`swift test` covers the license format. `node --test store/test/*.test.mjs` covers
 signing, checkout, the thank-you lookup, webhook signatures and retries, and recovery, against a
 fake Stripe and Resend.
 

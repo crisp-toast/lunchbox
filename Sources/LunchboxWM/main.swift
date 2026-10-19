@@ -28,13 +28,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let updater = Updater()
     private lazy var licenseWindow = LicenseWindow(licensing: licensing)
     private let windowClasses = WindowClassesWindow()
-    private var trialTimer: Timer?
+    private var revocationTimer: Timer?
     private var trustPoll: Timer?
     private var signalSource: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // The time back is read now, so the menu and the license window have it even before
-        // tiling starts (waiting for Accessibility, or after the trial ended).
+        // The time back is read now, so the menu has it even before tiling starts (waiting for
+        // Accessibility, or for a license).
         TimeBackLedger.shared.load()
         tiler.onChange = { [weak self] in
             guard let self else { return }
@@ -50,7 +50,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tiler.onSpaceCountChange = { [weak self] count in self?.tap.spaceCount = count }
         _ = launcher // build the app list now, so the first ⇧Space already finds apps
         menu.onToggle = { [weak self] in self?.toggleTiling() }
-        menu.onShowWelcome = { [weak self] in self?.onboarding.show() }
+        menu.onShowWelcome = { [weak self] in
+            self?.onboarding.show()
+            self?.updateUnlicensedKeys()
+        }
         menu.onShowShortcuts = { [weak self] in self?.shortcuts.show() }
         menu.onShowWindowClasses = { [weak self] in self?.windowClasses.show() }
         menu.licensing = licensing
@@ -59,13 +62,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.onCheckForUpdates = { [weak self] in self?.updater.checkNow() }
         menu.onCopyDiagnostics = { [weak self] in self?.copyDiagnostics() }
         licensing.onChange = { [weak self] in self?.licenseChanged() }
+        // licenseChanged has already paused tiling by then; this says why.
         licensing.onRevoked = { [weak self] license in
             self?.licenseWindow.show(error: "The license for \(license.email) was refunded, so it no longer unlocks LunchboxWM. If that's a mistake, write to support@sentientdonut.com.")
-            self?.checkTrial()
         }
         shortcuts.onChange = { KeymapStore.save($0) }
         help.onCustomize = { [weak self] in self?.shortcuts.show() }
         onboarding.onCustomize = { [weak self] in self?.shortcuts.show() }
+        onboarding.onClose = { [weak self] in self?.waitForLicense() }
         onboarding.onRequestAccess = {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
             if !AXIsProcessTrustedWithOptions(options) { Self.openAccessibilitySettings() }
@@ -116,19 +120,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.begin() }
             return
         }
-        tap.enabled = true
-        tiler.start()
-        menu.refresh()
-        checkTrial()
+        if licensing.canTile {
+            tap.enabled = true
+            tiler.start()
+            menu.refresh()
+        } else {
+            waitForLicense()
+        }
         licensing.checkRevocationIfDue()
-        // Look again now and then, and after sleep: a trial can end while LunchboxWM runs, and a
-        // licensed copy checks for refunds about once a week.
-        trialTimer = Timer.scheduledTimer(withTimeInterval: 1800, repeats: true) { [weak self] _ in
-            self?.checkTrial()
+        // A licensed copy checks for refunds about once a week: look now and then, and after sleep.
+        revocationTimer = Timer.scheduledTimer(withTimeInterval: 1800, repeats: true) { [weak self] _ in
             self?.licensing.checkRevocationIfDue()
         }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.checkTrial()
             self?.licensing.checkRevocationIfDue()
         }
         // Start at login by default, once; the menu can turn it off and that sticks.
@@ -165,18 +169,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: License
 
-    /// The trial ran out: tiling pauses (windows stay where they are) and LunchboxWM says why, once.
-    private func checkTrial() {
-        guard !licensing.canTile, tiler.enabled else { return }
-        log.notice("trial ended; pausing tiling")
-        setTiling(false)
-        licenseWindow.show()
+    /// LunchboxWM is paid up front: without a license nothing tiles and keys pass straight
+    /// through (windows stay where they are). The welcome window's practice screen still
+    /// works, and once setup is done the license window asks for a key.
+    private func waitForLicense() {
+        guard !licensing.canTile, menu.trusted else { return }
+        if tiler.enabled {
+            log.notice("no license; pausing tiling")
+            tiler.stop()
+        }
+        updateUnlicensedKeys()
+        menu.refresh()
+        if !onboarding.isVisible { licenseWindow.show() }
+    }
+
+    /// Unlicensed, the shortcuts are on only while the welcome window is open, for its practice
+    /// screen; real windows aren't tiled meanwhile, since the tiler isn't running.
+    private func updateUnlicensedKeys() {
+        guard !licensing.canTile, menu.trusted else { return }
+        tap.enabled = onboarding.isVisible
     }
 
     private func licenseChanged() {
         menu.refresh()
-        // Just licensed after the trial ended: pick up where things left off.
-        if licensing.canTile, !tiler.enabled, menu.trusted { setTiling(true) }
+        if licensing.canTile {
+            // Just licensed: tiling starts.
+            if !tiler.enabled, menu.trusted { setTiling(true) }
+        } else {
+            // Refunded, or removed: tiling stops.
+            waitForLicense()
+        }
     }
 
     /// lunchbox://activate?key=… from the thank-you page or the license email.
@@ -244,9 +266,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case "window": licenseWindow.show()
             case "remove": licensing.removeLicense()
             case _ where arg.hasPrefix("snapshot:"):
-                // license:snapshot:<png path>[:ended]
-                let bits = arg.dropFirst(9).split(separator: ":").map(String.init)
-                if let path = bits.first { licenseWindow.snapshot(to: path, trialEnded: bits.last == "ended") }
+                // license:snapshot:<png path>
+                licenseWindow.snapshot(to: String(arg.dropFirst(9)))
             default: if licensing.activate(arg) == nil { licenseWindow.show(error: "Not a valid key.") }
             }
             return
@@ -308,7 +329,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // timeback-add:<action>:<count>[:<days ago>] counts time back as if LunchboxWM had done it
         // (tiled, arranged, sent, restored, summoned, corrected, displayReturned), to try the
-        // menu line and the trial-end screen without a week of windows.
+        // menu line without a week of windows.
         if command.hasPrefix("timeback-add:") {
             let bits = command.dropFirst(13).split(separator: ":").map(String.init)
             guard let action = bits.first.flatMap(TimeBackAction.init(rawValue:)) else { return }

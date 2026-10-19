@@ -100,13 +100,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             if !unlicensed { menu.addItem(.separator()) }
         }
         if let licensing, licensing.license == nil {
-            switch licensing.trial {
-            case .active(let days):
-                let soFar = TimeBackLedger.shared.tally(since: licensing.trialStart ?? Date())
-                menu.addItem(disabled: TimeBackWords.trialLine(daysLeft: days, soFar: soFar))
-            case .ended: menu.addItem(disabled: "Free trial ended")
-            }
-            menu.addItem(action("Buy LunchboxWM – $9.99…") { [weak self] in self?.onBuy?() })
+            menu.addItem(disabled: "Not licensed: tiling is off")
+            menu.addItem(action("Buy LunchboxWM – $4.99…") { [weak self] in self?.onBuy?() })
             menu.addItem(action("Enter License…") { [weak self] in self?.onEnterLicense?() })
             menu.addItem(.separator())
         }

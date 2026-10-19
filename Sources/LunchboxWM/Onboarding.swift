@@ -11,6 +11,8 @@ final class Onboarding: NSObject, NSWindowDelegate {
 
     var onRequestAccess: (() -> Void)?
     var onCustomize: (() -> Void)?
+    /// The welcome window went away: finished, or closed.
+    var onClose: (() -> Void)?
 
     private let tap: HotkeyTap
     private let tiler: Tiler
@@ -145,6 +147,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
         } else {
             UserDefaults.standard.set(true, forKey: "onboardingDone")
             window?.orderOut(nil)
+            onClose?()
         }
     }
 
@@ -155,6 +158,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         tap.learnNextKey(nil)
         trustTimer?.invalidate()
+        DispatchQueue.main.async { [weak self] in self?.onClose?() }
     }
 
     // MARK: Welcome

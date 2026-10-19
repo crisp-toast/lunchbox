@@ -11,8 +11,8 @@ private let timeBackLog = Logger(subsystem: logSubsystem, category: "timeback")
 /// Kept as daily counts in the learning folder (timeback.json), under the same rules as the
 /// learning logs: yours alone, out of backups, days older than 90 pruned, and cleared by Reset
 /// What LunchboxWM Learned. It counts whether or not learning is on, since most of it is plain
-/// tiling. Only numbers and dates, and nothing leaves the Mac. It's shown in the menu, What
-/// LunchboxWM Learned and the trial-end screen, and never as a notification.
+/// tiling. Only numbers and dates, and nothing leaves the Mac. It's shown in the menu and What
+/// LunchboxWM Learned, never as a notification.
 final class TimeBackLedger {
     static let shared = TimeBackLedger()
 

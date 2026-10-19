@@ -50,17 +50,3 @@ import Testing
         #expect(License.parse(key, publicKeyBase64: "qLQZTRdDyv019zqGNELstTUJa3rmQXnLNk5eoYgM1nU=") == nil)
     }
 }
-
-@Suite struct FreeTrial {
-    let start = Date(timeIntervalSince1970: 1_800_000_000)
-
-    @Test func sevenDaysFromFirstLaunch() {
-        #expect(Trial.state(firstLaunch: start, now: start) == .active(daysLeft: 7))
-        #expect(Trial.state(firstLaunch: start, now: start + 86_400 * 6.5) == .active(daysLeft: 1))
-        #expect(Trial.state(firstLaunch: start, now: start + 86_400 * 7) == .ended)
-    }
-
-    @Test func settingTheClockBackDoesNotAddDays() {
-        #expect(Trial.state(firstLaunch: start, now: start - 86_400 * 30) == .active(daysLeft: 7))
-    }
-}

@@ -212,7 +212,7 @@ taking focus), `welcomeclose`, `find:<text>` (opens Summon with that text), `hel
 tests and demo recordings), `expect:<bundle id>` (holds a placeholder for a window of that app, without
 opening anything, to try placeholders), `leave-app:<bundle id>` and `manage-app:<bundle id>` (stop and
 resume tiling one app's windows, for agents testing it on a dummy-plug display), `license:<key>`,
-`license:window`, `license:remove`, `license:snapshot:<png>[:ended]`, `practice:<command>` (drives
+`license:window`, `license:remove`, `license:snapshot:<png>`, `practice:<command>` (drives
 onboarding's practice screen), `timeback-add:<action>:<count>[:<days ago>]`, `copy-diagnostics`, the
 learning commands (see below), and `dump`, which writes the current state (Summon's results with
 file paths among it) to `~/Library/Application Support/LunchboxWM/state.json`.
@@ -233,7 +233,7 @@ osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificati
 **Copy Diagnostics** (Settings) puts a summary for support on the clipboard: the LunchboxWM and macOS
 versions, the build kind, the displays, the Workspaces and each one's windows (as app bundle IDs, what
 kind of window LunchboxWM took each for, and the size limits it learned), the windows not in a tile, the
-trial or license state, and the last day's errors from LunchboxWM's log. It never includes window titles, file
+license state, and the last day's errors from LunchboxWM's log. It never includes window titles, file
 paths, the license key or the email address: log lines go through `SupportSummary.scrub` first.
 
 **Testing window handling:** `scripts/windowlab/build.sh` builds WindowLab, a small app that opens every
@@ -311,4 +311,4 @@ The Buy buttons go nowhere yet: set `CHECKOUT_URL` at the top of the page's scri
 
 ## Selling it
 
-Buying, licensing, the free trial and the release are described in [docs/store.md](docs/store.md).
+Buying (paid up front, $4.99, no free trial), licensing and the release are described in [docs/store.md](docs/store.md).

@@ -8,7 +8,7 @@ import Testing
     let summary = SupportSummary(
         app: "LunchboxWM 1.0 (52), release build",
         system: "macOS 15.7.1 (24G231), Mac16,10",
-        license: "free trial, 5 days left",
+        license: "not licensed",
         settings: ["Accessibility: allowed", "tiling: on"],
         screens: [
             .init(name: "LG UltraFine", frame: CGRect(x: 0, y: 0, width: 2560, height: 1440),
@@ -31,7 +31,7 @@ import Testing
 
     @Test func saysWhatSupportNeeds() {
         let text = summary.text
-        for part in ["LunchboxWM 1.0 (52), release build", "macOS 15.7.1 (24G231), Mac16,10", "License: free trial, 5 days left",
+        for part in ["LunchboxWM 1.0 (52), release build", "macOS 15.7.1 (24G231), Mac16,10", "License: not licensed",
                      "LG UltraFine (main): 2560×1440 at 0,0, @2x, usable 2560×1415 at 0,25",
                      "AOC28E850.HDR: 1920×1080 at -1920,0, @2x, usable 1920×1050 at -1920,30, not tiled",
                      "Workspaces: 2, current 1", "Workspace 1 (current)", "Workspace 2: no windows",

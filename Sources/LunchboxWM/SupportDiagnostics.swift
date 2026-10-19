@@ -33,16 +33,7 @@ enum SupportDiagnostics {
         let osBuild = sysctl("kern.osversion").map { " (\($0))" } ?? ""
         let model = sysctl("hw.model") ?? "unknown Mac"
 
-        let license: String
-        if licensing.license != nil {
-            license = "licensed"
-        } else {
-            let started = licensing.trialStart.map { ", started \($0.formatted(.iso8601.year().month().day()))" } ?? ""
-            switch licensing.trial {
-            case .active(let days): license = "free trial, \(days) day\(days == 1 ? "" : "s") left\(started)"
-            case .ended: license = "free trial ended\(started)"
-            }
-        }
+        let license = licensing.license != nil ? "licensed" : "not licensed"
 
         func onOff(_ on: Bool) -> String { on ? "on" : "off" }
         let settings = [

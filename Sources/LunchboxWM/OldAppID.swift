@@ -2,14 +2,13 @@ import AppKit
 
 /// LunchboxWM was called Tessel (com.tyleryouens.tessel) until it went on sale, and Lunchbox for
 /// a day after. On a Mac that had Tessel, LunchboxWM stops it whenever it starts, and the first
-/// time also takes over its settings (license, trial, shortcuts, Workspaces, layouts). What either
+/// time also takes over its settings (license, shortcuts, Workspaces, layouts). What either
 /// earlier name learned moves into LunchboxWM's folder. Tessel's login item keeps coming back
 /// until Tessel.app is deleted (scripts/build.sh says so). Customers never had the earlier names;
 /// this is for the Macs LunchboxWM was built and tested on.
 ///
 /// Not carried over: Accessibility (macOS asks again for the new app; onboarding walks through
-/// it) and the Keychain's copy of the trial's start (reading Tessel's item would ask for the
-/// login password; `Licensing` writes it again from the settings).
+/// it).
 enum OldAppID {
     static let id = "com.tyleryouens.tessel"
     private static let doneKey = "carriedOverFromTessel"

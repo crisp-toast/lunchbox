@@ -1,19 +1,18 @@
 import AppKit
 import LunchboxCore
 
-/// Enter a license, or buy one: shown from the menu, when the trial ends, and when an
-/// activation link carries a key that doesn't check out.
+/// Enter a license, or buy one: shown from the menu, when LunchboxWM has no license once setup
+/// is done (it's paid up front, so nothing tiles until then), and when an activation link
+/// carries a key that doesn't check out.
 final class LicenseWindow: NSObject, NSWindowDelegate {
     private let licensing: Licensing
     private var window: NSWindow?
-    /// Above the heading, when the heading is about your week: why the window opened.
-    private let eyebrow = NSTextField(labelWithString: "")
     private let heading = NSTextField(wrappingLabelWithString: "")
     private let detail = NSTextField(wrappingLabelWithString: "")
     private let field = NSTextField()
     private let message = NSTextField(wrappingLabelWithString: "")
     private let activate = NSButton(title: "Activate", target: nil, action: nil)
-    private let buy = NSButton(title: "Buy LunchboxWM – $9.99…", target: nil, action: nil)
+    private let buy = NSButton(title: "Buy LunchboxWM – $4.99…", target: nil, action: nil)
     private let lost = NSButton(title: "Lost your license?", target: nil, action: nil)
 
     init(licensing: Licensing) {
@@ -32,8 +31,8 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
     }
 
     /// Debugging: draws the window into a PNG without putting it on any screen.
-    func snapshot(to path: String, trialEnded: Bool = false) {
-        let window = configure(error: nil, activated: nil, trialEnded: trialEnded)
+    func snapshot(to path: String) {
+        let window = configure(error: nil, activated: nil)
         guard let view = window.contentView else { return }
         view.layoutSubtreeIfNeeded()
         guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
@@ -41,27 +40,15 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
         try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
     }
 
-    private func configure(error: String?, activated: License?, trialEnded: Bool = false) -> NSWindow {
+    private func configure(error: String?, activated: License?) -> NSWindow {
         let window = self.window ?? makeWindow()
         self.window = window
-        let ended = (licensing.trial == .ended || trialEnded) && licensing.license == nil
-        eyebrow.isHidden = true
         if let license = licensing.license {
             heading.attributedStringValue = Brand.wordmark("LunchboxWM is licensed", font: heading.font ?? .systemFont(ofSize: 19, weight: .semibold))
             setDetail("Licensed to \(license.email). Paste a different key below to replace it.")
-        } else if ended {
-            // Your week, in numbers LunchboxWM counted on this Mac (docs/worth-paying-for.md), and
-            // what it learned, which stays either way.
-            let words = TimeBackWords.trialEnded(week: trialWeek(), lessons: Learning.shared.lessons().count)
-            eyebrow.stringValue = words.eyebrow ?? ""
-            eyebrow.isHidden = words.eyebrow == nil
-            heading.stringValue = words.heading
-            setDetail(words.summary, keep: words.keep, then: words.stays)
         } else {
             heading.stringValue = "Enter your license"
-            let day: String
-            if case .active(let left) = licensing.trial { day = " Your free trial has \(left) day\(left == 1 ? "" : "s") left." } else { day = "" }
-            setDetail("Paste the license key from your email, or click the activation link in it." + day)
+            setDetail("Paste the license key from your email, or click the activation link in it. Tiling starts as soon as it's in. No license yet? It's $4.99, once.")
         }
         message.stringValue = error ?? activated.map { "Activated. Thanks for buying LunchboxWM, \($0.email)!" } ?? ""
         message.textColor = activated == nil ? .systemRed : .systemGreen
@@ -77,32 +64,13 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
         return window
     }
 
-    /// The trial's week: what was counted from its first day through its last (or today).
-    private func trialWeek() -> TimeBack.Tally {
-        let start = licensing.trialStart ?? Date()
-        let end = min(Date(), start.addingTimeInterval(Double(Trial.days) * 86_400))
-        return TimeBackLedger.shared.tally(since: start, through: end)
-    }
-
     private static let detailFont = NSFont.systemFont(ofSize: 13)
 
-    /// The text under the heading: `text`, then a paragraph with `keep` in bold, then `then`.
-    private func setDetail(_ text: String?, keep: String? = nil, then: String? = nil) {
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.paragraphSpacing = 8
-        let plain: [NSAttributedString.Key: Any] = [.font: Self.detailFont, .foregroundColor: NSColor.secondaryLabelColor,
-                                                    .paragraphStyle: paragraph]
-        let body = NSMutableAttributedString()
-        if let text { body.append(NSAttributedString(string: text, attributes: plain)) }
-        if let keep {
-            if body.length > 0 { body.append(NSAttributedString(string: "\n", attributes: plain)) }
-            var bold = plain
-            bold[.font] = NSFont.systemFont(ofSize: 13, weight: .semibold)
-            bold[.foregroundColor] = NSColor.labelColor
-            body.append(NSAttributedString(string: keep, attributes: bold))
-        }
-        if let then { body.append(NSAttributedString(string: " " + then, attributes: plain)) }
-        detail.attributedStringValue = body
+    /// The text under the heading.
+    private func setDetail(_ text: String) {
+        detail.attributedStringValue = NSAttributedString(string: text, attributes: [
+            .font: Self.detailFont, .foregroundColor: NSColor.secondaryLabelColor,
+        ])
     }
 
     private func makeWindow() -> NSWindow {
@@ -117,8 +85,6 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
         icon.translatesAutoresizingMaskIntoConstraints = false
         icon.widthAnchor.constraint(equalToConstant: 56).isActive = true
         icon.heightAnchor.constraint(equalToConstant: 56).isActive = true
-        eyebrow.font = .systemFont(ofSize: 12, weight: .medium)
-        eyebrow.textColor = .secondaryLabelColor
         heading.font = .systemFont(ofSize: 19, weight: .semibold)
         heading.isSelectable = false
         // The text column: 460 points, less the margins and the icon.
@@ -143,7 +109,7 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
         lost.isBordered = false
         lost.contentTintColor = .linkColor
 
-        let text = NSStackView(views: [eyebrow, heading, detail])
+        let text = NSStackView(views: [heading, detail])
         text.orientation = .vertical
         text.alignment = .leading
         text.spacing = 4
