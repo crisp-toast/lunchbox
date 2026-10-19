@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>LunchboxWM</title>
-<meta name="description" content="Tiling that feels like it came with your Mac. Every window tiles as it opens, dialogs float, fixed-size apps keep their size, and there's no config file. Try it free for 7 days, then $9.99 once.">
+<meta name="description" content="Break free from the pile of windows. LunchboxWM tiles every window as it opens: dialogs float, fixed-size apps keep their size, and there's no config file. Try it free for 7 days, then $9.99 once.">
 <link rel="icon" href="logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -115,6 +115,16 @@ p { margin: 0; }
   12% { opacity: 1; }
   100% { opacity: 1; transform: none; }
 }
+/* "pile of windows" gets a red crayon squiggle, like a spelling mistake, scribbled in after the words land.
+   It's a background image rather than an element inside the words: WebKit draws text around an inline SVG
+   heavier, as if it had a shadow. The image crops instead of squashing, so widening it draws it left to right. */
+.hero h1 .bad {
+  white-space: nowrap; padding: 0 .05em .2em; margin: 0 -.05em;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 44' preserveAspectRatio='xMinYMid slice'%3E%3Cfilter id='c' x='-4%25' y='-60%25' width='108%25' height='220%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.22 0.3' numOctaves='2' seed='7' result='w'/%3E%3CfeDisplacementMap in='SourceGraphic' in2='w' scale='3' xChannelSelector='R' yChannelSelector='G' result='r'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1 0.45' numOctaves='3' seed='3' result='g'/%3E%3CfeColorMatrix in='g' type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -5 0 0 0 3.45' result='x'/%3E%3CfeComposite in='r' in2='x' operator='in'/%3E%3C/filter%3E%3Cg fill='none' stroke-linecap='round' stroke-linejoin='round' filter='url(%23c)'%3E%3Cpath d='M5.0 25.0L9.8 19.2Q12.3 16.2 14.7 19.3L21.5 28.1Q23.3 30.5 25.8 28.9L38.1 21.1Q41.6 18.9 44.9 21.3L53.4 27.3Q55.6 28.8 58.0 27.7L74.2 19.9Q77.4 18.4 79.7 21.0L86.9 29.4Q89.1 32.1 92.0 30.1L107.8 19.3Q110.3 17.6 112.5 19.6L122.6 28.7Q125.2 31.1 128.2 29.2L140.4 21.5Q143.3 19.7 145.8 21.9L154.3 29.1Q156.8 31.3 159.6 29.4L173.3 20.2Q176.4 18.1 179.2 20.7L187.1 27.8Q189.0 29.6 191.4 28.6L209.3 21.5Q212.3 20.4 214.8 22.4L223.5 29.4Q226.5 31.8 229.7 29.7L242.6 21.0Q245.0 19.5 247.1 21.3L255.8 28.6Q258.8 31.2 262.5 29.6L280.2 21.9Q282.9 20.7 285.4 22.2L294.0 27.3Q297.1 29.2 300.5 27.8L318.9 20.1Q321.6 18.9 323.9 20.6L336.1 29.6Q338.7 31.6 341.6 29.9L355.2 22.3Q358.0 20.7 360.8 22.5L370.9 29.3Q373.2 30.8 375.4 29.2L386.3 21.6Q389.4 19.4 392.6 21.1L404.4 27.3Q407.3 28.9 410.5 27.6L425.5 21.4Q428.9 20.0 432.1 21.8L442.7 27.7Q445.7 29.4 448.8 27.8L465.3 19.6Q468.4 18.0 471.2 20.0L480.9 26.9Q483.7 28.9 486.9 27.5L504.1 20.5Q507.0 19.3 509.9 18.2L516.0 15.8' stroke='%23d3261c' stroke-width='8'/%3E%3Cpath d='M5.0 25.0L10.2 19.3Q12.9 16.5 15.2 19.6L21.4 28.1Q23.2 30.5 25.7 28.9L38.0 20.9Q41.5 18.7 44.8 21.2L52.8 27.3Q55.0 29.0 57.5 27.8L74.6 19.8Q77.7 18.3 80.0 21.0L87.1 29.5Q89.3 32.2 92.1 30.2L107.6 19.5Q110.1 17.8 112.3 19.7L122.8 28.7Q125.5 30.9 128.5 29.1L140.7 21.5Q143.6 19.7 146.1 22.0L153.9 28.9Q156.4 31.1 159.1 29.2L172.9 20.0Q176.0 17.9 178.7 20.4L186.8 27.9Q188.7 29.6 191.1 28.7L209.1 21.4Q212.1 20.2 214.6 22.2L223.6 29.3Q226.6 31.7 229.9 29.6L242.9 21.2Q245.3 19.7 247.5 21.5L256.4 28.8Q259.5 31.3 263.1 29.6L280.9 21.6Q283.6 20.4 286.0 22.0L294.5 27.4Q297.6 29.4 301.0 27.9L319.6 20.1Q322.2 19.0 324.5 20.8L335.9 29.9Q338.5 31.9 341.4 30.2L354.6 22.3Q357.4 20.7 360.2 22.4L371.5 29.2Q373.9 30.6 376.0 29.0L385.9 21.7Q388.9 19.4 392.2 21.2L404.3 27.6Q407.2 29.2 410.4 27.9L426.0 21.6Q429.5 20.2 432.7 22.1L442.6 27.8Q445.6 29.5 448.7 27.9L464.9 19.5Q468.0 17.9 470.9 19.9L481.0 26.9Q483.8 28.9 487.0 27.6L504.3 20.4Q507.2 19.2 510.0 18.1L516.0 15.7' stroke='%23b81d14' stroke-width='3.2' opacity='.45' transform='translate(1.2 1.6)'/%3E%3C/g%3E%3C/svg%3E") no-repeat left bottom / 100% .62em;
+}
+.hero-wait .hero h1 .bad { background-size: 0 .62em; }
+.hero-rise .hero h1 .bad { animation: scrawl .8s 1s cubic-bezier(.45, 0, .35, 1) both; }
+@keyframes scrawl { from { background-size: 0 .62em; } to { background-size: 100% .62em; } }
 .hero-copy .lede { color: #3f454d; max-width: 30em; text-shadow: 0 1px 10px rgba(251,251,253,.8); }
 .hero-copy .meta { color: #4b525b; text-shadow: 0 1px 8px rgba(251,251,253,.8); }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
@@ -517,8 +527,8 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       <source src="media/break.mp4" type="video/mp4">
     </video>
     <div class="hero-copy">
-    <h1>Tiling that feels like it came with your Mac.</h1>
-    <p class="lede">Every window tiles the moment it opens. Dialogs float, fixed-size apps keep their size, and there's no config file to write. Just left ⌘ and the arrow keys.</p>
+    <h1>Break free from the <br><span class="bad">pile of windows</span>.</h1>
+    <p class="lede">Lunchbox<span class="wm">WM</span> is the ultimate window manager for Mac. Left ⌘ and an arrow moves your focus. Add ⇧ and the window comes with you.</p>
     <div class="actions">
       <a class="btn dark" href="download/LunchboxWM.dmg">Try free for 7 days</a>
       <a class="btn" href="#pricing">Buy once · $9.99</a>
@@ -692,7 +702,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
 
   <footer>
     <a class="brand" href="#top" style="font-size:15px"><svg style="width:22px;height:22px"><use href="#logo"/></svg><span>Lunchbox<span class="wm">WM</span></span></a>
-    <span>Tiling that feels like it came with your Mac.</span>
+    <span>It’s time to stop losing things in a pile of windows.</span>
     <span class="foot-links"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="refunds.html">Refunds</a><a href="recover.html">Lost license</a><a href="mailto:support@sentientdonut.com">Contact</a></span>
     <span>© 2026 Sentient Donut LLC</span>
   </footer>
