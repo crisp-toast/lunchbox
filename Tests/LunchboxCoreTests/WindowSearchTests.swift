@@ -72,6 +72,20 @@ import Testing
         #expect(none.find("study notes").map(\.title) == ["Study App"])
     }
 
+    @Test func everyWordOrNot() {
+        #expect(search.matchesEveryWord("Tiler.swift", window: 6))
+        #expect(!search.matchesEveryWord("github.com", window: 4))
+        #expect(!search.matchesEveryWord("lunch", window: 99))
+    }
+
+    @Test func aShortCommonWordIsntEnoughOfTheQuery() {
+        // "meetnellie.app" splits into meetnellie and app: app alone is too little of it.
+        let search = WindowSearch(Self.windows([("Arc", "App Store Connect"), ("Arc", "Nellie — Meet Nellie")]))
+        #expect(search.find("meetnellie.app").isEmpty)
+        #expect(search.find("meet nellie").map(\.title) == ["Nellie — Meet Nellie"])
+        #expect(search.find("app store").map(\.title) == ["App Store Connect"])
+    }
+
     @Test func titleWordsCountForMoreThanTheAppsName() {
         let search = WindowSearch(Self.windows([("Notes", "Ideas"), ("Mail", "Notes from the offsite")]))
         #expect(search.find("notes").map(\.title) == ["Notes from the offsite", "Ideas"])

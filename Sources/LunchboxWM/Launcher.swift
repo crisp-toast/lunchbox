@@ -263,7 +263,15 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             case .app(let r), .window(let r): return r
             }
         }
-        if !query.isEmpty, appRows.isEmpty { results.append(.web(query)) }
+        if !query.isEmpty, appRows.isEmpty {
+            // A web address typed out is a site to open, ahead of windows that only partly match
+            // it ("github.com" and a GitHub tab); a window matching all of it ("Tiler.swift") stays first.
+            let complete = windowRows.contains { row in
+                if case .window(let w) = row { return windowSearch.matchesEveryWord(query, window: w.id) }
+                return false
+            }
+            if Self.address(in: query) != nil, !complete { results.insert(.web(query), at: 0) } else { results.append(.web(query)) }
+        }
         selected = key.flatMap { k in results.firstIndex { $0.key == k } } ?? 0
         render()
     }

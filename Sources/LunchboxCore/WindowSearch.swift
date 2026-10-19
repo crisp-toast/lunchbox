@@ -45,9 +45,10 @@ public struct WindowSearch: Sendable {
     /// The windows the query finds, best first.
     ///
     /// A window is found when at least half of the query's words each start a word in its title
-    /// or app name: one typo is forgiven ("lunch thursdy" still finds the lunch email), but one
-    /// common word out of a longer search isn't a match ("app store connect website" doesn't list
-    /// a window of Study App). Windows that match more of the words come first, and once some
+    /// or app name, and those words are at least 40% of the query's letters: one typo is forgiven
+    /// ("lunch thursdy" still finds the lunch email), but a short common word out of a longer
+    /// search isn't a match ("app store connect website" doesn't list a Study App window, and
+    /// "meetnellie.app" doesn't list App Store Connect). Windows that match more of the words come first, and once some
     /// window matches more words than another, the other is left out: "lunch thursday" lists the
     /// lunch email, not every window with a word starting "t". A word found in the title counts for more
     /// than one found only in the app's name. Ties keep the order the windows were given in.
@@ -57,17 +58,19 @@ public struct WindowSearch: Sendable {
     public func find(_ query: String, listedApps: Set<String> = []) -> [SearchableWindow] {
         let wanted = Self.words(in: query, splittingHumps: false)
         guard !wanted.isEmpty else { return [] }
+        let wantedLetters = wanted.reduce(0) { $0 + $1.count }
         var found: [(window: SearchableWindow, words: Int, score: Int)] = []
         for entry in entries {
-            var words = 0, inTitle = 0, whole = 0
+            var words = 0, inTitle = 0, whole = 0, letters = 0
             for q in wanted {
                 let title = entry.titleWords.contains { $0.hasPrefix(q) }
                 guard title || entry.appWords.contains(where: { $0.hasPrefix(q) }) else { continue }
                 words += 1
+                letters += q.count
                 if title { inTitle += 1 }
                 if entry.titleWords.contains(q) || entry.appWords.contains(q) { whole += 1 }
             }
-            guard words > 0, words * 2 >= wanted.count else { continue }
+            guard words > 0, words * 2 >= wanted.count, letters * 5 >= wantedLetters * 2 else { continue }
             if inTitle == 0, listedApps.contains(entry.window.appID), windowsPerApp[entry.window.appID] == 1 { continue }
             found.append((entry.window, words, words * 100 + inTitle * 10 + whole))
         }
@@ -76,6 +79,13 @@ public struct WindowSearch: Sendable {
             .filter { $0.element.words == most }
             .sorted { ($0.element.score, -$0.offset) > ($1.element.score, -$1.offset) }
             .map(\.element.window)
+    }
+
+    /// Whether every word of the query starts a word in that window's title or app name.
+    public func matchesEveryWord(_ query: String, window id: UInt32) -> Bool {
+        let wanted = Self.words(in: query, splittingHumps: false)
+        guard !wanted.isEmpty, let entry = entries.first(where: { $0.window.id == id }) else { return false }
+        return wanted.allSatisfy { q in (entry.titleWords + entry.appWords).contains { $0.hasPrefix(q) } }
     }
 
     /// Lowercased words without accents, split on anything that isn't a letter or a digit.
