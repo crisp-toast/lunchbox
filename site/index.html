@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>LunchboxWM</title>
-<meta name="description" content="LunchboxWM puts your Mac's windows on the arrow keys. Every window tiles the moment it opens. $9.99 once, lifetime updates.">
+<meta name="description" content="Tiling that feels like it came with your Mac. Every window tiles as it opens, dialogs float, fixed-size apps keep their size, and there's no config file. Try it free for 7 days, then $9.99 once.">
 <link rel="icon" href="logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -115,19 +115,9 @@ p { margin: 0; }
   12% { opacity: 1; }
   100% { opacity: 1; transform: none; }
 }
-/* "pile of windows" gets a red crayon squiggle, like a spelling mistake, scribbled in after the words land.
-   It's a background image rather than an element inside the words: WebKit draws text around an inline SVG
-   heavier, as if it had a shadow. The image crops instead of squashing, so widening it draws it left to right. */
-.hero h1 .bad {
-  white-space: nowrap; padding: 0 .05em .2em; margin: 0 -.05em;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 44' preserveAspectRatio='xMinYMid slice'%3E%3Cfilter id='c' x='-4%25' y='-60%25' width='108%25' height='220%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.22 0.3' numOctaves='2' seed='7' result='w'/%3E%3CfeDisplacementMap in='SourceGraphic' in2='w' scale='3' xChannelSelector='R' yChannelSelector='G' result='r'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1 0.45' numOctaves='3' seed='3' result='g'/%3E%3CfeColorMatrix in='g' type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -5 0 0 0 3.45' result='x'/%3E%3CfeComposite in='r' in2='x' operator='in'/%3E%3C/filter%3E%3Cg fill='none' stroke-linecap='round' stroke-linejoin='round' filter='url(%23c)'%3E%3Cpath d='M5.0 25.0L9.8 19.2Q12.3 16.2 14.7 19.3L21.5 28.1Q23.3 30.5 25.8 28.9L38.1 21.1Q41.6 18.9 44.9 21.3L53.4 27.3Q55.6 28.8 58.0 27.7L74.2 19.9Q77.4 18.4 79.7 21.0L86.9 29.4Q89.1 32.1 92.0 30.1L107.8 19.3Q110.3 17.6 112.5 19.6L122.6 28.7Q125.2 31.1 128.2 29.2L140.4 21.5Q143.3 19.7 145.8 21.9L154.3 29.1Q156.8 31.3 159.6 29.4L173.3 20.2Q176.4 18.1 179.2 20.7L187.1 27.8Q189.0 29.6 191.4 28.6L209.3 21.5Q212.3 20.4 214.8 22.4L223.5 29.4Q226.5 31.8 229.7 29.7L242.6 21.0Q245.0 19.5 247.1 21.3L255.8 28.6Q258.8 31.2 262.5 29.6L280.2 21.9Q282.9 20.7 285.4 22.2L294.0 27.3Q297.1 29.2 300.5 27.8L318.9 20.1Q321.6 18.9 323.9 20.6L336.1 29.6Q338.7 31.6 341.6 29.9L355.2 22.3Q358.0 20.7 360.8 22.5L370.9 29.3Q373.2 30.8 375.4 29.2L386.3 21.6Q389.4 19.4 392.6 21.1L404.4 27.3Q407.3 28.9 410.5 27.6L425.5 21.4Q428.9 20.0 432.1 21.8L442.7 27.7Q445.7 29.4 448.8 27.8L465.3 19.6Q468.4 18.0 471.2 20.0L480.9 26.9Q483.7 28.9 486.9 27.5L504.1 20.5Q507.0 19.3 509.9 18.2L516.0 15.8' stroke='%23d3261c' stroke-width='8'/%3E%3Cpath d='M5.0 25.0L10.2 19.3Q12.9 16.5 15.2 19.6L21.4 28.1Q23.2 30.5 25.7 28.9L38.0 20.9Q41.5 18.7 44.8 21.2L52.8 27.3Q55.0 29.0 57.5 27.8L74.6 19.8Q77.7 18.3 80.0 21.0L87.1 29.5Q89.3 32.2 92.1 30.2L107.6 19.5Q110.1 17.8 112.3 19.7L122.8 28.7Q125.5 30.9 128.5 29.1L140.7 21.5Q143.6 19.7 146.1 22.0L153.9 28.9Q156.4 31.1 159.1 29.2L172.9 20.0Q176.0 17.9 178.7 20.4L186.8 27.9Q188.7 29.6 191.1 28.7L209.1 21.4Q212.1 20.2 214.6 22.2L223.6 29.3Q226.6 31.7 229.9 29.6L242.9 21.2Q245.3 19.7 247.5 21.5L256.4 28.8Q259.5 31.3 263.1 29.6L280.9 21.6Q283.6 20.4 286.0 22.0L294.5 27.4Q297.6 29.4 301.0 27.9L319.6 20.1Q322.2 19.0 324.5 20.8L335.9 29.9Q338.5 31.9 341.4 30.2L354.6 22.3Q357.4 20.7 360.2 22.4L371.5 29.2Q373.9 30.6 376.0 29.0L385.9 21.7Q388.9 19.4 392.2 21.2L404.3 27.6Q407.2 29.2 410.4 27.9L426.0 21.6Q429.5 20.2 432.7 22.1L442.6 27.8Q445.6 29.5 448.7 27.9L464.9 19.5Q468.0 17.9 470.9 19.9L481.0 26.9Q483.8 28.9 487.0 27.6L504.3 20.4Q507.2 19.2 510.0 18.1L516.0 15.7' stroke='%23b81d14' stroke-width='3.2' opacity='.45' transform='translate(1.2 1.6)'/%3E%3C/g%3E%3C/svg%3E") no-repeat left bottom / 100% .62em;
-}
-.hero-wait .hero h1 .bad { background-size: 0 .62em; }
-.hero-rise .hero h1 .bad { animation: scrawl .8s 1s cubic-bezier(.45, 0, .35, 1) both; }
-@keyframes scrawl { from { background-size: 0 .62em; } to { background-size: 100% .62em; } }
 .hero-copy .lede { color: #3f454d; max-width: 30em; text-shadow: 0 1px 10px rgba(251,251,253,.8); }
 .hero-copy .meta { color: #4b525b; text-shadow: 0 1px 8px rgba(251,251,253,.8); }
-.hero .actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
 .meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; font-size: 13px; color: var(--muted); }
 .meta span::before { content: "·"; margin-right: 18px; color: #b9bec6; }
 .meta span:first-child::before { content: none; }
@@ -242,23 +232,67 @@ p { margin: 0; }
 .live .keys { transition: opacity .25s; }
 .real { text-align: center; font-size: 13px; color: var(--muted); }
 
-/* Walkthrough */
-.features { padding-block: 80px 40px; display: grid; gap: 44px; text-align: center; }
-.trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; text-align: left; }
-.trio article { display: grid; gap: 10px; }
-.trio .art { aspect-ratio: 4 / 3; border-radius: 16px; background: var(--soft); border: 1px solid var(--line); position: relative; overflow: hidden; }
-.trio p { color: var(--muted); font-size: 15px; }
-.trio h3 .to { color: var(--accent); margin: 0 2px; }
-.art-tiles { position: absolute; inset: 14%; }
-/* Three windows; the outlined one moves the way ⇧⌘ + arrows moves it, and the others make room. */
-.art-tiles span {
-  position: absolute; border-radius: 8px; background: #fff;
-  box-shadow: 0 0 0 1px var(--line), 0 6px 14px -8px rgba(20,30,60,.3);
-  transition: left .6s var(--ease), top .6s var(--ease), width .6s var(--ease), height .6s var(--ease);
+/* Why: what it already knows, each with a small scene */
+.why { padding-block: 90px 40px; display: grid; gap: 40px; }
+.why > header { text-align: center; display: grid; gap: 14px; }
+.cards { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px; }
+.card { grid-column: span 2; display: grid; gap: 12px; align-content: start; padding: 12px 12px 22px; border-radius: 22px; background: #fff; border: 1px solid var(--line); }
+.card.wide { grid-column: span 3; }
+.card h3, .card p { padding-inline: 6px; }
+.card p { color: var(--muted); font-size: 15px; }
+.scene {
+  position: relative; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; isolation: isolate;
+  background: radial-gradient(110% 90% at 15% 0%, #e3edff 0%, transparent 60%), radial-gradient(100% 90% at 70% 100%, #ffeedd 0%, #f6f1ec 75%);
+  box-shadow: inset 0 0 0 1px rgba(20,30,60,.05);
 }
-.art-tiles span.on { box-shadow: 0 0 0 2px var(--ring), 0 0 0 6px rgba(61,123,255,.16); z-index: 1; }
-.art-keys { position: absolute; inset: 0; display: grid; place-content: center; gap: 10px; justify-items: center; }
-.art-keys .row-k { display: flex; gap: 8px; }
+.card.wide .scene { aspect-ratio: 2.4 / 1; }
+/* A tiny window: title bar and traffic lights */
+.sw { position: absolute; border-radius: 7px; background: #fff; box-shadow: 0 0 0 .5px rgba(0,0,0,.12), 0 6px 14px -6px rgba(20,30,60,.3); overflow: hidden; }
+.sw::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 13px; background: #f3f4f6; border-bottom: .5px solid rgba(0,0,0,.08); }
+.sw::after { content: ""; position: absolute; left: 6px; top: 4.5px; width: 4px; height: 4px; border-radius: 50%; background: #ff5f57; box-shadow: 6px 0 #febc2e, 12px 0 #28c840; }
+.sw.under { opacity: .7; }
+.dlg { left: 31%; top: 22%; width: 38%; height: 56%; z-index: 2; border-radius: 9px; box-shadow: 0 0 0 .5px rgba(0,0,0,.14), 0 16px 30px -10px rgba(20,30,60,.45); }
+.dlg::before, .dlg::after { content: none; }
+.dlg i { position: absolute; left: 14%; right: 14%; height: 6px; border-radius: 3px; background: #e4e6ea; }
+.dlg i:nth-child(1) { top: 22%; right: 34%; background: #c9ced6; }
+.dlg i:nth-child(2) { top: 40%; }
+.dlg b { position: absolute; right: 12%; bottom: 14%; width: 30%; height: 16%; border-radius: 5px; background: var(--accent); }
+.dlg em { position: absolute; right: 46%; bottom: 14%; width: 26%; height: 16%; border-radius: 5px; background: #eef0f3; }
+.slot { position: absolute; border-radius: 9px; border: 1.5px dashed rgba(47,107,255,.45); }
+.phone { position: absolute; border-radius: 10px; background: #16191d; padding: 4px; box-shadow: 0 8px 18px -8px rgba(20,30,60,.5); }
+.phone::after { content: ""; display: block; height: 100%; border-radius: 7px; background: linear-gradient(160deg, #8fb4ff, #c9a8ff 55%, #ffc0a8); }
+.ph {
+  position: absolute; border-radius: 7px; display: grid; place-items: center;
+  background: rgba(255,255,255,.5); box-shadow: inset 0 0 0 1px rgba(255,255,255,.8), 0 0 0 .5px rgba(20,30,60,.12);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: ph-pulse 1.8s ease-in-out infinite;
+}
+.ph::after { content: ""; width: 24px; height: 24px; border-radius: 7px; background: linear-gradient(135deg, #ffb36b, #ff6f8f); box-shadow: 0 4px 10px -4px rgba(20,30,60,.4); }
+@keyframes ph-pulse { 50% { background: rgba(255,255,255,.78); } }
+.badge {
+  position: absolute; left: 50%; top: 12%; transform: translateX(-50%); z-index: 2; display: grid; gap: 5px; justify-items: center;
+  padding: 7px 16px 8px; border-radius: 12px; background: rgba(30,33,38,.82); color: #fff; font: 600 12.5px var(--text); white-space: nowrap;
+  box-shadow: 0 10px 24px -10px rgba(20,30,60,.5);
+}
+.badge .dots { display: flex; gap: 5px; }
+.badge .dots span { width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,.35); }
+.badge .dots span.on { background: #fff; }
+.scene .keys2 { position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; z-index: 2; }
+.scene .keys2 .plus { color: #a5abb4; font-weight: 600; }
+.steps { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 0 4%; }
+.steps span { display: flex; align-items: center; gap: 8px; padding: 9px 13px 9px 9px; border-radius: 12px; background: #fff; font: 600 13.5px var(--text); white-space: nowrap; box-shadow: 0 0 0 1px var(--line), 0 6px 14px -8px rgba(20,30,60,.3); }
+.steps span b { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px; }
+.steps i { width: 14px; height: 1.5px; background: #b9c3d6; flex: none; }
+
+/* Trust strip */
+.trust { margin-top: 40px; display: grid; gap: 22px; }
+.trust .eyebrow { text-align: center; }
+.trust ul { list-style: none; margin: 0; padding: 26px; border-radius: 24px; background: var(--soft); border: 1px solid var(--line); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 30px; }
+.trust li { display: grid; grid-template-columns: 30px 1fr; gap: 3px 12px; align-content: start; }
+.trust svg { grid-row: span 2; width: 30px; height: 30px; padding: 7px; border-radius: 9px; background: #fff; color: var(--accent); box-shadow: 0 0 0 1px var(--line); fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.trust b { font: 600 15px/1.35 var(--display); }
+.trust li span { color: var(--muted); font-size: 14px; line-height: 1.5; }
+.trust a { color: inherit; }
+
 .kc {
   display: inline-grid; place-items: center; min-width: 30px; height: 30px; padding: 0 9px;
   border-radius: 8px; background: #fff; border: 1px solid #dfe2e7; border-bottom-width: 3px;
@@ -267,13 +301,9 @@ p { margin: 0; }
 }
 .kc.big { min-width: 46px; height: 44px; font-size: 16px; border-radius: 10px; }
 .kc.press { transform: translateY(2px); border-bottom-width: 1px; background: var(--accent); border-color: var(--accent-deep); color: #fff; }
-.art-speed { position: absolute; inset: 16% 12%; display: grid; gap: 9%; align-content: center; }
-.art-speed .bar2 { height: 12px; border-radius: 6px; background: #fff; box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
-.art-speed .bar2 b { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), #7aa6ff); border-radius: 6px; }
-.art-speed small { font: 500 11px var(--mono); color: var(--muted); }
-
 .walk { padding-block: 80px 40px; display: grid; gap: 34px; }
 .walk header { text-align: center; display: grid; gap: 14px; }
+.walk header .lede { max-width: 30em; }
 .player { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 28px; align-items: start; }
 .chapters { display: grid; gap: 4px; }
 .chapter {
@@ -363,7 +393,12 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   .chapter .ck, .chapter .progress { display: none; }
   /* More chapters than fit: fade the edge so the strip reads as scrollable. */
   .chapters { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); }
-  .trio { grid-template-columns: minmax(0, 1fr); }
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .card, .card.wide { grid-column: span 1; }
+  .card:last-child { grid-column: 1 / -1; }
+  .card.wide .scene { aspect-ratio: 16 / 9; }
+  .card:last-child .scene { aspect-ratio: 2.4 / 1; }
+  .trust ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .nav-links { display: none; }
 }
 @media (max-width: 600px) {
@@ -384,11 +419,17 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   .showcase { margin-top: 0; }
   .meta span::before { content: none; }
   .meta { gap: 6px 16px; }
-  /* Tighter rhythm between sections, and demo cards without empty acres. */
-  .features, .walk { padding-block: 56px 24px; }
-  .features { gap: 32px; }
-  .trio { gap: 30px; }
-  .trio .art { aspect-ratio: 16 / 10; }
+  /* Tighter rhythm between sections. */
+  .why, .walk { padding-block: 56px 24px; }
+  .why { gap: 28px; }
+  .cards { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .card:last-child { grid-column: auto; }
+  .card:last-child .scene { aspect-ratio: 16 / 9; }
+  /* The three setup steps stack on a phone, so the longest one never overflows. */
+  .steps { flex-direction: column; gap: 6px; }
+  .steps i { width: 1.5px; height: 8px; }
+  .trust { margin-top: 24px; gap: 16px; }
+  .trust ul { grid-template-columns: minmax(0, 1fr); padding: 20px 18px; gap: 18px; }
   .pricing { padding-block: 48px 24px; gap: 26px; }
   .faq { padding-block: 52px 24px; }
   .closing { padding-block: 72px 52px; }
@@ -422,9 +463,6 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     <linearGradient id="logo-well" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="#1437a8"/><stop offset="1" stop-color="#1b46c8"/>
     </linearGradient>
-    <linearGradient id="logo-handle" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="#3f78ff"/><stop offset="1" stop-color="#1d4fe0"/>
-    </linearGradient>
     <linearGradient id="logo-coral" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="#ff9a76"/><stop offset="1" stop-color="#f2552f"/>
     </linearGradient>
@@ -437,17 +475,15 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     <linearGradient id="logo-gloss" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="#ffffff" stop-opacity="0.5"/><stop offset="0.45" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
-    <symbol id="apple" viewBox="0 0 16 16"><path fill="currentColor" d="M11.2 8.5c0-1.6 1.3-2.4 1.4-2.4-.8-1.1-2-1.3-2.4-1.3-1-.1-2 .6-2.5.6s-1.3-.6-2.2-.6c-1.1 0-2.2.7-2.8 1.7-1.2 2-.3 5.1.9 6.8.6.8 1.2 1.7 2.1 1.7.8 0 1.2-.5 2.2-.5s1.3.5 2.2.5c.9 0 1.5-.8 2-1.7.6-.9.9-1.8.9-1.9 0 0-1.8-.7-1.8-2.9zM9.6 3.6c.5-.6.8-1.3.7-2.1-.7 0-1.5.5-2 1.1-.4.5-.8 1.3-.7 2 .8.1 1.5-.4 2-1z"/></symbol>
     <symbol id="logo" viewBox="64 64 896 896">
       <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#logo-bg)"/>
       <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#logo-glow)"/>
       <rect x="67" y="67" width="890" height="890" rx="209" fill="none" stroke="url(#logo-rim)" stroke-width="6"/>
+      <!-- no handle: the box sits centered on the tile -->
+      <g transform="translate(0 -76)">
       <!-- a soft shadow on the cream -->
       <rect x="156" y="318" width="712" height="584" rx="110" fill="#b8742a" fill-opacity="0.10"/>
       <rect x="152" y="304" width="720" height="586" rx="106" fill="#b8742a" fill-opacity="0.12"/>
-      <!-- the handle -->
-      <path d="M402 300 V238 Q402 178 462 178 H562 Q622 178 622 238 V300" fill="none" stroke="url(#logo-handle)" stroke-width="54" stroke-linecap="round"/>
-      <path d="M402 268 V238 Q402 178 462 178 H562 Q622 178 622 238 V268" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="10" stroke-linecap="round" transform="translate(-12 0)"/>
       <!-- the box -->
       <rect x="148" y="286" width="728" height="590" rx="106" fill="url(#logo-box)"/>
       <rect x="148" y="286" width="728" height="590" rx="106" fill="url(#logo-sheen)"/>
@@ -460,6 +496,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       <!-- the clasp -->
       <rect x="460" y="852" width="104" height="44" rx="16" fill="#e9efff"/>
       <rect x="460" y="852" width="104" height="44" rx="16" fill="none" stroke="#1d4fe0" stroke-opacity="0.5" stroke-width="4"/>
+      </g>
     </symbol>
   </defs>
 </svg>
@@ -467,8 +504,8 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
 <nav class="nav" id="nav">
   <div class="nav-inner">
     <a class="brand" href="#top"><svg><use href="#logo"/></svg><span>Lunchbox<span class="wm">WM</span></span></a>
-    <div class="nav-links"><a href="#features">Features</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></div>
-    <a class="btn dark small" href="#pricing"><svg><use href="#apple"/></svg>Download for Mac</a>
+    <div class="nav-links"><a href="#why">Features</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></div>
+    <a class="btn dark small" href="download/LunchboxWM.dmg">Try it free</a>
   </div>
 </nav>
 
@@ -480,13 +517,13 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       <source src="media/break.mp4" type="video/mp4">
     </video>
     <div class="hero-copy">
-    <h1>Break free from the <br><span class="bad">pile of windows</span>.</h1>
-    <p class="lede">Lunchbox<span class="wm">WM</span> is the ultimate window manager for Mac. Left ⌘ and an arrow moves your focus. Add ⇧ and the window comes with you.</p>
+    <h1>Tiling that feels like it came with your Mac.</h1>
+    <p class="lede">Every window tiles the moment it opens. Dialogs float, fixed-size apps keep their size, and there's no config file to write. Just left ⌘ and the arrow keys.</p>
     <div class="actions">
-      <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Download for Mac<span class="sep"></span><span class="price">$9.99</span></a>
-      <a class="btn" href="#how">See how it works</a>
+      <a class="btn dark" href="download/LunchboxWM.dmg">Try free for 7 days</a>
+      <a class="btn" href="#pricing">Buy once · $9.99</a>
     </div>
-    <div class="meta"><span>One-time purchase, no subscription</span><span>Lifetime updates<sup class="fn" data-fn="lifetime"><a href="#fn-lifetime" aria-label="Footnote 1">1</a></sup></span><span>macOS 14 or later</span><span>Apple silicon<sup class="fn" data-fn="silicon"><a href="#fn-silicon" aria-label="Footnote 2">2</a></sup></span></div>
+    <div class="meta"><span>No account, no card to try<sup class="fn"><a href="#fn-trial" aria-label="Footnote 1">1</a></sup></span><span>One-time purchase, lifetime updates<sup class="fn"><a href="#fn-lifetime" aria-label="Footnote 2">2</a></sup></span><span>macOS 14 or later, Apple silicon<sup class="fn"><a href="#fn-silicon" aria-label="Footnote 3">3</a></sup></span></div>
     </div>
   </section>
 
@@ -502,26 +539,53 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     <p class="real">A real, unedited screen recording of Lunchbox<span class="wm">WM</span> on macOS. The colored windows stand in for your apps.</p>
   </section>
 
-  <section class="features" id="features">
-    <div style="display:grid;gap:14px">
-      <h2>All the order, none of the setup.</h2>
-      <p class="lede">No config file, no layouts to plan, no lag.<sup class="fn" data-fn="lag"><a href="#fn-lag" aria-label="Footnote 3">3</a></sup> Lunchbox<span class="wm">WM</span> does the arranging, so you can get on with the work.</p>
-    </div>
-    <div class="trio">
-      <article>
-        <div class="art"><div class="art-tiles" id="art-tiles"><span data-t="b" style="left:0;top:0;width:46%;height:100%"></span><span data-t="a" class="on" style="left:54%;top:0;width:46%;height:46%"></span><span data-t="c" style="left:54%;top:54%;width:46%;height:46%"></span></div></div>
-        <h3>No grid to draw <span class="to" aria-hidden="true">→</span> Lightning fast ⚡️</h3>
-        <p>Open a window and it takes a column. A lone window sits centered at a calm 16:10, never stretched edge to edge.</p>
+  <section class="why" id="why">
+    <header>
+      <span class="eyebrow">Why Lunchbox<span class="wm">WM</span></span>
+      <h2>No config file. No SIP.<br>No surprises.</h2>
+      <p class="lede">Free tiling window managers are made for tinkering: a config file to write, rules for apps that misbehave, sometimes System Integrity Protection to turn off. Lunchbox<span class="wm">WM</span> already knows how Mac apps behave.</p>
+    </header>
+    <div class="cards">
+      <article class="card">
+        <div class="scene" aria-hidden="true">
+          <span class="sw under" style="left:4%;top:7%;width:44%;height:86%"></span><span class="sw under" style="left:52%;top:7%;width:44%;height:86%"></span>
+          <span class="sw dlg"><i></i><i></i><em></em><b></b></span>
+        </div>
+        <h3>Dialogs float, centered</h3>
+        <p>Open and Save panels, alerts and password prompts sit in the middle of their screen instead of splitting your tiles apart. So do About boxes and progress windows.</p>
       </article>
-      <article>
-        <div class="art"><div class="art-keys"><div class="row-k"><span class="kc big">⇧</span><span class="kc big">Left ⌘</span></div><div class="row-k"><span class="kc">←</span><span class="kc">↑</span><span class="kc">↓</span><span class="kc">→</span></div></div></div>
-        <h3>Two ideas, the whole desktop</h3>
-        <p>Left ⌘ goes somewhere. Add ⇧ and it moves something. Right ⌘ keeps its usual job, and every shortcut can be rebound.</p>
+      <article class="card">
+        <div class="scene" aria-hidden="true">
+          <span class="slot" style="left:4%;top:5%;width:28%;height:90%"></span>
+          <span class="phone" style="left:8.5%;top:9%;width:19%;height:82%"></span>
+          <span class="sw" style="left:36%;top:7%;width:60%;height:86%"></span>
+        </div>
+        <h3>Fixed-size apps tile at their own size</h3>
+        <p>Simulator, Calculator and System Settings sit in a column sized to fit them, and the window beside them gets the rest. No list to keep: it learns each window's size the first time it places it.</p>
       </article>
-      <article>
-        <div class="art"><div class="art-speed"><small>Fast app · glides</small><div class="bar2"><b style="width:100%"></b></div><small>Busy app · slides</small><div class="bar2"><b style="width:70%"></b></div><small>Struggling app · snaps</small><div class="bar2"><b style="width:30%"></b></div></div></div>
-        <h3>Never waits on a slow app</h3>
-        <p>Lunchbox<span class="wm">WM</span> times how quickly each app moves its windows. Quick ones glide, slow ones snap, so moving never adds lag.<sup class="fn" data-fn="lag"><a href="#fn-lag" aria-label="Footnote 3">3</a></sup></p>
+      <article class="card">
+        <div class="scene" aria-hidden="true">
+          <span class="sw" style="left:4%;top:7%;width:44%;height:86%"></span><span class="sw" style="left:52%;top:7%;width:44%;height:40.5%"></span>
+          <span class="ph" style="left:52%;top:52.5%;width:44%;height:40.5%"></span>
+        </div>
+        <h3>New windows land in their tile</h3>
+        <p>A new window goes straight to its spot as it opens, not wherever its app put it. Open an app from Summon or the Dock and a placeholder holds its place while it starts.</p>
+      </article>
+      <article class="card wide">
+        <div class="scene" aria-hidden="true">
+          <span class="sw under" style="left:4%;top:7%;width:44%;height:86%"></span><span class="sw under" style="left:52%;top:7%;width:44%;height:86%"></span>
+          <span class="badge">Workspace 2<span class="dots"><span></span><span class="on"></span><span></span></span></span>
+          <span class="keys2"><span class="kc">Left ⌘</span><span class="plus">+</span><span class="kc">2</span></span>
+        </div>
+        <h3>Workspaces switch instantly</h3>
+        <p>Left ⌘ and a number takes you there, with no Mission Control slide. Add ⇧ and the window comes along. Three to start, up to nine.</p>
+      </article>
+      <article class="card wide">
+        <div class="scene" aria-hidden="true">
+          <div class="steps"><span><b>1</b>Install</span><i></i><span><b>2</b>Allow Accessibility</span><i></i><span><b>3</b>Practice</span></div>
+        </div>
+        <h3>Set up in about a minute</h3>
+        <p>Install it, allow one permission, then try every shortcut on a practice screen that can't touch your real windows. Nothing to turn off in macOS, no file to edit.</p>
       </article>
     </div>
   </section>
@@ -530,6 +594,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     <header>
       <span class="eyebrow">How it works</span>
       <h2>Learn it before your<br>coffee cools.</h2>
+      <p class="lede">Left ⌘ goes somewhere. Add ⇧ and it moves something. Right ⌘ keeps its usual job, and every shortcut can be changed.</p>
     </header>
     <div class="player">
       <div class="chapters" id="chapters" role="tablist" aria-label="Walkthroughs"></div>
@@ -548,6 +613,18 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     </div>
   </section>
 
+  <section class="trust" aria-label="What you can count on">
+    <span class="eyebrow">The fine print, up front</span>
+    <ul>
+      <li><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.8-2.6 2.7-4 5-4s4.2 1.4 5 4"/><path d="M2.5 2.5l11 11"/></svg><b>No account</b><span>Nothing to sign up for or sign in to. Your license is a key in an email.</span></li>
+      <li><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/><path d="M2.5 2.5l11 11"/></svg><b>No tracking</b><span>The app sends no analytics, crash reports or keystrokes, and this site has no trackers. <a href="privacy.html">Privacy</a></span></li>
+      <li><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="8" r="2.8"/><path d="M7.8 8h6.7M12 8v2.5M14.5 8v2"/></svg><b>License works offline</b><span>It's checked on your Mac, so tiling never waits on a server.</span></li>
+      <li><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8l5 2v4.1c0 3.1-2.1 5.4-5 6.3-2.9-.9-5-3.2-5-6.3V3.8z"/></svg><b>One required permission</b><span>Accessibility, to move windows and hear its shortcuts. Screen Recording (live previews on the Shelf) and browser control (Summon's web searches) are optional, asked for when you first use them.</span></li>
+      <li><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4.5L3 7.5l3 3"/><path d="M3.5 7.5H10a3 3 0 010 6H8"/></svg><b>14-day refunds</b><span>Full refund within 14 days of buying, no questions asked. <a href="refunds.html">Refunds</a></span></li>
+      <li><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2"/></svg><b>Made by Sentient Donut LLC</b><span>In Austin, Texas. Questions go to <a href="mailto:support@sentientdonut.com">support@sentientdonut.com</a>.</span></li>
+    </ul>
+  </section>
+
   <section class="pricing" id="pricing">
     <div style="display:grid;gap:14px">
       <span class="eyebrow">Pricing</span>
@@ -556,24 +633,25 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     </div>
     <div class="price-card">
       <div class="price-top"><svg><use href="#logo"/></svg><div><b>Lunchbox<span class="wm">WM</span></b><small>For your Mac, for good</small></div></div>
-      <div class="amount"><strong>$9.99</strong><sup class="fn" data-fn="price"><a href="#fn-price" aria-label="Footnote 4">4</a></sup><span>USD, one-time</span></div>
-      <div class="pills"><span class="lifetime">No subscription, ever</span><span class="lifetime">Lifetime updates included<sup class="fn" data-fn="lifetime"><a href="#fn-lifetime" aria-label="Footnote 1">1</a></sup></span></div>
+      <div class="amount"><strong>$9.99</strong><sup class="fn"><a href="#fn-price" aria-label="Footnote 4">4</a></sup><span>USD, one-time</span></div>
+      <div class="pills"><span class="lifetime">No subscription, ever</span><span class="lifetime">Lifetime updates included<sup class="fn"><a href="#fn-lifetime" aria-label="Footnote 2">2</a></sup></span></div>
       <ul class="checks">
-        <li>Automatic tiling, Focus, Tidy and three instant Workspaces</li>
+        <li>Automatic tiling that knows dialogs and fixed-size apps</li>
+        <li>Focus, Tidy, Resize and instant Workspaces (three to start, up to nine)</li>
         <li>Summon (⇧ then Space) for apps, open windows, the web and new windows</li>
-        <li>Every shortcut rebindable, with Restore Defaults one click away</li>
+        <li>Every shortcut rebindable, with Restore All Defaults one click away</li>
         <li>The Cheat Sheet: every shortcut, searchable in plain words</li>
         <li>Multi-display support, or main display only</li>
         <li>All future updates, free, forever</li>
       </ul>
       <form class="buy-form" id="buy-form" method="post" action="api/checkout">
         <input type="hidden" name="attempt" id="attempt" value="">
-        <button class="btn dark" type="submit" id="buy-button"><svg><use href="#apple"/></svg><span>Buy Lunchbox<span class="wm">WM</span> · $9.99</span></button>
+        <button class="btn dark" type="submit" id="buy-button"><span>Buy Lunchbox<span class="wm">WM</span> · $9.99</span></button>
       </form>
-      <a class="btn" href="download/LunchboxWM.dmg">Download the Free Trial</a>
+      <a class="btn" href="download/LunchboxWM.dmg">Try free for 7 days</a>
       <p class="buy-note" id="buy-note" aria-live="polite"></p>
-      <p class="fine">Try it free for 7 days,<sup class="fn" data-fn="trial"><a href="#fn-trial" aria-label="Footnote 5">5</a></sup> then pay $9.99 once to keep tiling. No subscription. Refunds within 14 days, no questions.</p>
-      <p class="fine">macOS 14 Sonoma or later · Apple silicon<sup class="fn" data-fn="silicon"><a href="#fn-silicon" aria-label="Footnote 2">2</a></sup></p>
+      <p class="fine">Try it free for 7 days,<sup class="fn"><a href="#fn-trial" aria-label="Footnote 1">1</a></sup> then pay $9.99 once to keep tiling. No subscription. Refunds within 14 days, no questions.</p>
+      <p class="fine">macOS 14 Sonoma or later · Apple silicon<sup class="fn"><a href="#fn-silicon" aria-label="Footnote 3">3</a></sup></p>
       <p class="fine"><a href="recover.html">Already bought it? Get your license again</a></p>
     </div>
   </section>
@@ -581,13 +659,14 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   <section class="faq" id="faq">
     <h2>Frequent Questions</h2>
     <div>
+      <details><summary>Why pay when there are free tiling window managers?</summary><p>Free tilers are great if you enjoy configuring them. Lunchbox<span class="wm">WM</span> is for everyone else: dialogs, fixed-size apps and new windows are handled from the start, Workspaces are instant without turning anything off in macOS, and there's no config file. Try it free for 7 days and see if it's worth $9.99 to you.</p></details>
       <details><summary>Is there a subscription?</summary><p>No, and there never will be. You pay $9.99 once and Lunchbox<span class="wm">WM</span> is yours, including every future version. Nothing renews and you're never charged again.</p></details>
       <details><summary>Can I try it before I buy?</summary><p>Yes. Download it and every feature works for 7 days, with no email or card needed. If you buy and change your mind, you have 14 days for a full refund.</p></details>
-      <details><summary><span>What does Lunchbox<span class="wm">WM</span> need permission for?</span></summary><p>Accessibility, so it can move and resize other apps' windows and listen for its shortcuts. Screen Recording is optional: allow it and the Shelf in Focus shows live previews of your windows instead of app icons.</p></details>
-      <details><summary>Will it take over my keyboard?</summary><p>Only a handful of combinations, and only with the left ⌘ key. Right ⌘ keeps doing what it always did, so ⌘← still jumps to the start of a line.</p></details>
-      <details><summary>Can I change the shortcuts?</summary><p>Yes, every one. Open Keyboard Shortcuts from the menu bar, click a command and press the keys you want. Lunchbox<span class="wm">WM</span> turns down combinations that would get in the way of typing or that another command already uses, and Restore Defaults puts everything back.</p></details>
-      <details><summary>How do I set it up?</summary><p>Lunchbox<span class="wm">WM</span> walks you through it the first time it opens: allow Accessibility, tap the three keys you want for your Workspaces, and try every shortcut on a practice screen that can't touch your real windows. It takes about a minute, and you can run it again from the menu bar.</p></details>
-      <details><summary>How do the three Workspaces work?</summary><p>During setup you tap three keys you never use, ideally out of the way on the right, like Page Up, Page Down and End. ⌘ plus one of them switches Workspaces instantly; add ⇧ to take the focused window with you. Hide (⇧⌘H) sends a window to Workspace 3 without leaving the one you're in.</p></details>
+      <details><summary><span>What does Lunchbox<span class="wm">WM</span> need permission for?</span></summary><p>Accessibility, so it can move and resize other apps' windows and listen for its shortcuts. That's the only one it needs. Two more are optional: Screen Recording, asked the first time you use Focus, makes the Shelf show live previews of your windows instead of app icons. And the first time Summon opens a web search in Arc, Safari, Chrome, Edge, Brave or Vivaldi, macOS asks whether Lunchbox<span class="wm">WM</span> may control that browser, so the page opens as a tab in the Workspace you're in. Say no and links open the usual way.</p></details>
+      <details><summary>Will it take over my keyboard?</summary><p>Only a handful of combinations, all with the left ⌘ key, plus ⇧ then Space for Summon (tapped one after the other, so typing a capital and a space never opens it). Right ⌘ keeps doing what it always did: ⌘← still jumps to the start of a line, and ⌘1 still picks a browser tab.</p></details>
+      <details><summary>Can I change the shortcuts?</summary><p>Yes, every one. Open Keyboard Shortcuts from the menu bar, click a command and press the keys you want. Lunchbox<span class="wm">WM</span> turns down combinations that would get in the way of typing or that another command already uses, and Restore All Defaults puts everything back.</p></details>
+      <details><summary>How do I set it up?</summary><p>Lunchbox<span class="wm">WM</span> walks you through it the first time it opens: allow Accessibility, then try every shortcut on a practice screen that can't touch your real windows. It takes about a minute, and Welcome &amp; Setup in the menu bar runs it again.</p></details>
+      <details><summary>How do Workspaces work?</summary><p>Left ⌘ and a number goes to that Workspace instantly: ⌘1, ⌘2, ⌘3. Add ⇧ (⌘⇧2) and the focused window comes with you. You start with three and can add up to nine from the menu bar. Hide (⌘⇧H) sends a window to the last Workspace without leaving the one you're in. Right ⌘ and a number still reach the app in front, and with three Workspaces ⌘⇧4 and ⌘⇧5 are still the Mac's screenshot keys.</p></details>
       <details><summary>Does it work with more than one display?</summary><p>Yes. Each display has its own layout and focus crosses between them at the edges. If a second display is a dummy plug or you only want your main screen tiled, turn off Use All Displays in Settings.</p></details>
       <details><summary>Something isn't working. How do I get help?</summary><p>Write to <a href="mailto:support@sentientdonut.com">support@sentientdonut.com</a>. It helps to choose Settings › Copy Diagnostics in Lunchbox<span class="wm">WM</span>'s menu first and paste what it copies into your email: your Lunchbox<span class="wm">WM</span> and macOS versions, your displays, and which apps' windows are in each Workspace. It never includes window titles, file names or your license key.</p></details>
       <details><summary>What does "lifetime updates" mean?</summary><p>You buy Lunchbox<span class="wm">WM</span> once and every future version is included. No upgrade fees, no subscription, no catch.</p></details>
@@ -598,23 +677,22 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     <svg class="icon"><use href="#logo"/></svg>
     <h2>Go on, open another window.</h2>
     <p class="lede">It already knows where to go.</p>
-    <a class="btn dark buy" href="#pricing"><svg><use href="#apple"/></svg>Download for Mac<span class="sep"></span><span class="price">$9.99</span></a>
+    <div class="actions"><a class="btn dark" href="download/LunchboxWM.dmg">Try free for 7 days</a><a class="btn" href="#pricing">Buy once · $9.99</a></div>
     <p class="fine">One-time purchase · No subscription · Lifetime updates</p>
   </section>
 
   <section class="footnotes" id="footnotes" aria-label="Footnotes">
     <ol>
+      <li id="fn-trial">The free trial lasts 7 days from the first time you open Lunchbox<span class="wm">WM</span>, with every feature. No email or card needed to try it. When it ends, tiling pauses (your windows stay where they are) until you enter a license.</li>
       <li id="fn-lifetime">Every future version of Lunchbox<span class="wm">WM</span> we release is included at no extra charge. See the <a href="terms.html">Terms of Sale</a>.</li>
       <li id="fn-silicon">Requires a Mac with Apple silicon (M1 or later) and macOS 14 Sonoma or later. Lunchbox<span class="wm">WM</span> doesn't run on Intel-based Macs.</li>
-      <li id="fn-lag">Lunchbox<span class="wm">WM</span> handles a shortcut in about 7 milliseconds (median of 656 shortcuts on a Mac mini with M4, October 2026). Windows of apps that take longer than 30 milliseconds to move are placed in one step instead of animated, so a slow app never holds Lunchbox<span class="wm">WM</span> up.</li>
       <li id="fn-price">Price in US dollars. Sales tax or VAT is added at checkout where it applies.</li>
-      <li id="fn-trial">The free trial lasts 7 days from the first time you open Lunchbox<span class="wm">WM</span>, with every feature. No email or card needed to try it. When it ends, tiling pauses (your windows stay where they are) until you enter a license.</li>
     </ol>
   </section>
 
   <footer>
     <a class="brand" href="#top" style="font-size:15px"><svg style="width:22px;height:22px"><use href="#logo"/></svg><span>Lunchbox<span class="wm">WM</span></span></a>
-    <span>It’s time to stop losing things in a pile of windows.</span>
+    <span>Tiling that feels like it came with your Mac.</span>
     <span class="foot-links"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="refunds.html">Refunds</a><a href="recover.html">Lost license</a><a href="mailto:support@sentientdonut.com">Contact</a></span>
     <span>© 2026 Sentient Donut LLC</span>
   </footer>
@@ -641,7 +719,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     buyLabel.textContent = "Opening secure checkout…";
   });
   // Back from Stripe with the browser's Back button: the button works again.
-  addEventListener("pageshow", () => { buyButton.disabled = false; buyLabel.textContent = "Buy LunchboxWM · $9.99"; });
+  addEventListener("pageshow", () => { buyButton.disabled = false; buyLabel.innerHTML = 'Buy Lunchbox<span class="wm">WM</span> · $9.99'; });
   if (new URLSearchParams(location.search).get("checkout") === "unavailable") {
     buyNote.textContent = "Checkout didn't open, and you weren't charged. Please try again in a minute.";
   }
@@ -654,27 +732,6 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   }).join("");
 
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  // ---------- "No grid to draw": the outlined window moves like ⇧⌘ + arrows ----------
-  const tiles = document.getElementById("art-tiles");
-  const SLOT = { tall: [0, 0, 46, 100], leftTop: [0, 0, 46, 46], leftBottom: [0, 54, 46, 46],
-                 tallRight: [54, 0, 46, 100], rightTop: [54, 0, 46, 46], rightBottom: [54, 54, 46, 46] };
-  // Down, left (it joins the left column and the right one grows), up, then right back home.
-  const MOVES = [
-    { b: "tall", a: "rightTop", c: "rightBottom" },
-    { b: "tall", a: "rightBottom", c: "rightTop" },
-    { b: "leftTop", a: "leftBottom", c: "tallRight" },
-    { b: "leftBottom", a: "leftTop", c: "tallRight" },
-  ];
-  let move = 0, tilesVisible = false;
-  function placeTiles() {
-    for (const el of tiles.children) {
-      const [x, y, w, h] = SLOT[MOVES[move][el.dataset.t]];
-      Object.assign(el.style, { left: x + "%", top: y + "%", width: w + "%", height: h + "%" });
-    }
-  }
-  if (!reduce) setInterval(() => { if (tilesVisible) { move = (move + 1) % MOVES.length; placeTiles(); } }, 1500);
-  new IntersectionObserver(([e]) => { tilesVisible = e.isIntersecting; }).observe(tiles);
 
   // ---------- the hero: glass breaking once, then holding on the shards mid-fall ----------
   const film = document.getElementById("hero-film");
@@ -822,8 +879,11 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     c3t: [67.17, 2, 31.33, 47.25], c3b: [67.17, 50.75, 31.33, 47.25],
     f1: [1.5, 2, 23.13, 96], f2: [26.13, 2, 23.13, 96], f3: [50.75, 2, 23.13, 96], f4: [75.38, 2, 23.13, 96],
     s1: [3, 14, 16, 15], s2: [3, 36, 16, 15], s3: [3, 58, 16, 15],
+    gTL: [1.5, 2, 47.75, 47.25], gBL: [1.5, 50.75, 47.75, 47.25], gTR: [50.75, 2, 47.75, 47.25], gBR: [50.75, 50.75, 47.75, 47.25],
+    l3a: [1.5, 2, 47.75, 29.67], l3b: [1.5, 35.17, 47.75, 29.67], l3c: [1.5, 68.33, 47.75, 29.67],
   };
-  const four = { A: R.c1, B: R.c2, C: R.c3t, D: R.c3b };
+  // The fourth window makes a 2×2 grid: two columns of two.
+  const four = { A: R.gTL, B: R.gBL, C: R.gTR, D: R.gBR };
   const shelf = (r) => ({ r, shelf: true });
   const away = (r) => ({ r, away: true });
 
@@ -853,7 +913,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     if (H) {
       const all = [
         ["WINDOWS", [["Left ⌘", "←→"], "Focus the next window", "select switch"], [["⇧ Left ⌘", "←→"], "Move the window", "arrange swap"], [["⇧ Left ⌘", "F"], "Focus", "maximize fullscreen center"], [["⇧ Left ⌘", "0"], "Tidy", "reset even balance"]],
-        ["WORKSPACES", [["⌘", "Page Up"], "Go to Workspace 1", "desktop space switch"], [["⇧⌘", "Page Down"], "Move the window to Workspace 2", "send desktop space"], [["⇧ Left ⌘", "H"], "Hide in Workspace 3", "stash tuck minimize away"]],
+        ["WORKSPACES", [["Left ⌘", "1"], "Go to Workspace 1", "desktop space switch"], [["⇧ Left ⌘", "2"], "Move the window to Workspace 2", "send desktop space"], [["⇧ Left ⌘", "H"], "Hide in the last Workspace", "stash tuck minimize away"]],
         ["SUMMON", [["⇧ then", "Space"], "Summon an app, window or website", "launcher open search spotlight"]],
       ];
       const q = (H.q || "").toLowerCase();
@@ -869,7 +929,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
 
   const browserRows = [
     { t: "Browser", s: "Go to its window", sub: "New Browser window" },
-    { t: "Brochure.pdf", s: "Documents", ic: "background:linear-gradient(135deg,#e9ecf1,#b9c0cc)" },
+    { t: "Browser — Recipes", s: "Browser · Workspace 2" },
   ];
   const notesRows = [
     { t: "Notes", s: "Open", ic: "background:linear-gradient(135deg,#ffe58a,#f5c542)" },
@@ -879,9 +939,10 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     { t: "Search the web for “best desk lamp”", s: "Google, in your browser", ic: "background:linear-gradient(135deg,#7aa6ff,#2f6bff)" },
   ];
 
+  // Each chapter follows what LunchboxWM does with today's default shortcuts (README.md).
   const CHAPTERS = [
     { title: "Open with Summon", hint: "⇧ then Space", steps: [
-      { win: {}, keys: [], cap: "Every window starts the same way: with Summon." },
+      { win: {}, keys: [], cap: "Open anything from the keyboard with Summon." },
       { win: {}, keys: ["⇧", "then", "Space"], launcher: { q: "", rows: [] }, cap: "Tap ⇧, then Space, and Summon is there instantly." },
       { win: {}, keys: ["N", "O", "T"], launcher: { q: "not", rows: notesRows, sel: 0 }, cap: "Type a few letters. Apps come first, then open windows, then the web." },
       { win: { A: R.single }, focus: "A", keys: ["↩"], cap: "↩ opens it, already tiled and focused." },
@@ -890,26 +951,27 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       { win: { A: R.single }, focus: "A", keys: [], cap: "One window sits centered at a calm 16:10. Never stretched edge to edge." },
       { win: { A: R.halfL, B: R.halfR }, focus: "B", keys: [], cap: "Open a second and they share the screen." },
       { win: { A: R.c1, B: R.c2, C: R.c3 }, focus: "C", keys: [], cap: "A third gets its own column." },
-      { win: four, focus: "D", keys: [], cap: "After that, new windows stack where there's room." },
+      { win: four, focus: "D", keys: [], cap: "A fourth makes a 2×2 grid." },
     ]},
     { title: "Move focus", hint: "left ⌘ + arrows", steps: [
       { win: four, focus: "A", keys: [], cap: "Hold the left ⌘ key and point with the arrows." },
-      { win: four, focus: "B", keys: ["Left ⌘", "→"], cap: "Focus jumps to the window on the right." },
-      { win: four, focus: "C", keys: ["Left ⌘", "→"], cap: "And again." },
-      { win: four, focus: "D", keys: ["Left ⌘", "↓"], cap: "Down into the stack." },
-      { win: four, focus: "B", keys: ["Left ⌘", "←"], cap: "Right ⌘ is left alone, so it still moves your text cursor." },
+      { win: four, focus: "C", keys: ["Left ⌘", "→"], cap: "Focus jumps to the window on the right." },
+      { win: four, focus: "D", keys: ["Left ⌘", "↓"], cap: "Down to the one below." },
+      { win: four, focus: "B", keys: ["Left ⌘", "←"], cap: "And back to the left." },
+      { win: four, focus: "A", keys: ["Left ⌘", "↑"], cap: "Right ⌘ is left alone, so it still moves your text cursor." },
     ]},
     { title: "Move windows", hint: "⇧ + left ⌘ + arrows", steps: [
       { win: four, focus: "D", keys: [], cap: "Add ⇧ to carry the focused window with you." },
-      { win: { A: R.c1, B: R.c2t, D: R.c2b, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "←"], cap: "First press: it stacks with its neighbor." },
-      { win: { A: R.f1, D: R.f2, B: R.f3, C: R.f4 }, focus: "D", keys: ["⇧", "Left ⌘", "←"], cap: "Press again: it moves past it." },
-      { win: { A: R.c1, B: R.c2t, D: R.c2b, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "→"], cap: "Any layout is a few presses away." },
-      { win: { A: R.c1, D: R.c2t, B: R.c2b, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "↑"], cap: "↑ and ↓ swap places in a stack." },
+      { win: { A: R.c1t, B: R.c1b, D: R.c2, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "←"], cap: "Out of its stack, it gets a column of its own." },
+      { win: { A: R.l3a, B: R.l3b, D: R.l3c, C: R.halfR }, focus: "D", keys: ["⇧", "Left ⌘", "←"], cap: "On its own, it joins the stack beside it." },
+      { win: { D: R.c1, A: R.c2t, B: R.c2b, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "←"], cap: "Press again and it moves past." },
+      { win: { A: R.l3a, B: R.l3b, D: R.l3c, C: R.halfR }, focus: "D", keys: ["⇧", "Left ⌘", "→"], cap: "Any layout is a few presses away." },
+      { win: { A: R.l3a, D: R.l3b, B: R.l3c, C: R.halfR }, focus: "D", keys: ["⇧", "Left ⌘", "↑"], cap: "↑ and ↓ swap places in a stack." },
     ]},
-    { title: "Resize & Tidy", hint: "⇧ + left ⌘ + − / 0", steps: [
+    { title: "Resize & Tidy", hint: "⇧ + left ⌘ + plus, minus, 0", steps: [
       { win: four, focus: "B", keys: [], cap: "Give the focused window more room when it needs it." },
-      { win: { A: [1.5, 2, 24, 96], B: [27, 2, 44, 96], C: [72.5, 2, 26, 47.25], D: [72.5, 50.75, 26, 47.25] }, focus: "B", keys: ["⇧", "Left ⌘", "+"], cap: "Its neighbors make space." },
-      { win: { A: [1.5, 2, 19, 96], B: [22, 2, 54, 96], C: [77.5, 2, 21, 47.25], D: [77.5, 50.75, 21, 47.25] }, focus: "B", keys: ["⇧", "Left ⌘", "+"], cap: "A bit more." },
+      { win: { A: [1.5, 2, 55.75, 39.25], B: [1.5, 44.75, 55.75, 53.25], C: [60.25, 2, 38.25, 47.25], D: [60.25, 50.75, 38.25, 47.25] }, focus: "B", keys: ["⇧", "Left ⌘", "+"], cap: "It grows, and its neighbors make space." },
+      { win: { A: [1.5, 2, 63.75, 31.25], B: [1.5, 36.75, 63.75, 61.25], C: [68.25, 2, 30.25, 47.25], D: [68.25, 50.75, 30.25, 47.25] }, focus: "B", keys: ["⇧", "Left ⌘", "+"], cap: "A bit more. Minus gives some back." },
       { win: four, focus: "B", keys: ["⇧", "Left ⌘", "0"], cap: "Tidy puts every split back to even." },
     ]},
     { title: "Focus", hint: "⇧ + left ⌘ + F", steps: [
@@ -917,17 +979,17 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       { win: { A: R.single, B: shelf(R.s1), C: shelf(R.s2), D: shelf(R.s3) }, focus: "A", keys: ["⇧", "Left ⌘", "F"], cap: "It takes the center. The rest wait on the Shelf, tilted out of the way." },
       { win: four, focus: "A", keys: ["⇧", "Left ⌘", "F"], cap: "⇧⌘F again, or a click on any card on the Shelf, brings everything back." },
     ]},
-    { title: "Three Workspaces", hint: "⌘ + your Workspace keys", steps: [
-      { win: four, focus: "C", space: 1, keys: [], cap: "Pick three keys you never use, like Page Up, Page Down and End." },
-      { win: { A: away(R.c1), B: away(R.c2), C: away(R.c3t), D: away(R.c3b), E: R.single }, focus: "E", space: 2, keys: ["⌘", "Page Down"], cap: "⌘ plus a Workspace key switches instantly. No slide, no wait." },
-      { win: four, focus: "C", space: 1, keys: ["⌘", "Page Up"], cap: "Back again, focused on the rightmost window." },
-      { win: { A: away(R.c1), B: away(R.c2), D: away(R.c3b), E: R.halfL, C: R.halfR }, focus: "C", space: 2, keys: ["⇧", "⌘", "Page Down"], cap: "Add ⇧ and the window comes with you." },
-      { win: { A: away(R.c1), B: away(R.c2), D: away(R.c3b), E: R.single }, focus: "E", space: 2, keys: ["⇧", "Left ⌘", "H"], cap: "Hide (⇧⌘H) tucks a window away in Workspace 3." },
+    { title: "Workspaces", hint: "left ⌘ + 1, 2, 3", steps: [
+      { win: four, focus: "C", space: 1, keys: [], cap: "Three Workspaces to start, on left ⌘ and a number." },
+      { win: { A: away(R.gTL), B: away(R.gBL), C: away(R.gTR), D: away(R.gBR), E: R.single }, focus: "E", space: 2, keys: ["Left ⌘", "2"], cap: "Left ⌘ 2 switches instantly. No slide, no wait." },
+      { win: four, focus: "C", space: 1, keys: ["Left ⌘", "1"], cap: "Left ⌘ 1 and you're back." },
+      { win: { A: away(R.gTL), B: away(R.gBL), D: away(R.gBR), E: R.halfL, C: R.halfR }, focus: "C", space: 2, keys: ["⇧", "Left ⌘", "2"], cap: "Add ⇧ and the window comes with you." },
+      { win: { A: away(R.gTL), B: away(R.gBL), D: away(R.gBR), E: R.single }, focus: "E", space: 2, keys: ["⇧", "Left ⌘", "H"], cap: "Hide (⇧⌘H) tucks a window away in Workspace 3." },
     ]},
     { title: "Summon tricks", hint: "⇧ then Space", steps: [
-      { win: four, focus: "B", keys: ["B", "R", "O"], launcher: { q: "bro", rows: browserRows, sel: 0 }, cap: "An app that's already open offers two choices." },
-      { win: { A: R.c1t, F: R.c1b, B: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: ["⇧", "↩"], cap: "↩ goes to its window. ⇧↩ opens a new one, tiled and focused." },
-      { win: { A: R.c1t, F: R.c1b, B: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: [], launcher: { q: "best desk lamp", rows: webRows, sel: 0 }, cap: "No match? It searches the web, in a tab right here. Never a pop-up." },
+      { win: four, focus: "B", keys: ["B", "R", "O"], launcher: { q: "bro", rows: browserRows, sel: 0 }, cap: "An app that's already open offers two choices, and its windows by name." },
+      { win: { A: R.c1t, B: R.c1b, F: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: ["⇧", "↩"], cap: "↩ goes to its window. ⇧↩ opens a new one, tiled and focused." },
+      { win: { A: R.c1t, B: R.c1b, F: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: [], launcher: { q: "best desk lamp", rows: webRows, sel: 0 }, cap: "No match? It searches the web in your browser, as a tab in this Workspace." },
     ]},
     { title: "Cheat Sheet", hint: "⇧ + left ⌘ + Space", steps: [
       { win: four, focus: "C", keys: [], cap: "Forget a shortcut? There's one to show them all." },
