@@ -62,9 +62,9 @@ p { margin: 0; }
 .nav.scrolled .nav-inner { background: rgba(255,255,255,.86); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-color: var(--line); box-shadow: 0 8px 30px rgba(20,30,60,.08); }
 .brand { display: flex; align-items: center; gap: 10px; font: 600 17px var(--display); letter-spacing: -0.02em; text-decoration: none; }
 .brand svg { width: 28px; height: 28px; }
-/* The name: LunchboxWM, with WM in the brand blue. */
-.wm { color: var(--accent); }
-.btn.dark .wm { color: inherit; }
+/* The name: LunchboxWM. Only the main logo at the top has WM in the brand blue; everywhere else WM is the color of the words around it. */
+.wm { color: inherit; }
+.nav .brand .wm { color: var(--accent); }
 .nav-links { display: flex; gap: 28px; font-size: 14.5px; color: #4b525b; }
 .nav-links a { text-decoration: none; }
 .nav-links a:hover { color: var(--ink); }
