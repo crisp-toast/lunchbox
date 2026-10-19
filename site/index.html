@@ -707,7 +707,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   const buyForm = document.getElementById("buy-form"), buyButton = document.getElementById("buy-button");
   const buyLabel = buyButton.querySelector("span"), buyNote = document.getElementById("buy-note");
   document.getElementById("attempt").value = (crypto.randomUUID && crypto.randomUUID()) || Date.now() + "-" + Math.random().toString(16).slice(2);
-  const storeLive = /(^|\.)sentientdonut\.com$/.test(location.hostname);
+  const storeLive = /(^|\.)lunchboxwm\.com$/.test(location.hostname);
   buyForm.addEventListener("submit", (e) => {
     if (!storeLive) { e.preventDefault(); buyNote.textContent = "Checkout opens at launch. Thanks for your patience."; return; }
     if (buyButton.disabled) { e.preventDefault(); return; }
