@@ -686,12 +686,20 @@ final class Tiler {
             window.target = nil
             return true
         }
-        if !wantsTile, isNew, initialScanDone, info.windowLike, onScreen.contains(info.id) {
-            // The app Tessel is holding a tile for answered with a window that doesn't
-            // tile (a fixed-size window, say). Its real one may be right behind; if
-            // not, close the gap soon instead of waiting it out.
-            let soon = CACurrentMediaTime() + Self.placeholderAfterOtherWindow
-            for e in expected where e.matches(window) { e.deadline = min(e.deadline, soon) }
+        if !wantsTile, initialScanDone, onScreen.contains(info.id), !info.minimized {
+            // The app Tessel is holding a tile for answered with something that doesn't tile: a
+            // welcome window or a template chooser (Xcode, Pages), a dialog, a fixed-size window.
+            // Once the app has finished starting up, that's its answer for now, so the gap closes
+            // in a moment (a window-like one waits a little longer: its real window may be right
+            // behind). A splash while the app is still starting up doesn't count.
+            let launched = NSRunningApplication(processIdentifier: app.pid)?.isFinishedLaunching ?? true
+            for e in expected where launched && !e.answeredOtherwise && e.matches(window) {
+                e.answeredOtherwise = true
+                let wait = info.windowLike ? Self.placeholderAfterOtherWindow : Self.placeholderAfterPanel
+                e.deadline = min(e.deadline, CACurrentMediaTime() + wait)
+                checkPlaceholders(after: wait)
+                log.notice("\(e.bundleID, privacy: .public) answered with a window that doesn't tile; letting its tile go")
+            }
         }
         return false
     }
@@ -1118,6 +1126,12 @@ final class Tiler {
         if returnFromFullScreen(window) { return }
         let saved = savedPlacement.removeValue(forKey: window.id)
         if saved == nil, initialScanDone, takePlaceholder(for: window) { return }
+        // The app brought back a window it already had (a minimized one, say) instead of making a
+        // new one: that's the window you were waiting for, so the tile held for it goes.
+        if initialScanDone {
+            let answered = expected.filter { $0.existing.contains(window.id) && $0.bundleID == window.handle.app.bundleID }
+            if !answered.isEmpty { giveUp(answered, why: "it brought back a window it already had") }
+        }
         let display = saved.flatMap { s in activeDisplays.first { $0.uuid == s.display } } ?? arrivalDisplay(for: window.frame)
         guard let display else { return }
         // A window that just opened: not one back from before a relaunch or a pause, nor one
@@ -1474,6 +1488,12 @@ final class Tiler {
                 // it, not to whichever tile is nearest the middle of the screen.
                 let before = place(of: id) == nil ? lastFocused[currentSpace] : nil
                 forget(id)
+                // An app Tessel is holding a tile for closed what it showed instead (Xcode's welcome
+                // window, say) and has nothing else up: no window is coming, so close the gap now.
+                let pending = expected.filter { $0.answeredOtherwise && ($0.pid == app.pid || ($0.pid == nil && $0.bundleID == app.bundleID)) }
+                if !pending.isEmpty, !windows.values.contains(where: { $0.pid == app.pid && !$0.minimized && !$0.hidden }) {
+                    giveUp(pending, why: "it closed the window it showed instead")
+                }
                 relayout(animated: true)
                 persist()
                 // macOS would hand focus to another window of the same app, which may be
@@ -2849,6 +2869,9 @@ final class Tiler {
         let tile: PlaceholderTile
         /// It took the window's usual spot (Learning).
         var usual = false
+        /// The app, done starting up, showed something that doesn't tile instead (a welcome
+        /// window, a template chooser, a dialog): its answer for now. The tile lets go soon.
+        var answeredOtherwise = false
 
         init(id: CGWindowID, bundleID: String, pid: pid_t?, existing: Set<CGWindowID>, deadline: CFTimeInterval,
              tile: PlaceholderTile) {
@@ -2870,8 +2893,11 @@ final class Tiler {
     static let placeholderWait: CFTimeInterval = 8
     /// ...or, while the app is visibly still starting up (a big app's first launch), up to this long.
     static let placeholderLongestWait: CFTimeInterval = 20
-    /// How long it waits once the app showed some other window instead (one that doesn't tile).
+    /// How long it waits once the app showed some other window instead: one that looks like a
+    /// window but doesn't tile (its real one may be right behind)...
     static let placeholderAfterOtherWindow: CFTimeInterval = 1.5
+    /// ...or a panel or dialog, like Xcode's welcome window or a template chooser.
+    static let placeholderAfterPanel: CFTimeInterval = 0.4
 
     /// Tiles held for windows on their way, oldest first.
     private var expected: [Expected] = []
@@ -2983,18 +3009,37 @@ final class Tiler {
     }
 
     /// Lets go of tiles whose window didn't come in time.
+    /// Looks again right when a tile's shortened wait runs out, not at the next routine check.
+    private func checkPlaceholders(after delay: CFTimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.02) { [weak self] in self?.checkPlaceholders() }
+    }
+
     private func checkPlaceholders() {
         guard enabled else { return }
         let now = CACurrentMediaTime()
+        // An app that put up its other window while still starting up (Xcode's welcome window can
+        // beat the end of its launch) has answered once it's done starting up.
+        for e in expected where !e.answeredOtherwise {
+            guard let pid = e.pid, NSRunningApplication(processIdentifier: pid)?.isFinishedLaunching == true,
+                  windows.values.contains(where: { $0.pid == pid && !e.existing.contains($0.id) && !$0.minimized && !$0.hidden
+                      && place(of: $0.id) == nil && isOnScreen($0.id) }) else { continue }
+            e.answeredOtherwise = true
+            e.deadline = min(e.deadline, now + Self.placeholderAfterPanel)
+            checkPlaceholders(after: Self.placeholderAfterPanel)
+            log.notice("\(e.bundleID, privacy: .public) answered with a window that doesn't tile; letting its tile go")
+        }
         let late = expected.filter { e in
             guard now >= e.deadline else { return false }
             let app = e.pid.flatMap { NSRunningApplication(processIdentifier: $0) }
                 ?? NSRunningApplication.runningApplications(withBundleIdentifier: e.bundleID).first { !$0.isTerminated }
             let starting = app.map { !$0.isFinishedLaunching && !$0.isTerminated } ?? false
-            return !starting || now - e.started >= Self.placeholderLongestWait
+            return e.answeredOtherwise || !starting || now - e.started >= Self.placeholderLongestWait
         }
         if !late.isEmpty {
-            giveUp(late, why: "no window came")
+            let answered = late.filter(\.answeredOtherwise)
+            if !answered.isEmpty { giveUp(answered, why: "it showed a window that doesn't tile instead") }
+            let empty = late.filter { !$0.answeredOtherwise }
+            if !empty.isEmpty { giveUp(empty, why: "no window came") }
             relayout(animated: true)
         }
         schedulePlaceholderCheck()

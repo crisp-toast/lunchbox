@@ -128,9 +128,11 @@ Apps you open often rise to the top.
   makes room right away, so a slow launch never looks like nothing happened: the windows here glide
   aside and a frosted **placeholder** with the app's icon, gently pulsing, holds the exact spot and
   size the window will get (alone, or in Focus, it's centered at 16:10). The app's first new window lands right in it and nothing else moves; any more windows
-  it opens tile as usual. If no window comes within about 8 seconds (a little longer while a big app
-  is still starting up), the app quits, or its window opens while you're in another Workspace, the
-  placeholder fades and the gap closes. A placeholder belongs to its Workspace like a window does.
+  it opens tile as usual. If the app shows something that doesn't tile instead (Xcode's welcome
+  window, a template chooser, a dialog), brings back a window it already had, or closes what it
+  showed, the placeholder goes at once. If no window comes within about 8 seconds (a little longer
+  while a big app is still starting up), the app quits, or its window opens while you're in another
+  Workspace, the placeholder fades and the gap closes. A placeholder belongs to its Workspace like a window does.
   You can't click or focus it.
 - ↑ ↓ to choose, Return to open, ⇧↩ for a new window, Esc or ⇧ Space to close. When nothing matches, it offers to search the web with your Mac's search engine in your default browser (or opens a typed address). The page opens as a new tab in the browser's window in this Workspace, or in a new window here when it has none, never a pop-up like Little Arc. This works with Arc, Safari, Chrome, Edge, Brave and Vivaldi; the first time, macOS asks whether Tessel may control the browser. Other browsers, or a browser you said no to, get the link the usual way, and Tessel still tiles whatever window it lands in.
 
