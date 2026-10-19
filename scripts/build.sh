@@ -1,9 +1,11 @@
 #!/bin/bash
 # Builds Tessel.app into build/. With --install, replaces /Applications/Tessel.app and relaunches it.
+# This is a development build: TESSEL_DEV keeps every script command (press:, dump, license:…)
+# for the test VMs and WindowLab. scripts/release.sh builds what customers get, without them.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-swift build -c release -j "${JOBS:-4}" --product Tessel
+swift build -c release -j "${JOBS:-4}" --product Tessel -Xswiftc -DTESSEL_DEV
 BIN="$(swift build -c release --show-bin-path)/Tessel"
 
 APP="build/Tessel.app"

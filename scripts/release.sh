@@ -14,14 +14,23 @@ APP="$OUT/Tessel.app"
 DMG="$OUT/Tessel-$VERSION.dmg"
 
 if [[ "$DRY" == "--dry-run" ]]; then
-  IDENTITY=$(security find-identity -v -p codesigning | awk '/Apple Development/ {print $2; exit}')
+  # The development certificate build.sh uses, so a test Mac's Accessibility grant carries over.
+  IDENTITY=$(security find-identity -v -p codesigning | awk '/Apple Development/ && /ZV7V23WVKL/ {print $2; exit}')
+  [[ -n "$IDENTITY" ]] || IDENTITY=$(security find-identity -v -p codesigning | awk '/Apple Development/ {print $2; exit}')
 else
   IDENTITY=$(security find-identity -v -p codesigning | awk '/Developer ID Application/ {print $2; exit}')
   [[ -n "$IDENTITY" ]] || { echo "No Developer ID Application certificate in the keychain (see docs/store.md)."; exit 1; }
 fi
 
-swift build -c release --arch arm64 --product Tessel
-BIN="$(swift build -c release --arch arm64 --show-bin-path)/Tessel"
+# Never TESSEL_DEV: a release takes only the script commands an agent needs on a customer's Mac
+# (pause, resume, retile, balance), since any process can post one. Its own build folder, so
+# nothing compiled for scripts/build.sh's development builds can end up in it.
+SCRATCH=".build/dist"
+swift build -c release --arch arm64 --scratch-path "$SCRATCH" --product Tessel
+BIN="$(swift build -c release --arch arm64 --scratch-path "$SCRATCH" --show-bin-path)/Tessel"
+if LC_ALL=C grep -aq "takes every script command" "$BIN"; then
+  echo "$BIN is a development build (it takes every script command). Not shipping it."; exit 1
+fi
 rm -rf "$OUT"; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Tessel"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"

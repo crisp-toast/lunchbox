@@ -16,6 +16,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     var onEnterLicense: (() -> Void)?
     var onBuy: (() -> Void)?
     var onCheckForUpdates: (() -> Void)?
+    var onCopyDiagnostics: (() -> Void)?
     var licensing: Licensing?
 
     init(tiler: Tiler) {
@@ -126,6 +127,9 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         options.addItem(action("Keyboard Shortcuts…") { [weak self] in self?.onShowShortcuts?() })
         options.addItem(action("Welcome & Setup…") { [weak self] in self?.onShowWelcome?() })
         options.addItem(action("Check for Updates…") { [weak self] in self?.onCheckForUpdates?() })
+        let diagnostics = action("Copy Diagnostics") { [weak self] in self?.onCopyDiagnostics?() }
+        diagnostics.toolTip = "Copies a summary for support to paste into an email: versions, displays, and which apps' windows are in each Workspace. No window titles, files or license key."
+        options.addItem(diagnostics)
         options.addItem(.separator())
         let learning = action("Learn Where Windows Go", checked: Learning.shared.isOn) { [weak self] in
             guard let self else { return }

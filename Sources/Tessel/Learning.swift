@@ -179,6 +179,11 @@ final class Learning {
         state.withLock { $0.on ? $0.seen[id]?.decision : nil }
     }
 
+    /// What the window classifier made of a window, if it's seen it (it runs while learning is on).
+    func behavior(of id: CGWindowID) -> WindowBehavior? {
+        state.withLock { $0.on ? $0.seen[id]?.behavior : nil }
+    }
+
     /// The size a window had when it first appeared, before Tessel tiled it.
     func openingSize(of id: CGWindowID) -> CGSize? {
         state.withLock { s in s.seen[id].map { CGSize(width: $0.features.width, height: $0.features.height) } }

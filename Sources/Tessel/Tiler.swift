@@ -3308,6 +3308,45 @@ final class Tiler {
 
     // MARK: Diagnostics
 
+    /// For Copy Diagnostics: each Workspace's tiles, and the windows that aren't in one, as their
+    /// apps' bundle IDs and what Tessel made of them. Never titles.
+    func supportWindows() -> (workspaces: [SupportSummary.Workspace], untiled: [SupportSummary.Window]) {
+        func entry(_ w: ManagedWindow, _ state: String) -> SupportSummary.Window {
+            SupportSummary.Window(id: w.id, app: w.handle.app.bundleID ?? "no bundle ID", state: state,
+                                  kind: Learning.shared.behavior(of: w.id), limits: limits[w.id], resizable: w.resizable)
+        }
+        var tiled = Set<CGWindowID>()
+        let workspaces = (0..<spaceCount).map { s -> SupportSummary.Workspace in
+            let layouts = s < spaces.count ? spaces[s] : [:]
+            let tiles = layouts.sorted { $0.key < $1.key }.map { uuid, layout -> SupportSummary.Tiles in
+                let columns = layout.columns.map { column in
+                    column.windows.compactMap { id -> SupportSummary.Window? in
+                        tiled.insert(id)
+                        if let w = windows[id] { return entry(w, layout.shelved.contains(id) ? "on the shelf" : "tiled") }
+                        return expected.first { $0.id == id }.map {
+                            SupportSummary.Window(id: id, app: $0.bundleID, state: "placeholder, waiting for its window")
+                        }
+                    }
+                }
+                let name = displays.first { $0.uuid == uuid }?.name ?? "a display that isn't connected"
+                return SupportSummary.Tiles(display: name, columns: columns, focus: layout.spotlight != nil)
+            }
+            return SupportSummary.Workspace(number: s + 1, tiles: tiles)
+        }
+        let untiled = windows.values.filter { !tiled.contains($0.id) }.sorted { $0.id < $1.id }.map { w -> SupportSummary.Window in
+            let state: String
+            if w.minimized { state = "minimized" }
+            else if userFloating.contains(w.id) { state = "floated by you" }
+            else if leftAloneApps.contains(w.handle.app.bundleID ?? "") { state = "app left alone" }
+            else if Self.floatingApps.contains(w.handle.app.bundleID ?? "") { state = "floats (its app always does)" }
+            else if Learning.shared.decision(for: w.id)?.choice == .float { state = "floats (learned)" }
+            else if !w.standard { state = "floats (panel or dialog)" }
+            else { state = w.hidden ? "not tiled, off screen" : "not tiled" }
+            return entry(w, state)
+        }
+        return (workspaces, untiled)
+    }
+
     func stateDescription() -> [String: Any] {
         var spaceList: [[String: Any]] = []
         for (s, layouts) in spaces.enumerated() {

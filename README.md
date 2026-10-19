@@ -200,15 +200,34 @@ System Settings → Privacy & Security.
 Tessel listens for distributed notifications named `com.tyleryouens.tessel.command`:
 
 ```bash
-osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately("com.tyleryouens.tessel.command", "focus-left", $(), true)'
+osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately("com.tyleryouens.tessel.command", "pause", $(), true)'
 ```
 
-Commands: `welcome`, `welcome-<step 0…4>`, `welcomeclose`, `find:<text>` (opens the launcher with that text), `help`, `help:<text>`, `launcher`, `launcher-open|up|down`, `focus-left|right|up|down`, `move-…`, `grow`, `shrink`, `close` (the focused window) or `close-<windowID>`, `hide`, `spotlight`, `space-1…3`, `send-1…3`,
-`balance`, `retile`, `displays-all`, `displays-main`, `pause`, `resume`, `expect:<bundle id>` (holds a
-placeholder for a window of that app, without opening anything, to try placeholders), `leave-app:<bundle id>` and
-`manage-app:<bundle id>` (stop and resume tiling one app's windows, for agents testing it on a
-dummy-plug display), the learning commands (see below), and `dump`, which writes the
-current state to `~/Library/Application Support/Tessel/state.json`.
+Any process on the Mac can post one, so which commands Tessel takes depends on the build, and that's
+fixed when it's compiled (no setting or environment variable changes it):
+
+- **Every build**, including the download customers get (`scripts/release.sh`): `pause`, `resume`,
+  `retile` and `balance`. Anything else is ignored, and the log says `ignored command <name>`.
+- **Development builds only** (`scripts/build.sh`, which passes `-DTESSEL_DEV`, and `swift build`, a
+  debug build): everything else. The test VMs (`vm.sh install-tessel`), WindowLab and Tyler's Mac run
+  these. `release.sh` uses its own build folder (`.build/dist`) and refuses a binary that was compiled
+  with them. Settings › Copy Diagnostics says which kind of build is running. A build.sh build is
+  version 1 to Sparkle, so once a release ships it offers to update to it: on a Mac where agents need
+  `leave-app:` (the mac-mini skill's `spoof.sh claim`) or `dump`, say no, or install build.sh's again.
+
+The development commands: `welcome`, `welcome-<step 0…4>` (`@<display id>` opens it on that display without
+taking focus), `welcomeclose`, `find:<text>` (opens Summon with that text), `help`, `help:<text>`,
+`launcher`, `launcher-open|new|up|down`, `shortcuts`, `focus-left|right|up|down`, `move-…`, `grow`,
+`shrink`, `close` (the focused window) or `close-<windowID>`, `hide`, `spotlight`, `space-1…9`,
+`send-1…9`, `workspaces-3…9`, `displays-all`, `displays-main`, `press:<keycode>[:cmd][:shift][:opt]`
+(presses the keys through the whole system, with Tessel's Accessibility permission, for end-to-end
+tests and demo recordings), `expect:<bundle id>` (holds a placeholder for a window of that app, without
+opening anything, to try placeholders), `leave-app:<bundle id>` and `manage-app:<bundle id>` (stop and
+resume tiling one app's windows, for agents testing it on a dummy-plug display), `license:<key>`,
+`license:window`, `license:remove`, `license:snapshot:<png>[:ended]`, `practice:<command>` (drives
+onboarding's practice screen), `timeback-add:<action>:<count>[:<days ago>]`, `copy-diagnostics`, the
+learning commands (see below), and `dump`, which writes the current state (Summon's results with
+file paths among it) to `~/Library/Application Support/Tessel/state.json`.
 
 `pause` and `resume` do what the menu's **Tiling** item does. Pausing brings back windows parked in
 other spaces, stops tiling, and lets every shortcut through to apps. Both are safe to send twice.
@@ -222,6 +241,12 @@ osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificati
 ```bash
 osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately("com.tyleryouens.tessel.command", "resume", $(), true)'
 ```
+
+**Copy Diagnostics** (Settings) puts a summary for support on the clipboard: the Tessel and macOS
+versions, the build kind, the displays, the Workspaces and each one's windows (as app bundle IDs, what
+kind of window Tessel took each for, and the size limits it learned), the windows not in a tile, the
+trial or license state, and the last day's errors from Tessel's log. It never includes window titles, file
+paths, the license key or the email address: log lines go through `SupportSummary.scrub` first.
 
 **Testing window handling:** `scripts/windowlab/build.sh` builds WindowLab, a small app that opens every
 kind of window Tessel has to handle on command: fixed-size, minimum or maximum size, keeps its shape,
@@ -269,7 +294,7 @@ says what happened, and ⌘ with the number of the Workspace you were in undoes 
 them all. It keeps everything in `~/Library/Application Support/Tessel/Learning`, out of
 backups, and never sends any of it anywhere.
 
-Commands: `learning-on`, `learning-off`, `classes` / `classify` (the window classifier's calls),
+Commands (development builds only): `learning-on`, `learning-off`, `classes` / `classify` (the window classifier's calls),
 `snapshot:<path>` (every window with its traits, for building the labeled set in the test VMs),
 `float` (float or tile the focused window),
 `learning-reset`, and `learning-lived:<seconds>` (counts that much window time at once, to try

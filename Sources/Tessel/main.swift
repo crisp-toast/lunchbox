@@ -57,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.onEnterLicense = { [weak self] in self?.licenseWindow.show() }
         menu.onBuy = { NSWorkspace.shared.open(Licensing.buyURL) }
         menu.onCheckForUpdates = { [weak self] in self?.updater.checkNow() }
+        menu.onCopyDiagnostics = { [weak self] in self?.copyDiagnostics() }
         licensing.onChange = { [weak self] in self?.licenseChanged() }
         licensing.onRevoked = { [weak self] license in
             self?.licenseWindow.show(error: "The license for \(license.email) was refunded, so it no longer unlocks Tessel. If that's a mistake, write to support@sentientdonut.com.")
@@ -196,10 +197,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Lets scripts drive Tessel without the keyboard, e.g.
-    /// `osascript -l JavaScript -e '…postNotificationName("com.tyleryouens.tessel.command", "focus-left")…'`.
-    /// Commands: focus-/move-left|right|up|down, grow, shrink, space-1…9, send-1…9, workspaces-3…9,
-    /// balance, retile, pause, resume, dump (writes the state to ~/Library/Application Support/Tessel/state.json),
-    /// timeback-add:<action>:<count>[:<days ago>].
+    /// `osascript -l JavaScript -e '…postNotificationName("com.tyleryouens.tessel.command", "pause")…'`.
+    /// Any process on the Mac can post these, so the builds customers get take only what an agent
+    /// needs there: pause, resume, retile and balance. Everything else (pressing keys with Tessel's
+    /// Accessibility permission, dump, license:, find:, leave-app:…) exists only in development
+    /// builds (see `Build`), and isn't in a release binary at all.
     private func listenForCommands() {
         DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name("com.tyleryouens.tessel.command"), object: nil, queue: .main
@@ -210,6 +212,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func run(_ command: String) {
+        switch command {
+        case "pause": setTiling(false)
+        case "resume": setTiling(true)
+        case "retile": tiler.retile()
+        case "balance": tiler.normalize()
+        default:
+            #if DEBUG || TESSEL_DEV
+            runDevelopment(command)
+            #else
+            // Only the name, so whatever else a stranger sent stays out of the log (and out of
+            // Copy Diagnostics).
+            let name = command.prefix { $0.isLetter || $0.isNumber || $0 == "-" }.prefix(32)
+            log.error("ignored command \(String(name), privacy: .public): only development builds take it")
+            #endif
+        }
+    }
+
+    #if DEBUG || TESSEL_DEV
+    /// The commands for tests, demos and agents on test Macs: focus-/move-left|right|up|down, grow,
+    /// shrink, space-1…9, send-1…9, workspaces-3…9, dump (writes the state to
+    /// ~/Library/Application Support/Tessel/state.json), press:, license:, timeback-add:… (README, Scripting).
+    private func runDevelopment(_ command: String) {
         if command.hasPrefix("license:") {
             // license:<key> activates; license:window shows the window; license:remove forgets it.
             let arg = String(command.dropFirst(8))
@@ -350,6 +374,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("learning", "off"?): tiler.setLearning(false)
         case ("learning", "reset"?): Learning.shared.reset()
         case ("dump", _): dumpState()
+        case ("copy", "diagnostics"?): copyDiagnostics()
         case ("workspaces", let n?): if let n = Int(n) { tiler.setSpaceCount(n) }
         default: log.error("unknown command \(command, privacy: .public)")
         }
@@ -405,6 +430,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let data = try? JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: dir.appendingPathComponent("state.json"))
         }
+    }
+    #endif
+
+    // MARK: Support
+
+    /// Settings › Copy Diagnostics: a support summary on the clipboard, without window titles,
+    /// file paths or the license.
+    private func copyDiagnostics() {
+        SupportDiagnostics.copy(tiler: tiler, licensing: licensing, trusted: menu.trusted)
     }
 }
 
