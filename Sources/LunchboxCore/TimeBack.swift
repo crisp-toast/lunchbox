@@ -48,7 +48,7 @@ public enum TimeBackAction: String, Codable, CaseIterable, Sendable {
 ///
 /// Only numbers and dates: no app names, no window titles, nothing that leaves the Mac.
 public struct TimeBack: Codable, Equatable, Sendable {
-    /// Days are kept this long, like the learning logs, then pruned.
+    /// Days are kept this long, then pruned.
     public static let keptDays = 90
 
     /// Counts by day ("2026-10-17", in your time zone), then by action. An action this
@@ -129,7 +129,7 @@ public struct TimeBack: Codable, Equatable, Sendable {
     }
 }
 
-/// Where `TimeBack` is kept: one small JSON file in the learning folder, under the same rules
+/// Where `TimeBack` is kept: one small JSON file in LunchboxWM's own folder, under the same rules
 /// as the event logs. The file is yours alone (0600), and the folder (0700) stays out of Time
 /// Machine and other backups.
 ///
@@ -169,7 +169,7 @@ public struct TimeBackFile {
     }
 }
 
-/// The words wherever the time back shows: the menu and What LunchboxWM Learned. Never a
+/// The words wherever the time back shows: the menu. Never a
 /// notification or a popup (Etiquette).
 public enum TimeBackWords {
     /// "23 minutes back", "under a minute back", or "no time back yet".

@@ -27,7 +27,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let licensing = Licensing()
     private let updater = Updater()
     private lazy var licenseWindow = LicenseWindow(licensing: licensing)
-    private let windowClasses = WindowClassesWindow()
     private var revocationTimer: Timer?
     private var trustPoll: Timer?
     private var signalSource: DispatchSourceSignal?
@@ -55,7 +54,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.updateUnlicensedKeys()
         }
         menu.onShowShortcuts = { [weak self] in self?.shortcuts.show() }
-        menu.onShowWindowClasses = { [weak self] in self?.windowClasses.show() }
         menu.licensing = licensing
         menu.onEnterLicense = { [weak self] in self?.licenseWindow.show() }
         menu.onBuy = { NSWorkspace.shared.open(Licensing.buyURL) }
@@ -109,7 +107,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         tiler.revealHiddenWindows()
-        Learning.shared.saveNow()
         TimeBackLedger.shared.saveNow()
     }
 
@@ -312,21 +309,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             tiler.expectWindow(from: String(command.dropFirst(7)), another: true)
             return
         }
-        // classes shows How LunchboxWM Sees Your Windows; classify writes the same, without titles, to
-        // ~/Library/Application Support/LunchboxWM/classes.json, for agents checking the classifier.
-        if command == "classes" { windowClasses.show(); return }
-        if command == "classify" { writeClasses(); return }
-        // snapshot:<path> appends every window of every app (with titles) to a JSON Lines file,
-        // to build the window classifier's labeled set in the test VMs.
-        if command.hasPrefix("snapshot:") {
-            WindowCensus.write(to: String(command.dropFirst(9)), screens: Display.current().map(\.visible))
-            return
-        }
-        // learning-lived:<seconds> counts that much window time at once (trying Workspace homes).
-        if command.hasPrefix("learning-lived:") {
-            tiler.countLivedForTesting(Double(command.dropFirst(15)) ?? 0)
-            return
-        }
         // timeback-add:<action>:<count>[:<days ago>] counts time back as if LunchboxWM had done it
         // (tiled, arranged, sent, restored, summoned, corrected, displayReturned), to try the
         // menu line without a week of windows.
@@ -391,12 +373,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case ("retile", _): tiler.retile()
         case ("pause", _): setTiling(false)
         case ("resume", _): setTiling(true)
-        // Learning (Settings › Learn Where Windows Go): float or tile the focused window, switch
-        // learning on or off, forget everything it learned.
+        // Float or tile the focused window.
         case ("float", _): tiler.toggleFloating()
-        case ("learning", "on"?): tiler.setLearning(true)
-        case ("learning", "off"?): tiler.setLearning(false)
-        case ("learning", "reset"?): Learning.shared.reset()
         case ("dump", _): dumpState()
         case ("copy", "diagnostics"?): copyDiagnostics()
         case ("workspaces", let n?): if let n = Int(n) { tiler.setSpaceCount(n) }
@@ -424,23 +402,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func writeClasses() {
-        let screens = Display.current().map(\.visible)
-        DispatchQueue.global(qos: .userInitiated).async {
-            let survey = WindowClassesWindow.survey(screens: screens)
-            let rows = survey.rows.map { r -> [String: Any] in
-                ["id": r.id, "app": r.appID, "behavior": r.behavior.rawValue, "confidence": (r.confidence * 100).rounded() / 100,
-                 "rules": r.rules.rawValue, "againstRules": r.byModel]
-            }
-            let n = Double(max(1, survey.rows.count))
-            let report: [String: Any] = ["windows": rows, "readMsPerWindow": survey.readMs / n, "decideMsPerWindow": survey.decideMs / n]
-            let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/LunchboxWM")
-            if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-                try? data.write(to: dir.appendingPathComponent("classes.json"))
-            }
-        }
-    }
-
     private func dumpState() {
         let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/LunchboxWM")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -449,7 +410,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state["spaceCount"] = tiler.spaceCount
         state["launcher"] = launcher.stateDescription
         state["help"] = help.stateDescription
-        state["learning"] = Learning.shared.stateDescription
         state["timeBack"] = TimeBackLedger.shared.stateDescription
         if let data = try? JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: dir.appendingPathComponent("state.json"))

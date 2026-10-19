@@ -32,7 +32,7 @@ public struct SupportSummary: Sendable {
         public var app: String
         /// How LunchboxWM handles it now: "tiled", "floats", "minimized"…
         public var state: String
-        /// What the window classifier made of it (it runs while learning is on).
+        /// Its kind, when LunchboxWM knows it.
         public var kind: WindowBehavior?
         /// The size limits LunchboxWM learned for it.
         public var limits: SizeLimits?

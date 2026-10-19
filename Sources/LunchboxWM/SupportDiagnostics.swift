@@ -41,7 +41,6 @@ enum SupportDiagnostics {
             "Screen Recording: \(CGPreflightScreenCaptureAccess() ? "allowed" : "not allowed")",
             "tiling: \(tiler.enabled ? "on" : "paused")",
             "Use All Displays: \(onOff(tiler.useAllDisplays))",
-            "Learn Where Windows Go: \(onOff(Learning.shared.isOn))",
             "Launch at Login: \(onOff(LoginItem.isEnabled))",
         ]
 

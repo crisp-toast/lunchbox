@@ -1,5 +1,9 @@
 # Making LunchboxWM worth $9.99
 
+> **Superseded (2026-10-19).** The learning layer and the window classifier this plan builds on
+> were removed at Tyler's request: LunchboxWM sticks to its rules. What's still current here is the
+> time-back counter (`TimeBack`), which counts plain tiling, Summon and restarts.
+
 > **Update, 2026-10-19:** LunchboxWM is now $4.99, paid up front, with no free trial. The trial
 > line in the menu and the trial-end screen this doc proposed were removed with the trial; the
 > weekly time-back line in the menu stays.

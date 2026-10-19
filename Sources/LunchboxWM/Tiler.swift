@@ -26,7 +26,9 @@ final class ManagedWindow {
     var settledSize: CGSize?
     /// When LunchboxWM first saw it.
     let seenAt = CACurrentMediaTime()
-    /// It opened just now: only new windows are placed by what LunchboxWM learned.
+    /// Its size when LunchboxWM first saw it: floated, it goes back to that.
+    let openedSize: CGSize
+    /// It opened just now.
     var isNew: Bool { CACurrentMediaTime() - seenAt < 10 }
     /// It opened while LunchboxWM was running (not one already open when it started), so how
     /// long it lived means something.
@@ -37,6 +39,7 @@ final class ManagedWindow {
     init(handle: WindowHandle, frame: CGRect) {
         self.handle = handle
         self.frame = frame
+        openedSize = frame.size
     }
 
     var id: CGWindowID { handle.id }
@@ -62,8 +65,6 @@ private struct WindowInfo {
     /// How many tabs its native tab bar shows (0 without one). macOS lists only the tab in
     /// front; each tab is a window of its own, and the ones behind aren't on screen.
     let tabs: Int
-    /// Whether it floats, by what you taught LunchboxWM (nil unless Learning is on).
-    let learned: FloatDecision?
 }
 
 private func axCallback(_ observer: AXObserver, _ element: AXUIElement, _ notification: CFString, _ refcon: UnsafeMutableRawPointer?) {
@@ -194,8 +195,6 @@ final class Tiler {
         loadSaved()
         displays = Display.current()
         TimeBackLedger.shared.load()
-        Learning.shared.start(alive: allWindowIDs())
-        Learning.shared.setScreens(displays.map(\.visible))
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 1.0)
 
         func on(_ name: Notification.Name, _ center: NotificationCenter = NSWorkspace.shared.notificationCenter, _ body: @escaping (Notification) -> Void) {
@@ -251,10 +250,6 @@ final class Tiler {
         timer.tolerance = 0.5
         RunLoop.main.add(timer, forMode: .common)
         ghostTimer = timer
-        let minute = Timer(timeInterval: 60, repeats: true) { [weak self] _ in self?.learningTick() }
-        minute.tolerance = 5
-        RunLoop.main.add(minute, forMode: .common)
-        learningTimer = minute
 
         for app in NSWorkspace.shared.runningApplications { track(app, scan: false) }
         mergeInactiveDisplays()
@@ -267,13 +262,9 @@ final class Tiler {
         guard enabled else { return }
         persist() // resuming puts everything back where it is now
         revealHiddenWindows()
-        for key in Array(standing.keys) { flushStanding(key) }
         automatic = nil
         placedForYou = [:]
         requested = []
-        learningTimer?.invalidate()
-        learningTimer = nil
-        Learning.shared.stop()
         TimeBackLedger.shared.saveNow()
         enabled = false
         notificationTokens.forEach {
@@ -412,11 +403,11 @@ final class Tiler {
     /// Runs on the app's queue.
     private static func readWindows(of app: AppHandle) -> [WindowInfo] {
         let all = app.element.elements(kAXWindowsAttribute)
-        return all.compactMap { readWindow($0, app: app, appWindows: { all.count }) }
+        return all.compactMap { readWindow($0, app: app) }
     }
 
-    /// Runs on the app's queue. `appWindows` counts the app's windows, if Learning asks.
-    private static func readWindow(_ element: AXUIElement, app: AppHandle, appWindows: () -> Int) -> WindowInfo? {
+    /// Runs on the app's queue.
+    private static func readWindow(_ element: AXUIElement, app: AppHandle) -> WindowInfo? {
         guard let id = element.windowID, let frame = element.frame else { return nil }
         let role = element.role, subrole = element.subrole
         let resizable = element.isResizable
@@ -449,23 +440,12 @@ final class Tiler {
         let usable = !minimized && !fullScreen && !dialog && !panel
         let tileable = standard && usable
         let windowLike = tileable || (usable && resizable && role == kAXWindowRole && hasWindowButtons())
-        // The first time a window that could tile shows up, Learning decides how it behaves:
-        // the window classifier, then your own corrections. Off, it's the rules as always.
-        let verdict = windowLike ? Learning.shared.decide(id) { screens in
-            app.bundleID.map { bundleID in
-                WindowReader.traits(of: element, id: id, bundleID: bundleID,
-                                    appName: NSRunningApplication(processIdentifier: app.pid)?.localizedName,
-                                    frame: frame, screens: screens, appWindows: appWindows())
-            }
-        } : nil
         return WindowInfo(id: id, element: element, frame: frame, tileable: tileable, minimized: minimized,
                           standard: standard, windowLike: windowLike, resizable: resizable,
-                          // A window asking something that the rules missed floats centered too.
-                          dialog: dialog || panel || verdict?.behavior == .dialog,
+                          dialog: dialog || panel,
                           fullScreen: fullScreen,
                           tabs: element.elements(kAXChildrenAttribute)
-                            .first { $0.role == "AXTabGroup" }.map { $0.elements(kAXTabsAttribute).count } ?? 0,
-                          learned: verdict?.decision)
+                            .first { $0.role == "AXTabGroup" }.map { $0.elements(kAXTabsAttribute).count } ?? 0)
     }
 
     /// Reads every app at once at startup so existing windows can be laid out
@@ -616,7 +596,7 @@ final class Tiler {
         let appHidden = NSRunningApplication(processIdentifier: app.pid)?.isHidden ?? false
         let ruleTiles = (info.tileable || (adopted.contains(info.id) && info.windowLike))
             && !Self.floatingApps.contains(app.bundleID ?? "")
-        let wantsTile = tiles(info, rule: ruleTiles, placed: spot != nil)
+        let wantsTile = ruleTiles
             && !offDisplay.contains(info.id)
             && !leftAloneApps.contains(app.bundleID ?? "")
             && !appHidden
@@ -625,16 +605,6 @@ final class Tiler {
             // sight, not gone: they keep their tiles.
             && (onScreen.contains(info.id) || window.hidden
                 || (spot != nil && isOutOfView(info.id, shown: shown)))
-        // A new window going against the rules because of what you taught LunchboxWM: one quiet line.
-        if initialScanDone, window.isNew, info.windowLike, onScreen.contains(info.id), savedPlacement[info.id] == nil,
-           !announced.contains(info.id), let d = Learning.shared.decision(for: info.id), d.source == .learned {
-            announced.insert(info.id)
-            let name = Learning.appName(app.bundleID ?? "")
-            let display = displays.first { $0.frame.contains(info.frame.center) }
-            didOnItsOwn(d.choice == .float ? .floated(app: name) : .tiled(app: name),
-                        undo: d.choice == .float ? .float(info.id) : .tile(info.id),
-                        key: "float|\(info.id)", from: currentSpace, on: display)
-        }
         let placed = spot != nil
         if wantsTile && !placed {
             // A tab of a native tab group came forward (switched to, or just opened): each tab is
@@ -727,32 +697,16 @@ final class Tiler {
         return window
     }
 
-    /// Whether a window tiles: what the rules say, unless you taught LunchboxWM otherwise
-    /// (Learning, off by default). Your own choice for this window always stands. Otherwise
-    /// a window Summon opened tiles as the rules say, and a window already tiled (or tiled
-    /// before a relaunch or a pause) stays tiled: what LunchboxWM learns never moves a window
-    /// that's already in place.
-    private func tiles(_ info: WindowInfo, rule: Bool, placed: Bool) -> Bool {
-        guard info.windowLike, let learned = Learning.shared.decision(for: info.id) ?? info.learned else { return rule }
-        if learned.source != .you, adopted.contains(info.id) || placed || savedPlacement[info.id] != nil {
-            let choice: FloatChoice = (adopted.contains(info.id) ? rule : true) ? .tile : .float
-            if learned.choice != choice { Learning.shared.overrule(info.id, to: choice) }
-            return choice == .tile
-        }
-        return learned.choice == .tile
-    }
-
-    /// Floats the focused window, or tiles a floating one (the `float` command and menu item,
-    /// with Learning on). LunchboxWM learns from it: the next window of the same kind follows.
+    /// Floats the focused window, or tiles a floating one (the `float` command and menu item).
     func toggleFloating() {
         guard enabled, let id = focusedID else { return }
         toggleFloating(id)
     }
 
     private func toggleFloating(_ id: CGWindowID) {
-        guard Learning.shared.isOn, let w = windows[id], !w.hidden else { return }
+        guard let w = windows[id], !w.hidden else { return }
         let tiled = place(of: id) != nil
-        guard Learning.shared.corrected(id, to: tiled ? .float : .tile, by: .toggle) else { return }
+        if tiled { userFloating.insert(id) } else { userFloating.remove(id) }
         log.notice("window \(id) (\(w.handle.app.bundleID ?? "?", privacy: .public)) \(tiled ? "floats" : "tiles", privacy: .public) now")
         if tiled {
             float(w)
@@ -764,7 +718,7 @@ final class Tiler {
     /// Whether the focused window floats, for the menu: nil without one that could go
     /// either way.
     var focusedFloats: Bool? {
-        guard let id = focusedID, let w = windows[id], !w.hidden, Learning.shared.decision(for: id) != nil else { return nil }
+        guard let id = focusedID, let w = windows[id], !w.hidden, w.standard else { return nil }
         return place(of: id) == nil
     }
 
@@ -777,7 +731,8 @@ final class Tiler {
         w.target = nil
         relayout(animated: true)
         persist()
-        if let size = Learning.shared.openingSize(of: w.id), size.width >= 100, size.height >= 60,
+        let size = w.openedSize
+        if size.width >= 100, size.height >= 60,
            let d = displays.first(where: { $0.frame.contains(from.center) }) ?? displays.first(where: \.isMain) {
             let origin = droppedAt ?? CGPoint(x: from.midX - size.width / 2, y: from.midY - size.height / 2)
             let width = min(size.width, d.visible.width), height = min(size.height, d.visible.height)
@@ -792,23 +747,7 @@ final class Tiler {
         showRing(on: w.id)
     }
 
-    // MARK: Learning: what LunchboxWM does on its own
-
-    /// `learning-lived:<seconds>`: counts that much window time in each Workspace at once, to
-    /// try Workspace homes without waiting ten minutes.
-    func countLivedForTesting(_ seconds: Double) { learningTick(seconds: seconds, testing: true) }
-
-    /// Settings › Learn Where Windows Go. Windows already open stay as they are until LunchboxWM
-    /// looks at them again.
-    func setLearning(_ on: Bool) {
-        Learning.shared.setSwitch(on, alive: allWindowIDs())
-        if !on {
-            for key in Array(standing.keys) { flushStanding(key) }
-            automatic = nil
-        }
-        scanAll()
-        onChange?()
-    }
+    // MARK: What LunchboxWM does on its own
 
     /// Says what LunchboxWM did on its own, and which key undoes it.
     private let quietLine = QuietLineView()
@@ -820,13 +759,7 @@ final class Tiler {
     /// coming back after a login) share one line and one undo.
     private struct Automatic {
         enum Undo {
-            /// It floated by itself: tile it.
-            case float(CGWindowID)
-            /// It tiled by itself: float it.
-            case tile(CGWindowID)
-            /// It took its usual spot: put it where it would have gone.
-            case layout(space: Int, display: String, applied: Layout, plain: Layout)
-            /// It went to its app's Workspace: bring it to the one you were in.
+            /// It went back to its Workspace: bring it to the one you were in.
             case place(CGWindowID, from: Int)
         }
         var actions: [AutomaticAction]
@@ -844,16 +777,9 @@ final class Tiler {
     private var placedForYou: [CGWindowID: CFTimeInterval] = [:]
     /// Windows that answered something you opened from LunchboxWM (Summon): they come to you.
     private var requested = Set<CGWindowID>()
-    /// New windows whose learned float or tile was already announced.
-    private var announced = Set<CGWindowID>()
     /// Apps you just launched yourself (Spotlight, Finder, a launcher), and when: when their
     /// window goes to its home, you go with it.
     private var launchedByYou: [pid_t: CFTimeInterval] = [:]
-    /// Arrangements you made (or let stand), and since when, by "space|display". `byYou`: you
-    /// made it (moved, sized or dragged windows into it), rather than letting LunchboxWM's stand.
-    private var standing: [String: (arrangement: Arrangement, display: String, since: CFTimeInterval, byYou: Bool)] = [:]
-    private var learningTimer: Timer?
-    private var learningTicks = 0
 
     private func didOnItsOwn(_ action: AutomaticAction, undo: Automatic.Undo, key: String, from: Int, on display: Display?) {
         let now = CACurrentMediaTime()
@@ -861,7 +787,7 @@ final class Tiler {
         // brings the window along while the line is up.
         let window: Double
         switch action {
-        case .followed, .reopened(_, _, true): window = Etiquette.lineSeconds + 1
+        case .reopened(_, _, true): window = Etiquette.lineSeconds + 1
         default: window = Etiquette.undoSeconds
         }
         if var a = automatic, now - a.at < Etiquette.batchSeconds, a.from == from {
@@ -871,12 +797,10 @@ final class Tiler {
             a.until = min(a.until, now + window)
             automatic = a
         } else {
-            if let a = automatic { a.keys.forEach { Learning.shared.kept($0) } }
             automatic = Automatic(actions: [action], undos: [undo], keys: [key], from: from, at: now, until: now + window,
                                   display: display ?? displays.first(where: \.isMain))
             DispatchQueue.main.asyncAfter(deadline: .now() + Etiquette.undoSeconds + 0.1) { [weak self] in
                 guard let self, let a = self.automatic, a.at == now else { return }
-                a.keys.forEach { Learning.shared.kept($0) }
                 self.automatic = nil
             }
         }
@@ -890,24 +814,9 @@ final class Tiler {
     private func undoAutomatic(pressed index: Int) -> Bool {
         guard let a = automatic, a.from == index, CACurrentMediaTime() < a.until else { return false }
         automatic = nil
-        for key in a.keys where !key.hasPrefix("float|") { Learning.shared.undone(key) }
         var back: [CGWindowID] = []
         for undo in a.undos.reversed() {
             switch undo {
-            case .float(let id):
-                if place(of: id) == nil { toggleFloating(id) } // tiles it; LunchboxWM learns from that
-            case .tile(let id):
-                if place(of: id) != nil { toggleFloating(id) }
-            case .layout(let space, let display, let applied, var plain):
-                guard spaces.indices.contains(space), var now = spaces[space][display] else { continue }
-                // A placeholder that has since been filled by its window counts as the same.
-                for id in applied.placeholders where !now.contains(id) {
-                    if let filled = now.windows.first(where: { !applied.contains($0) }) {
-                        plain.replace(id, with: filled)
-                        now.replace(filled, with: id)
-                    }
-                }
-                if now == applied { spaces[space][display] = plain }
             case .place(let id, let from):
                 guard windows[id] != nil, let (space, uuid) = place(of: id), space != from, spaces.indices.contains(from) else { continue }
                 removeFromLayouts(id)
@@ -975,155 +884,6 @@ final class Tiler {
     /// display that size (and the same display, wherever it's plugged in).
     static func displayKey(_ d: Display) -> String { "\(Int(d.frame.width))x\(Int(d.frame.height))" }
 
-    /// Where a new window (or a placeholder) usually goes next to the windows in `layout`: its
-    /// usual spot and share, or the shape you gave its app's windows when alone.
-    private func usualPlace(_ id: CGWindowID, app: String, in layout: Layout,
-                            display: Display) -> (Layout, AutomaticAction, String)? {
-        guard Learning.shared.isOn else { return nil }
-        let key = Self.displayKey(display)
-        let name = Learning.appName(app)
-        if layout.isEmpty {
-            guard let shape = Learning.shared.loneShape(of: app, on: key) else { return nil }
-            var lone = Layout(columns: [Column(windows: [id])])
-            lone.singleOwner = id
-            lone.singleScale = shape.scale
-            lone.singleHeight = shape.height
-            return (lone, .shaped(app: name), ArrangementMemory.loneKey(display: key, app: app))
-        }
-        var apps: [WindowID: String] = [:]
-        for wid in layout.windows { apps[wid] = appID(of: wid) }
-        guard apps.count == layout.windowCount else { return nil }
-        let all = Array(apps.values) + [app]
-        // The fourth window: instead of the 2×2 grid, the whole shape you gave these four
-        // before, or the one you gave four windows around one of these apps (Claude on the
-        // left at full height, say).
-        if layout.windowCount + 1 == ArrangementMemory.anchoredWindows {
-            var withNew = apps
-            withNew[id] = app
-            let four = layout.windows + [id]
-            if let usual = Learning.shared.arrangement(display: key, apps: all),
-               let placed = usual.layout(of: four, apps: withNew) {
-                return (placed, .arranged(app: name), ArrangementMemory.key(display: key, apps: all))
-            }
-            if let (anchorApp, shape) = Learning.shared.anchoredShape(display: key, apps: all),
-               let anchor = four.first(where: { withNew[$0] == anchorApp }),
-               let placed = shape.layout(anchor: anchor, others: four.filter { $0 != anchor }) {
-                return (placed, .anchored(app: Learning.appName(anchorApp), side: shape.side),
-                        ArrangementMemory.shapeKey(display: key, app: anchorApp))
-            }
-            return nil
-        }
-        guard let usual = Learning.shared.arrangement(display: key, apps: all),
-              let placed = usual.place(id, app: app, in: layout, apps: apps) else { return nil }
-        return (placed, .arranged(app: name), ArrangementMemory.key(display: key, apps: all))
-    }
-
-    /// A new window went to the Workspace its app lives in. If you just opened it, you go
-    /// with it, the way the Dock takes you to an app's window. If it opened by itself, you
-    /// stay, and so does the keyboard.
-    private func placedInHome(_ window: ManagedWindow, app: String, home: Int, display: Display) {
-        let from = currentSpace
-        let name = Learning.appName(app)
-        Learning.shared.placed(app, in: home)
-        if openedByYou(window) {
-            didOnItsOwn(.followed(app: name, space: home), undo: .place(window.id, from: from), key: "place|\(app)",
-                        from: from, on: display)
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.place(of: window.id)?.space == home else { return }
-                self.lastFocused[home] = window.id
-                self.switchSpace(to: home, focusing: window.id)
-                self.activate(window.id)
-                self.showRing(on: window.id)
-            }
-        } else {
-            placedForYou[window.id] = CACurrentMediaTime() + 3
-            didOnItsOwn(.sent(app: name, space: home), undo: .place(window.id, from: from), key: "place|\(app)",
-                        from: from, on: display)
-            // Its app may have taken the keyboard on its way: give it back.
-            for delay in [0.1, 0.5] {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                    guard let self, NSWorkspace.shared.frontmostApplication?.processIdentifier == window.pid
-                        || self.focusedID == window.id else { return }
-                    if self.focusedID == window.id { self.focusedID = self.lastFocused[self.currentSpace] }
-                    self.reclaimFocus()
-                }
-            }
-        }
-    }
-
-    /// You arranged a layout (or let LunchboxWM's arrangement stand): from now on it counts,
-    /// for as long as it stays the same. `shaped`: you resized a lone window (or Tidied it),
-    /// and that shape is kept right away.
-    private func noteArranged(space: Int, display uuid: String, byYou: Bool = true, shaped: Bool = false) {
-        guard Learning.shared.isOn, let d = displays.first(where: { $0.uuid == uuid }) else { return }
-        let key = "\(space)|\(uuid)"
-        flushStanding(key)
-        guard let layout = spaces[space][uuid]?.withoutPlaceholders() else { return }
-        if shaped, layout.windowCount == 1, let id = layout.windows.first, let app = appID(of: id) {
-            // The shape you left it at; after Tidy, the default one.
-            let shape = layout.singleOwner == id ? LoneShape(scale: layout.singleScale, height: layout.singleHeight)
-                : LoneShape(scale: Layout.defaultSingleScale, height: nil)
-            Learning.shared.shaped(app, shape: shape, on: Self.displayKey(d))
-            return
-        }
-        var apps: [WindowID: String] = [:]
-        for id in layout.windows { apps[id] = appID(of: id) }
-        guard let a = Arrangement(layout, apps: apps) else { return }
-        standing[key] = (a, Self.displayKey(d), CACurrentMediaTime(), byYou)
-    }
-
-    /// Counts the time an arrangement stood, and stops counting.
-    private func flushStanding(_ key: String) {
-        guard let s = standing.removeValue(forKey: key) else { return }
-        Learning.shared.arranged(s.arrangement, on: s.display, dwell: CACurrentMediaTime() - s.since, byYou: s.byYou)
-    }
-
-    /// An arrangement that changed by itself (a window closed or opened) stops counting.
-    private func checkStanding() {
-        for (key, s) in standing {
-            let parts = key.split(separator: "|", maxSplits: 1).map(String.init)
-            guard parts.count == 2, let space = Int(parts[0]), spaces.indices.contains(space),
-                  let layout = spaces[space][parts[1]]?.withoutPlaceholders() else {
-                flushStanding(key)
-                continue
-            }
-            var apps: [WindowID: String] = [:]
-            for id in layout.windows { apps[id] = appID(of: id) }
-            if Arrangement(layout, apps: apps) != s.arrangement { flushStanding(key) }
-        }
-    }
-
-    /// Once a minute: how long each app's windows spent in each Workspace (while you're at
-    /// the Mac: a night away isn't a night in Workspace 2), and every ten minutes, the time
-    /// arrangements stood.
-    private func learningTick(seconds: Double = 60, testing: Bool = false) {
-        guard enabled, Learning.shared.isOn else { return }
-        guard !testing else { return countLived(seconds) }
-        learningTicks += 1
-        if learningTicks % 10 == 0 {
-            for (key, s) in standing {
-                Learning.shared.arranged(s.arrangement, on: s.display, dwell: CACurrentMediaTime() - s.since, byYou: s.byYou)
-                standing[key]?.since = CACurrentMediaTime()
-            }
-        }
-        guard Self.secondsSinceInput() < 300 else { return }
-        countLived(seconds)
-    }
-
-    private func countLived(_ seconds: Double) {
-        var lived: [String: [Int: Double]] = [:]
-        for (s, layouts) in spaces.enumerated() {
-            for layout in layouts.values {
-                for id in layout.windows {
-                    if let app = windows[id]?.handle.app.bundleID { lived[app, default: [:]][s, default: 0] += seconds }
-                }
-            }
-        }
-        Learning.shared.lived(lived.flatMap { app, bySpace in bySpace.map { (app: app, space: $0.key, seconds: $0.value) } })
-    }
-
-    /// The window last dragged out of its tile (it glided back), and when.
-    private var lastDragOut: (id: CGWindowID, at: CFTimeInterval)?
 
     /// Set once the windows that were already open at launch are placed, so
     /// only windows opened afterwards count as new.
@@ -1157,47 +917,21 @@ final class Tiler {
         // that was around already (floating, minimized, in full screen) and is tiling again.
         let fresh = saved == nil && back == nil && initialScanDone && window.isNew
         let app = window.handle.app.bundleID
-        var space = back?.space ?? saved?.space ?? currentSpace
-        // Learned: a new window you didn't open from LunchboxWM goes to the Workspace its app lives in.
-        var home: Int?
-        if fresh, let app {
-            home = Learning.shared.home(for: app, requested: isRequested(window), current: currentSpace,
-                                        appSpaces: spacesOf(app, excluding: window.id))
-                .flatMap { $0 < spaceCount ? $0 : nil }
-            if let home { space = home }
-        }
+        let space = back?.space ?? saved?.space ?? currentSpace
         var layout = spaces[space][display.uuid] ?? Layout()
         // Back from before a relaunch: the same stack and column it had, else a new spot.
         let before = back.map { QuitMemory.layout(of: $0, as: window.id) }
             ?? saved.flatMap { s in s.display == display.uuid ? savedLayouts["\(s.space)|\(s.display)"] : nil }
-        var usual: (action: AutomaticAction, undo: Automatic.Undo, key: String)?
         if !(before.map { layout.restore(window.id, from: $0) } ?? false) {
-            var plain = layout
             let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
-            plain.insert(window.id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width),
-                         limits: limits, room: room(on: display))
-            // Learned: the spot and share it usually has next to these apps.
-            if fresh, let app, let (placed, action, key) = usualPlace(window.id, app: app, in: layout, display: display) {
-                layout = placed
-                usual = (action, .layout(space: space, display: display.uuid, applied: placed, plain: plain), key)
-            } else {
-                layout = plain
-            }
+            layout.insert(window.id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width),
+                          limits: limits, room: room(on: display))
         }
         spaces[space][display.uuid] = layout
         log.notice("tiling window \(window.id) (\(app ?? "?")) in space \(space + 1)")
-        if let usual, home == nil {
-            didOnItsOwn(usual.action, undo: usual.undo, key: usual.key, from: currentSpace, on: display)
-            standing["\(space)|\(display.uuid)"] = nil // it starts standing once you leave it be
-            DispatchQueue.main.async { [weak self] in self?.noteArranged(space: space, display: display.uuid, byYou: false) }
-        }
         if back != nil, let app {
             reopened(window, app: app, space: space, display: display)
             TimeBackLedger.shared.count(.restored)
-        } else if let home, let app {
-            placedInHome(window, app: app, home: home, display: display) // counted as sent, in Learning
-        } else if usual != nil {
-            TimeBackLedger.shared.count(.arranged)
         } else if fresh {
             TimeBackLedger.shared.count(.tiled)
         } else if saved != nil, countsRestores {
@@ -1312,7 +1046,7 @@ final class Tiler {
     private func windowCreated(_ element: AXUIElement, app: AppHandle) {
         noteCreated(by: app.pid)
         app.queue.async { [weak self] in
-            let info = Self.readWindow(element, app: app, appWindows: { app.element.elements(kAXWindowsAttribute).count })
+            let info = Self.readWindow(element, app: app)
             DispatchQueue.main.async {
                 guard let self, self.enabled, self.apps[app.pid] === app else { return }
                 guard let info else {
@@ -1428,14 +1162,6 @@ final class Tiler {
         let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
         var planned = layout
         planned.insert(info.id, near: near, maxColumns: maxColumns, limits: limits, room: room(on: display))
-        // What Learning will do with it: a window going to its app's Workspace isn't planned
-        // here, and one taking its usual spot (or a learned four-window shape) is planned there.
-        if let bundleID = app.bundleID, Learning.shared.isOn {
-            let home = Learning.shared.home(for: bundleID, requested: isRequested(probe), current: currentSpace,
-                                            appSpaces: spacesOf(bundleID, excluding: info.id))
-            if home != nil { return nil }
-            if let (placed, _, _) = usualPlace(info.id, app: bundleID, in: layout, display: display) { planned = placed }
-        }
         prePlaced[info.id] = (display.uuid, now)
         return planned.frames(in: display.visible, gap: Self.gap, limits: limits)[info.id]
     }
@@ -1478,11 +1204,7 @@ final class Tiler {
                                                usedLast: focusedID == id || lastFocused[space] == id),
                               at: CACurrentMediaTime())
         }
-        if let w = windows[id] {
-            Learning.shared.closed(id, lifetime: CACurrentMediaTime() - w.seenAt, counts: w.openedWhileRunning && !appQuit)
-        }
         requested.remove(id)
-        announced.remove(id)
         placedForYou[id] = nil
         fullScreenSpots[id] = nil
         unlistedSince[id] = nil
@@ -2138,7 +1860,6 @@ final class Tiler {
             w.target = nil
             relayout(animated: true)
             persist()
-            noteArranged(space: space, display: uuid, shaped: true)
             return
         }
         if abs(frame.width - target.width) > 4 || abs(frame.height - target.height) > 4 {
@@ -2156,26 +1877,11 @@ final class Tiler {
                 var layout = spaces[currentSpace][d.uuid] ?? Layout()
                 layout.insert(id, near: layout.windows.last, maxColumns: Layout.maxColumns(forWidth: d.visible.width))
                 spaces[currentSpace][d.uuid] = layout
-            } else if Learning.shared.isOn {
-                // Dragged out of its tile, it glides back. Dragged out again right away,
-                // it stays where you put it, floating, and LunchboxWM learns from that.
-                let now = CACurrentMediaTime()
-                if let last = lastDragOut, last.id == id, now - last.at < 10,
-                   Learning.shared.corrected(id, to: .float, by: .dragOut) {
-                    lastDragOut = nil
-                    log.notice("window \(id) dragged out twice: it floats now")
-                    float(w, droppedAt: frame.origin)
-                    return
-                }
-                lastDragOut = (id, now)
             }
         }
         w.target = nil
         relayout(animated: true)
         persist()
-        // A resize, a swap or a move to another display: an arrangement you made.
-        if let (s, d) = place(of: id) { noteArranged(space: s, display: d) }
-        if place(of: id)?.display != uuid { noteArranged(space: space, display: uuid) }
     }
 
     private func swapWindows(_ a: CGWindowID, _ b: CGWindowID) {
@@ -2289,7 +1995,6 @@ final class Tiler {
         // changes without the set of displays changing.
         let fresh = Display.current()
         if Set(fresh.map(\.uuid)) == Set(displays.map(\.uuid)) { displays = fresh }
-        Learning.shared.setScreens(displays.map(\.visible))
         let now = CACurrentMediaTime()
         let spot = Display.hidingSpot(in: displays)
         var moves: [(window: WindowHandle, from: CGRect, to: CGRect, kind: Animator.Kind)] = []
@@ -2344,7 +2049,6 @@ final class Tiler {
         arriving.removeAll()
         animator.run(moves)
         updateShelf()
-        if !standing.isEmpty { checkStanding() }
         onChange?()
     }
 
@@ -2493,8 +2197,6 @@ final class Tiler {
         }
         relayout(animated: true)
         persist()
-        if let (s, d) = place(of: id) { noteArranged(space: s, display: d) }
-        if uuid != place(of: id)?.display { noteArranged(space: space, display: uuid) }
         let after = place(of: id).flatMap { spaces[$0.space][$0.display]?.columns.map(\.windows) } ?? []
         log.notice("move \(direction.rawValue, privacy: .public): window \(id) (\(self.windows[id]?.handle.app.bundleID ?? "?", privacy: .public)) \(String(describing: before), privacy: .public) -> \(String(describing: after), privacy: .public)")
         showRing(on: id)
@@ -2554,7 +2256,6 @@ final class Tiler {
             spaces[space][uuid] = layout
             relayout(animated: true)
             persist()
-            noteArranged(space: space, display: uuid, shaped: true)
             quietLine.show(Self.resizeHelp, on: d, seconds: HotkeyTap.resizeModeSeconds)
         } else if layout.resize(id, toward: direction, by: Self.sideStep, in: d.visible, gap: Self.gap) {
             // The shares could move, but the window (or its neighbor) is as small or as big as it goes.
@@ -2576,7 +2277,6 @@ final class Tiler {
             spaces[space][uuid] = layout
             relayout(animated: true)
             persist()
-            noteArranged(space: space, display: uuid, shaped: true)
         }
         showRing(on: id)
     }
@@ -2605,7 +2305,6 @@ final class Tiler {
             spaces.removeLast(spaceCount - count)
             for s in count..<spaceCount {
                 lastFocused[s] = nil
-                for uuid in Array(standing.keys) where uuid.hasPrefix("\(s)|") { standing[uuid] = nil }
             }
             if currentSpace > last { currentSpace = last }
         }
@@ -2666,9 +2365,6 @@ final class Tiler {
                            limits: limits, room: display.map(room(on:)))
         spaces[index][uuid] = destination
         // You put this app's window in that Workspace (hiding a window is putting it away, not a home).
-        if caption == nil, let app = windows[id]?.handle.app.bundleID { Learning.shared.moved(app, to: index) }
-        noteArranged(space: space, display: uuid)
-        noteArranged(space: index, display: uuid)
         if follow {
             lastFocused[index] = id
             switchSpace(to: index, focusing: id) // shows the space badge
@@ -3051,8 +2747,6 @@ final class Tiler {
         let started: CFTimeInterval
         var deadline: CFTimeInterval
         let tile: PlaceholderTile
-        /// It took the window's usual spot (Learning).
-        var usual = false
         /// The app, done starting up, showed something that doesn't tile instead (a welcome
         /// window, a template chooser, a dialog): its answer for now. The tile lets go soon.
         var answeredOtherwise = false
@@ -3116,19 +2810,9 @@ final class Tiler {
         let id = Placeholder.id(placeholderCount)
         placeholderCount += 1
         var layout = spaces[currentSpace][display.uuid] ?? Layout()
-        var plain = layout
         let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
-        plain.insert(id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width),
-                     limits: limits, room: room(on: display))
-        // Learned: the placeholder takes the spot the window usually has next to these apps.
-        let usual = usualPlace(id, app: bundleID, in: layout, display: display)
-        if let (placed, action, key) = usual {
-            layout = placed
-            didOnItsOwn(action, undo: .layout(space: currentSpace, display: display.uuid, applied: placed, plain: plain),
-                        key: key, from: currentSpace, on: display)
-        } else {
-            layout = plain
-        }
+        layout.insert(id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width),
+                      limits: limits, room: room(on: display))
         spaces[currentSpace][display.uuid] = layout
 
         let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
@@ -3137,7 +2821,6 @@ final class Tiler {
         let icon = running?.icon ?? url.map { NSWorkspace.shared.icon(forFile: $0.path) } ?? NSWorkspace.shared.icon(for: .application)
         let e = Expected(id: id, bundleID: bundleID, pid: running?.processIdentifier, existing: Set(mine.map(\.id)),
                          deadline: CACurrentMediaTime() + Self.placeholderWait, tile: PlaceholderTile(icon: icon, name: name))
-        e.usual = usual != nil
         expected.append(e)
         relayout(animated: true)
         schedulePlaceholderCheck()
@@ -3157,7 +2840,7 @@ final class Tiler {
         }
         expected.removeAll { $0 === e }
         e.tile.dismiss(animated: animationsAllowed)
-        TimeBackLedger.shared.count(e.usual ? .arranged : .tiled)
+        TimeBackLedger.shared.count(.tiled)
         let waited = CACurrentMediaTime() - e.started
         log.notice("window \(window.id) (\(e.bundleID, privacy: .public)) took its tile after \(waited, format: .fixed(precision: 2)) s")
         return true
@@ -3363,9 +3046,6 @@ final class Tiler {
         guard !w.hidden else { return }
         w.frame = actual
         w.settledSize = actual.size
-        if let target = w.target, abs(actual.width - target.width) > 2 || abs(actual.height - target.height) > 2 {
-            Learning.shared.sizeLimited(id) // it has a minimum or maximum size
-        }
         if ringWindow == id, ring.isShowing, let target = w.target, !actual.isClose(to: target, tolerance: 2) {
             let resizing = resizingWindow == id
             ring.flash(actual, on: displays, color: resizing ? .systemGreen : .controlAccentColor, hold: resizing)
@@ -3473,8 +3153,6 @@ final class Tiler {
         }
         relayout(animated: true)
         persist()
-        // Even shares (and default sizes) are an arrangement you chose too.
-        for uuid in spaces[currentSpace].keys { noteArranged(space: currentSpace, display: uuid, shaped: true) }
         if let id = focusedID { showRing(on: id) }
     }
 
@@ -3493,7 +3171,7 @@ final class Tiler {
     func supportWindows() -> (workspaces: [SupportSummary.Workspace], untiled: [SupportSummary.Window]) {
         func entry(_ w: ManagedWindow, _ state: String) -> SupportSummary.Window {
             SupportSummary.Window(id: w.id, app: w.handle.app.bundleID ?? "no bundle ID", state: state,
-                                  kind: Learning.shared.behavior(of: w.id), limits: limits[w.id], resizable: w.resizable)
+                                  kind: nil, limits: limits[w.id], resizable: w.resizable)
         }
         var tiled = Set<CGWindowID>()
         let workspaces = (0..<spaceCount).map { s -> SupportSummary.Workspace in
@@ -3519,7 +3197,6 @@ final class Tiler {
             else if userFloating.contains(w.id) { state = "floated by you" }
             else if leftAloneApps.contains(w.handle.app.bundleID ?? "") { state = "app left alone" }
             else if Self.floatingApps.contains(w.handle.app.bundleID ?? "") { state = "floats (its app always does)" }
-            else if Learning.shared.decision(for: w.id)?.choice == .float { state = "floats (learned)" }
             else if !w.standard { state = "floats (panel or dialog)" }
             else { state = w.hidden ? "not tiled, off screen" : "not tiled" }
             return entry(w, state)

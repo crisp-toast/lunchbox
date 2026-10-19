@@ -5,14 +5,11 @@ import LunchboxCore
 private let timeBackLog = Logger(subsystem: logSubsystem, category: "timeback")
 
 /// The time LunchboxWM gives back (`TimeBack`, docs/worth-paying-for.md), counted where each thing
-/// happens: Tiler for windows it places and puts back, Learning for homes, corrections and
-/// undos, Summon for jumps.
+/// happens: Tiler for windows it places and puts back, Summon for jumps.
 ///
-/// Kept as daily counts in the learning folder (timeback.json), under the same rules as the
-/// learning logs: yours alone, out of backups, days older than 90 pruned, and cleared by Reset
-/// What LunchboxWM Learned. It counts whether or not learning is on, since most of it is plain
-/// tiling. Only numbers and dates, and nothing leaves the Mac. It's shown in the menu and What
-/// LunchboxWM Learned, never as a notification.
+/// Kept as daily counts in timeback.json: yours alone, out of backups, days older than 90 pruned.
+/// Only numbers and dates, and nothing leaves the Mac. It's shown in the menu, never as a
+/// notification.
 final class TimeBackLedger {
     static let shared = TimeBackLedger()
 
@@ -29,7 +26,10 @@ final class TimeBackLedger {
 
     private let state = OSAllocatedUnfairLock(initialState: State())
     private let io = DispatchQueue(label: "com.sentientdonut.lunchbox.timeback", qos: .utility)
-    private let file = TimeBackFile(folder: Learning.folder)
+    /// Where it has always been kept (the folder's name is from when LunchboxWM also learned).
+    static let folder = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/LunchboxWM/Learning")
+    private let file = TimeBackFile(folder: TimeBackLedger.folder)
 
     /// Reads back what was counted before, once, off the main thread, and prunes old days.
     func load() {
@@ -74,7 +74,7 @@ final class TimeBackLedger {
         state.withLock { $0.timeBack.tally(from: start, through: end) }
     }
 
-    /// Reset What LunchboxWM Learned: forgets every count.
+    /// Forgets every count.
     func reset() {
         state.withLock { s in
             s.timeBack = TimeBack()
@@ -109,7 +109,7 @@ final class TimeBackLedger {
         guard ready else { return }
         var pruned = stored
         pruned.prune(now: Date())
-        // Nothing counted yet: no file, and no learning folder just for that.
+        // Nothing counted yet: no file, and no folder just for that.
         guard !pruned.isEmpty || FileManager.default.fileExists(atPath: file.url.path) else { return }
         do { try file.write(pruned) } catch {
             timeBackLog.error("couldn't write the time back: \(error.localizedDescription, privacy: .public)")

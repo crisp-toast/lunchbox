@@ -12,7 +12,6 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     var onShowHelp: (() -> Void)?
     var onShowWelcome: (() -> Void)?
     var onShowShortcuts: (() -> Void)?
-    var onShowWindowClasses: (() -> Void)?
     var onEnterLicense: (() -> Void)?
     var onBuy: (() -> Void)?
     var onCheckForUpdates: (() -> Void)?
@@ -72,13 +71,11 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             }
             focus.isEnabled = tiler.enabled && (inFocus || tiler.focusedID != nil)
             menu.addItem(focus)
-            if Learning.shared.isOn {
-                let floats = tiler.focusedFloats
-                let float = action(floats == true ? "Tile This Window" : "Float This Window") { [weak self] in self?.tiler.toggleFloating() }
-                float.toolTip = "LunchboxWM learns from this: the next window like it does the same."
-                float.isEnabled = tiler.enabled && floats != nil
-                menu.addItem(float)
-            }
+            let floats = tiler.focusedFloats
+            let float = action(floats == true ? "Tile This Window" : "Float This Window") { [weak self] in self?.tiler.toggleFloating() }
+            float.toolTip = "Takes the window out of the tiles to float where you put it, or puts it back."
+            float.isEnabled = tiler.enabled && floats != nil
+            menu.addItem(float)
             let even = action("Tidy This Workspace") { [weak self] in self?.tiler.normalize() }
             even.isEnabled = tiler.enabled
             menu.addItem(even)
@@ -88,8 +85,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
-        // The time LunchboxWM gave back this week, once there's any. How it's counted is in its
-        // tooltip and in What LunchboxWM Learned.
+        // The time LunchboxWM gave back this week, once there's any. How it's counted is in its tooltip.
         let week = TimeBackLedger.shared.week
         let unlicensed = licensing.map { $0.license == nil } ?? false
         if trusted, !week.isEmpty {
@@ -125,42 +121,6 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         let diagnostics = action("Copy Diagnostics") { [weak self] in self?.onCopyDiagnostics?() }
         diagnostics.toolTip = "Copies a summary for support to paste into an email: versions, displays, and which apps' windows are in each Workspace. No window titles, files or license key."
         options.addItem(diagnostics)
-        options.addItem(.separator())
-        let learning = action("Learn Where Windows Go", checked: Learning.shared.isOn) { [weak self] in
-            guard let self else { return }
-            self.tiler.setLearning(!Learning.shared.isOn)
-        }
-        learning.toolTip = "LunchboxWM learns which windows you float, how you arrange your apps, and which Workspace each app lives in. All on this Mac."
-        learning.isEnabled = tiler.enabled
-        options.addItem(learning)
-        if Learning.shared.isOn {
-            let learned = NSMenuItem(title: "What LunchboxWM Learned", action: nil, keyEquivalent: "")
-            let lessons = NSMenu()
-            lessons.addItem(action("How LunchboxWM Sees Your Windows…") { [weak self] in self?.onShowWindowClasses?() })
-            lessons.addItem(.separator())
-            let line = NSMenuItem(title: TimeBackWords.menuLine(week), action: nil, keyEquivalent: "")
-            line.isEnabled = false
-            line.toolTip = Self.howCounted(week)
-            lessons.addItem(line)
-            lessons.addItem(Self.footnote(TimeBackWords.howCounted.joined(separator: "\n"), toolTip: Self.howCounted(week)))
-            lessons.addItem(.separator())
-            let list = Learning.shared.lessons()
-            if list.isEmpty {
-                lessons.addItem(disabled: "Nothing yet")
-                lessons.addItem(disabled: "Float a window, arrange some apps, or move an app to a Workspace.")
-            } else {
-                lessons.addItem(disabled: "Click a lesson to forget it")
-                for lesson in list {
-                    let row = action(lesson.text) { Learning.shared.forget(lesson.key) }
-                    row.toolTip = "Forget this"
-                    lessons.addItem(row)
-                }
-            }
-            lessons.addItem(.separator())
-            lessons.addItem(action("Reset What LunchboxWM Learned…") { Self.confirmReset() })
-            learned.submenu = lessons
-            options.addItem(learned)
-        }
         if let license = licensing?.license {
             options.addItem(.separator())
             options.addItem(action("Licensed to \(license.email)…") { [weak self] in self?.onEnterLicense?() })
@@ -175,7 +135,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private static func howCounted(_ week: TimeBack.Tally) -> String {
         let rows = TimeBackWords.breakdown(week)
         return (TimeBackWords.howCounted + (rows.isEmpty ? [] : ["", "This week:"] + rows)
-            + ["", "Counted on this Mac only. Reset What LunchboxWM Learned clears it."]).joined(separator: "\n")
+            + ["", "Counted on this Mac only."]).joined(separator: "\n")
     }
 
     /// A small grey note in a menu.
@@ -188,17 +148,6 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         entry.isEnabled = false
         entry.toolTip = toolTip
         return entry
-    }
-
-    /// Asks once, since it can't be undone. Windows stay where they are either way.
-    private static func confirmReset() {
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = "Forget everything LunchboxWM learned about how you work?"
-        alert.informativeText = "Your windows stay where they are, and the count of time LunchboxWM gave back starts over. Nothing LunchboxWM learned ever left this Mac."
-        alert.addButton(withTitle: "Forget Everything")
-        alert.addButton(withTitle: "Cancel")
-        if alert.runModal() == .alertFirstButtonReturn { Learning.shared.reset() }
     }
 
     private func action(_ title: String, checked: Bool = false, _ body: @escaping () -> Void) -> NSMenuItem {

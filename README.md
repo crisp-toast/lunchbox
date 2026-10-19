@@ -3,7 +3,7 @@
 A small, fast tiling window manager for macOS that lives in the menu bar.
 
 - One window on a screen sits centered at a comfortable 16:10 size. Two or three tile side by side;
-  the fourth makes a 2×2 grid, unless you've shown LunchboxWM a shape you like better (see Learning).
+  the fourth makes a 2×2 grid.
 - Everything is driven by the **left** ⌘ key, so right ⌘ + arrows still move the text cursor.
 - Windows slide into place, in one move each. Apps that can't keep up, or stall now and then, just
   snap, so LunchboxWM never adds lag; and an app's windows move together, never one after another. An
@@ -213,8 +213,8 @@ tests and demo recordings), `expect:<bundle id>` (holds a placeholder for a wind
 opening anything, to try placeholders), `leave-app:<bundle id>` and `manage-app:<bundle id>` (stop and
 resume tiling one app's windows, for agents testing it on a dummy-plug display), `license:<key>`,
 `license:window`, `license:remove`, `license:snapshot:<png>`, `practice:<command>` (drives
-onboarding's practice screen), `timeback-add:<action>:<count>[:<days ago>]`, `copy-diagnostics`, the
-learning commands (see below), and `dump`, which writes the current state (Summon's results with
+onboarding's practice screen), `timeback-add:<action>:<count>[:<days ago>]`, `copy-diagnostics`,
+`float` (float or tile the focused window), and `dump`, which writes the current state (Summon's results with
 file paths among it) to `~/Library/Application Support/LunchboxWM/state.json`.
 
 `pause` and `resume` do what the menu's **Tiling** item does. Pausing brings back windows parked in
@@ -255,38 +255,17 @@ Logs (`/usr/bin/log`, since zsh has its own `log` builtin):
 /usr/bin/log stream --predicate 'subsystem == "com.sentientdonut.lunchbox"' --info
 ```
 
-## Learning where your windows go (off by default for now)
+## Restarted apps, floating windows and installers
 
-**Settings › Learn Where Windows Go** turns it on. LunchboxWM then learns from what you do, entirely
-on this Mac ([docs/learning.md](docs/learning.md)):
-
-- **It knows what kind of window it's looking at.** A window classifier decides, as each window
-  appears, whether it's a document (tiles), a tool panel, a here-and-gone window, a video or call,
-  or a dialog the rules missed, in well under a millisecond. **What LunchboxWM Learned › How LunchboxWM
-  Sees Your Windows** shows its call for every open window ([docs/window-classifier.md](docs/window-classifier.md)).
-- **It floats what you'd float.** Float a window from the menu (**Float This Window**), or drag
-  it out of its tile twice in a row, and the next window like it floats by itself. A full
-  document window takes two.
-- **It opens apps in your usual arrangement.** A split you made and kept comes back when one of
-  the apps opens again beside the others, and so does the size you gave a lone window. When a
-  fourth window would make a 2×2 grid, a shape you made instead (say, Claude alone on the left at
-  full height, the rest stacked on the right) comes back whenever that app is one of the four.
-- **It sends new windows to the Workspace they belong in.** Move an app's window to a Workspace
-  and keep it there for ten minutes, and its new windows open there. Windows you open from
-  Summon or the Dock still come to you.
-
-It only decides where a new window lands (and, with a fourth window, the grid's shape), never
-takes focus, and never asks anything. Each time it acts, a quiet line at the bottom of the screen
-says what happened, and ⌘ with the number of the Workspace you were in undoes it. Undo the same thing twice and LunchboxWM forgets it.
-**Settings › What LunchboxWM Learned** lists every lesson in words: click one to forget it, or reset
-them all. It keeps everything in `~/Library/Application Support/LunchboxWM/Learning`, out of
-backups, and never sends any of it anywhere.
-
-Commands (development builds only): `learning-on`, `learning-off`, `classes` / `classify` (the window classifier's calls),
-`snapshot:<path>` (every window with its traits, for building the labeled set in the test VMs),
-`float` (float or tile the focused window),
-`learning-reset`, and `learning-lived:<seconds>` (counts that much window time at once, to try
-Workspace homes without waiting). `dump` adds a `learning` section.
+- **A restarted app goes back where it was.** When an app quits (an update, a crash, ⌘Q and
+  back), LunchboxWM remembers where each of its tiled windows was. For an hour, its new windows go
+  back to the same Workspace and spot instead of the one you're in. If you opened the app yourself
+  you go with it; if it came back by itself you stay where you are, and a quiet line says where it
+  went, with ⌘ and the number of the Workspace you were in to bring it to you instead.
+- **Float This Window** (the menu, or the `float` command) takes the focused window out of the
+  tiles at the size it opened at; **Tile This Window** puts it back.
+- **A downloaded app's disk image window** ("drag the app to Applications") floats centered at the
+  size its maker chose, like a dialog, instead of stretching into a tile.
 
 ## Website
 
