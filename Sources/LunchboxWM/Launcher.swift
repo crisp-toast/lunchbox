@@ -327,22 +327,34 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         }
     }
 
-    /// Opens a search or address in the default browser's own window: a new tab in
-    /// its window in this Workspace, or a new window here when it has none, so it
-    /// never pops up somewhere LunchboxWM then has to tidy (like Little Arc).
+    /// Opens a search or address in the Workspace you're in: as a new tab in the browser's
+    /// window here, or in a new window here when it has none here. Never in a window parked in
+    /// another Workspace, and never a pop-up somewhere LunchboxWM then has to tidy (Little Arc).
     private func openWeb(_ url: URL) {
         guard let bundleID = Self.defaultBrowser.flatMap({ Bundle(path: $0.path)?.bundleIdentifier }),
-              Browsers.canScript(bundleID),
-              !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
+              let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first(where: { !$0.isTerminated })
         else {
-            // Not running yet (it opens a window for the page as it starts) or not scriptable.
+            // Not running yet: it opens a window for the page as it starts, and that window tiles here.
             NSWorkspace.shared.open(url)
             return
         }
-        let asTab = tiler.focusWindowHere(ofApp: bundleID)
-        Browsers.open(url, in: bundleID, asTab: asTab) { ok in
-            if !ok { NSWorkspace.shared.open(url) }
+        let pid = running.processIdentifier
+        tiler.focusWindowHere(ofApp: bundleID) { [weak self] frame in
+            guard let self else { return }
+            guard Browsers.canScript(bundleID) else { return self.openUnscripted(url, pid: pid, windowHere: frame != nil) }
+            Browsers.open(url, in: bundleID, windowAt: frame?.origin) { [weak self] ok in
+                if !ok { self?.openUnscripted(url, pid: pid, windowHere: frame != nil) }
+            }
         }
+    }
+
+    /// Without a script (a browser that has none, or Automation turned off for it), a browser
+    /// opens a link in the window it used last. With one here, that's the one just focused;
+    /// without, a new window opens here first (the browser's own New Window command) and the
+    /// link goes into it.
+    private func openUnscripted(_ url: URL, pid: pid_t, windowHere: Bool) {
+        guard !windowHere else { NSWorkspace.shared.open(url); return }
+        tiler.openNewWindowHere(ofApp: pid) { _ in NSWorkspace.shared.open(url) }
     }
 
     // MARK: Web

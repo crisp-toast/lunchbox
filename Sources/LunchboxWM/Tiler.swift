@@ -1572,6 +1572,12 @@ final class Tiler {
         expectedArrival = (bundleID, CACurrentMediaTime() + 6)
         let existing = Set(windows.values.filter { $0.handle.app.bundleID == bundleID }.map(\.id))
         summonedArrival = (bundleID, existing, CACurrentMediaTime() + 6)
+        // An app already in front doesn't activate again, so what it focuses next counts as
+        // Summon's straight away: a page that still lands in a window parked in another
+        // Workspace brings that window here instead of taking you there.
+        if let app = apps.values.first(where: { $0.bundleID == bundleID }) {
+            summonActivation = (app.pid, CACurrentMediaTime() + 3)
+        }
     }
 
     /// The next new window from an app Summon just opened something in.
@@ -2731,16 +2737,50 @@ final class Tiler {
 
     /// Focuses one of the app's windows in the Workspace being viewed (the focused
     /// one, else the one used last, else the left-most), so a web search can open
-    /// as a tab right where you are. Returns false when the app has none here.
-    func focusWindowHere(ofApp bundleID: String) -> Bool {
+    /// as a tab right where you are. Calls back once the app itself says that window
+    /// is in front (or after half a second either way) with its frame, or with nil
+    /// when the app has no window here. Only then is the browser's "front window"
+    /// this one, not one parked in another Workspace.
+    func focusWindowHere(ofApp bundleID: String, completion: @escaping (CGRect?) -> Void) {
         let visible = visibleFrames()
         let mine = visible.keys.filter { windows[$0]?.handle.app.bundleID == bundleID }
-        guard !mine.isEmpty else { return false }
+        guard !mine.isEmpty else { return completion(nil) }
         let pick = [focusedID, lastFocused[currentSpace]].compactMap { $0 }.first(where: mine.contains)
             ?? mine.min { a, b in (visible[a]!.minX, visible[a]!.minY) < (visible[b]!.minX, visible[b]!.minY) }!
         activate(pick)
         showRing(on: pick)
-        return true
+        let frame = visible[pick]!
+        guard let app = windows[pick]?.handle.app else { return completion(frame) }
+        whenFocused(app, timeout: 0.5, where: { $0 == pick }) { _ in completion(frame) }
+    }
+
+    /// Opens a new window of the app here (its own New Window command) and calls back once
+    /// it's in front, or with false if the app has no such command or nothing came in 2 s.
+    func openNewWindowHere(ofApp pid: pid_t, then: @escaping (Bool) -> Void) {
+        guard let app = apps[pid] else { return then(false) }
+        let existing = Set(windows.values.filter { $0.pid == pid }.map(\.id))
+        openNewWindow(ofApp: pid) { [weak self] opened in
+            guard opened, let self else { return then(false) }
+            self.whenFocused(app, timeout: 2, where: { !existing.contains($0) }, then: then)
+        }
+    }
+
+    /// Calls `then` on the main queue once the app's focused window, read through
+    /// Accessibility every 40 ms, passes `test`, or after `timeout` (with false).
+    private func whenFocused(_ app: AppHandle, timeout: CFTimeInterval, where test: @escaping (CGWindowID) -> Bool,
+                             then: @escaping (Bool) -> Void) {
+        let deadline = CACurrentMediaTime() + timeout
+        func check() {
+            app.queue.async {
+                let id = app.element.element(kAXFocusedWindowAttribute)?.windowID
+                DispatchQueue.main.async {
+                    if let id, test(id) { return then(true) }
+                    guard CACurrentMediaTime() < deadline else { return then(false) }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) { check() }
+                }
+            }
+        }
+        check()
     }
 
     /// Focuses the app's most recently used window, switching spaces or
