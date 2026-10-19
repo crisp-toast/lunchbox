@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="64 64 896 896" role="img" aria-label="LunchboxWM">
   <defs>
     <linearGradient id="lb-box" x1="0.3" y1="0" x2="0.7" y2="1">
-      <stop offset="0" stop-color="#6a98ff"/><stop offset="0.45" stop-color="#2f6bff"/><stop offset="1" stop-color="#1d4fe0"/>
+      <stop offset="0" stop-color="#ffffff"/><stop offset="0.3" stop-color="#eef0f3"/><stop offset="0.55" stop-color="#d9dde3"/><stop offset="0.8" stop-color="#e8ebef"/><stop offset="1" stop-color="#b9c0c9"/>
     </linearGradient>
     <linearGradient id="lb-sheen" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.45"/><stop offset="0.22" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.6"/><stop offset="0.22" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
     <linearGradient id="lb-well" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#1437a8"/><stop offset="1" stop-color="#1b46c8"/>
@@ -22,17 +22,17 @@
       <stop offset="0" stop-color="#ffffff" stop-opacity="0.5"/><stop offset="0.45" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
   </defs>
-  <!-- the box is the tile: its edge is the squircle's edge -->
+  <!-- the box is the tile: a silver squircle -->
   <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#lb-box)"/>
   <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#lb-sheen)"/>
-  <rect x="66" y="66" width="892" height="892" rx="210" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="4"/>
-  <!-- the well, its corners concentric with the box's -->
+  <rect x="68" y="68" width="888" height="888" rx="208" fill="none" stroke="#ffffff" stroke-opacity="0.7" stroke-width="4"/>
+  <!-- the well, its corners concentric with the box's, pressed into the metal -->
+  <rect x="128" y="128" width="768" height="768" rx="148" fill="none" stroke="#7f8896" stroke-opacity="0.45" stroke-width="8"/>
   <rect x="128" y="128" width="768" height="768" rx="148" fill="url(#lb-well)"/>
   <!-- three compartments: the layout LunchboxWM makes, rounded to match the well at its corners -->
   <path d="M276 164 H438 A56 56 0 0 1 494 220 V804 A56 56 0 0 1 438 860 H276 A112 112 0 0 1 164 748 V276 A112 112 0 0 1 276 164 Z" fill="url(#lb-coral)"/><path d="M276 164 H438 A56 56 0 0 1 494 220 V804 A56 56 0 0 1 438 860 H276 A112 112 0 0 1 164 748 V276 A112 112 0 0 1 276 164 Z" fill="url(#lb-gloss)"/><path d="M276 166 H438 A54 54 0 0 1 492 220 V804 A54 54 0 0 1 438 858 H276 A110 110 0 0 1 166 748 V276 A110 110 0 0 1 276 166 Z" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="4"/>
   <path d="M586 164 H748 A112 112 0 0 1 860 276 V438 A56 56 0 0 1 804 494 H586 A56 56 0 0 1 530 438 V220 A56 56 0 0 1 586 164 Z" fill="url(#lb-mint)"/><path d="M586 164 H748 A112 112 0 0 1 860 276 V438 A56 56 0 0 1 804 494 H586 A56 56 0 0 1 530 438 V220 A56 56 0 0 1 586 164 Z" fill="url(#lb-gloss)"/><path d="M586 166 H748 A110 110 0 0 1 858 276 V438 A54 54 0 0 1 804 492 H586 A54 54 0 0 1 532 438 V220 A54 54 0 0 1 586 166 Z" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="4"/>
   <path d="M586 530 H804 A56 56 0 0 1 860 586 V748 A112 112 0 0 1 748 860 H586 A56 56 0 0 1 530 804 V586 A56 56 0 0 1 586 530 Z" fill="url(#lb-amber)"/><path d="M586 530 H804 A56 56 0 0 1 860 586 V748 A112 112 0 0 1 748 860 H586 A56 56 0 0 1 530 804 V586 A56 56 0 0 1 586 530 Z" fill="url(#lb-gloss)"/><path d="M586 532 H804 A54 54 0 0 1 858 586 V748 A110 110 0 0 1 748 858 H586 A54 54 0 0 1 532 804 V586 A54 54 0 0 1 586 532 Z" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="4"/>
-  <!-- the clasp, on the front -->
-  <rect x="460" y="906" width="104" height="44" rx="16" fill="#e9efff"/>
-  <rect x="460" y="906" width="104" height="44" rx="16" fill="none" stroke="#1d4fe0" stroke-opacity="0.5" stroke-width="4"/>
+  <!-- the box's outer edge -->
+  <rect x="65" y="65" width="894" height="894" rx="211" fill="none" stroke="#5d6673" stroke-opacity="0.35" stroke-width="2"/>
 </svg>
