@@ -1,4 +1,4 @@
-/// Which kind of build this is. It's fixed when Lunchbox is compiled: no setting or environment
+/// Which kind of build this is. It's fixed when LunchboxWM is compiled: no setting or environment
 /// variable can change it.
 ///
 /// - Development builds take every script command (README, Scripting): scripts/build.sh passes

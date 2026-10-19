@@ -2,7 +2,7 @@ import AppKit
 import Security
 import LunchboxCore
 
-/// Lunchbox's license and free trial: what's stored on this Mac, and whether tiling may run.
+/// LunchboxWM's license and free trial: what's stored on this Mac, and whether tiling may run.
 final class Licensing {
     /// The store's Ed25519 public key. Its private half signs licenses on the server
     /// (LICENSE_PRIVATE_KEY) and is kept off this repo.
@@ -34,7 +34,7 @@ final class Licensing {
         }
     }
 
-    /// When the trial began: the earlier of what's in Lunchbox's settings and the Keychain,
+    /// When the trial began: the earlier of what's in LunchboxWM's settings and the Keychain,
     /// so clearing the settings doesn't hand out a fresh trial.
     var trialStart: Date? {
         let stored = [defaults.object(forKey: Self.trialKey) as? Date,

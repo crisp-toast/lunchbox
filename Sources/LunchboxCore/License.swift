@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-/// A Lunchbox license: who bought it and which order, signed by the store. Checked
+/// A LunchboxWM license: who bought it and which order, signed by the store. Checked
 /// entirely offline against the store's public key, so a purchase works without an
 /// account, a server round trip, or a network connection.
 ///
@@ -11,7 +11,7 @@ import Foundation
 public struct License: Equatable, Sendable {
     public static let prefix = "lunchbox1"
     public static let product = "lunchbox"
-    /// Keys issued while Lunchbox was called Tessel (the owner's), signed by the same store key:
+    /// Keys issued while LunchboxWM was called Tessel (the owner's), signed by the same store key:
     /// still good.
     static let legacy = (prefix: "tessel1", product: "tessel")
 
@@ -66,7 +66,7 @@ public struct License: Equatable, Sendable {
     }
 }
 
-/// The free trial: every feature for 7 days from the first time Lunchbox is opened.
+/// The free trial: every feature for 7 days from the first time LunchboxWM is opened.
 public enum Trial: Equatable, Sendable {
     case active(daysLeft: Int)
     case ended

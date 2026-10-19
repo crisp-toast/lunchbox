@@ -1,6 +1,6 @@
 import CoreGraphics
 
-/// The sizes a window will take, as far as Lunchbox has seen. Most windows take any size
+/// The sizes a window will take, as far as LunchboxWM has seen. Most windows take any size
 /// and fill their tile. Some can't be resized at all (a fixed-size window), some stop at a
 /// minimum or maximum, and some keep their shape (Simulator, a video): those still tile,
 /// but at the size they allow, centered in their slot, with their column sized to fit.
@@ -41,7 +41,7 @@ public struct SizeLimits: Equatable, Sendable, Codable {
     /// limits. Bigger than asked: it won't go smaller. Clearly smaller than asked: it won't go
     /// bigger. It took a size outside what was known: that limit was wrong, so it's dropped.
     ///
-    /// A maximum sticks (Lunchbox stops asking for more), so it takes clear evidence: more than
+    /// A maximum sticks (LunchboxWM stops asking for more), so it takes clear evidence: more than
     /// `slack` short (Terminal snaps to whole character cells, a few points short of what's
     /// asked), from a slot of a fair size, and not while the window grew the other way.
     public func learning(asked target: CGSize, got actual: CGSize, tolerance: CGFloat = 2, slack: CGFloat = 24) -> SizeLimits {

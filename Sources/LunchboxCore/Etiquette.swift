@@ -1,6 +1,6 @@
 import Foundation
 
-/// The rules that keep what Lunchbox learns from ever being annoying, in one place and tested
+/// The rules that keep what LunchboxWM learns from ever being annoying, in one place and tested
 /// like everything else (docs/learning.md, "Not annoying, as hard rules"):
 ///
 /// - It only decides where a new window lands. It never rearranges what you're looking at.
@@ -13,18 +13,18 @@ import Foundation
 /// - It's never slower than without it.
 /// - What it learned is listed in words, and each lesson can be forgotten.
 public enum Etiquette {
-    /// How long the undo key works after Lunchbox does something on its own.
+    /// How long the undo key works after LunchboxWM does something on its own.
     public static let undoSeconds = 10.0
     /// How long the quiet line stays.
     public static let lineSeconds = 2.5
-    /// Things Lunchbox does within this long of each other share one line and one undo
+    /// Things LunchboxWM does within this long of each other share one line and one undo
     /// (windows coming back after a login, say).
     public static let batchSeconds = 1.0
     /// Undone this many times in a row, a thing stops happening.
     public static let undosToStop = 2
 }
 
-/// Something Lunchbox did on its own, from what it learned.
+/// Something LunchboxWM did on its own, from what it learned.
 public enum AutomaticAction: Equatable, Sendable {
     /// A new window floats, because you floated windows like it.
     case floated(app: String)
@@ -43,7 +43,7 @@ public enum AutomaticAction: Equatable, Sendable {
     case followed(app: String, space: Int)
 }
 
-/// The one line Lunchbox shows when it did something on its own.
+/// The one line LunchboxWM shows when it did something on its own.
 public enum QuietLine {
     /// `undoKey` names the undo key ("Left ⌘ 1"), nil when there isn't one.
     public static func text(for actions: [AutomaticAction], undoKey: String?) -> String {
@@ -70,9 +70,9 @@ public enum QuietLine {
     }
 }
 
-/// What you keep undoing, so Lunchbox stops doing it. A thing is anything Lunchbox does on its
+/// What you keep undoing, so LunchboxWM stops doing it. A thing is anything LunchboxWM does on its
 /// own, named by a key ("place|com.apple.mail", "arrange|…"). Undone `Etiquette.undosToStop`
-/// times in a row, it stops until you forget the lesson or reset what Lunchbox learned. Any
+/// times in a row, it stops until you forget the lesson or reset what LunchboxWM learned. Any
 /// time you leave it be, the count starts over.
 public struct UndoLedger: Codable, Equatable, Sendable {
     public private(set) var streak: [String: Int] = [:]

@@ -1,4 +1,4 @@
-// Lunchbox license keys: `lunchbox1.<payload>.<signature>`, Ed25519 over compact JSON.
+// LunchboxWM license keys: `lunchbox1.<payload>.<signature>`, Ed25519 over compact JSON.
 // The app checks them offline with the matching public key (Sources/LunchboxCore/License.swift).
 // Runs in Cloudflare Workers and in Node 20+ (both have WebCrypto Ed25519).
 

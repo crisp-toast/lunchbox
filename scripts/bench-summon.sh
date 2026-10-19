@@ -16,7 +16,7 @@ until only_spoof && [ "$(idle)" -ge 600 ]; do
 done
 echo "starting at $(date)"
 cmd dump; sleep 0.5
-ws=$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/Library/Application Support/Lunchbox/state.json')))['currentSpace'])")
+ws=$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/Library/Application Support/LunchboxWM/state.json')))['currentSpace'])")
 cmd space-3; sleep 1
 open -a Terminal; sleep 3   # one base window, in Workspace 3
 build/bench-summon "${RUNS:-8}" > "$OUT"; status=$?

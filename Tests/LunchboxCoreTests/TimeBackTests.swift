@@ -214,15 +214,15 @@ private func scratchFolder() -> URL {
         #expect(week.minutes == 26)
         let words = TimeBackWords.trialEnded(week: week, lessons: 14)
         #expect(words.eyebrow == "Your free trial has ended")
-        #expect(words.heading == "This week, Lunchbox gave you back 26 minutes.")
+        #expect(words.heading == "This week, LunchboxWM gave you back 26 minutes.")
         #expect(words.summary == "It placed 412 windows, put 9 apps back the way you like them, sent 41 windows to their Workspace, and put everything back the 6 times your display came back. It learned 14 things about how you work.")
-        #expect(words.keep == "Keep Lunchbox: $9.99, once.")
+        #expect(words.keep == "Keep LunchboxWM: $9.99, once.")
         #expect(words.stays == "What it learned stays on your Mac either way.")
     }
 
     @Test func theTrialEndScreenOnlySaysWhatHappened() {
         let words = TimeBackWords.trialEnded(week: tally([.tiled: 40, .sent: 1, .displayReturned: 1]), lessons: 1)
-        #expect(words.heading == "This week, Lunchbox gave you back 1 minute.")
+        #expect(words.heading == "This week, LunchboxWM gave you back 1 minute.")
         #expect(words.summary == "It placed 41 windows, sent 1 window to its Workspace, and put everything back when your display came back. It learned 1 thing about how you work.")
         let quiet = TimeBackWords.trialEnded(week: tally([.tiled: 3]), lessons: 0)
         #expect(quiet.eyebrow == nil)

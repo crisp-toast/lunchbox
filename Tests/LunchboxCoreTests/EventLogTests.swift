@@ -82,7 +82,7 @@ private func scratchFolder() -> URL {
     }
 }
 
-/// "Everything it learns stays on your Mac" is checked here: the only code in Lunchbox that
+/// "Everything it learns stays on your Mac" is checked here: the only code in LunchboxWM that
 /// opens a network connection itself is the weekly license check. (Sparkle's update check
 /// is set up in Info.plist, and Summon's web searches open in your browser.)
 @Suite struct NothingLeavesThisMac {
@@ -101,6 +101,6 @@ private func scratchFolder() -> URL {
                 offenders.append(url.path.replacingOccurrences(of: sources.path + "/", with: ""))
             }
         }
-        #expect(offenders == ["Lunchbox/Licensing.swift"])
+        #expect(offenders == ["LunchboxWM/Licensing.swift"])
     }
 }

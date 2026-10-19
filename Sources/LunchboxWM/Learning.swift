@@ -4,22 +4,22 @@ import LunchboxCore
 
 private let learningLog = Logger(subsystem: logSubsystem, category: "learning")
 
-/// Lunchbox learns where your windows go (docs/learning.md): which windows you float, how you
+/// LunchboxWM learns where your windows go (docs/learning.md): which windows you float, how you
 /// arrange each set of apps, and which Workspace each app lives in. One switch, Settings ›
 /// Learn Where Windows Go (the `learning` default), off unless turned on for now.
 ///
-/// Everything it learns is in ~/Library/Application Support/Lunchbox/Learning, kept out of
+/// Everything it learns is in ~/Library/Application Support/LunchboxWM/Learning, kept out of
 /// backups, and none of it is ever sent anywhere. Float decisions are made on each app's own
-/// queue, where Lunchbox reads the window anyway. Arrangements and homes are dictionary reads
+/// queue, where LunchboxWM reads the window anyway. Arrangements and homes are dictionary reads
 /// on the main thread, where windows are placed. Disk work runs on a queue of its own.
 final class Learning {
     static let shared = Learning()
 
     static var folder: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Lunchbox/Learning")
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/LunchboxWM/Learning")
     }
 
-    /// A window Lunchbox has decided about.
+    /// A window LunchboxWM has decided about.
     struct Seen: Codable, Sendable {
         var features: FloatFeatures
         var decision: FloatDecision
@@ -30,7 +30,7 @@ final class Learning {
         var byModel: Bool? = nil
     }
 
-    /// What Lunchbox decided for a window it just saw.
+    /// What LunchboxWM decided for a window it just saw.
     struct Verdict {
         var decision: FloatDecision
         var behavior: WindowBehavior
@@ -65,7 +65,7 @@ final class Learning {
     private let workspaceLog = EventLog<WorkspaceMemory.Event>(folder: Learning.folder, name: "workspace", maxBytes: 512 << 10)
     private var snapshotURL: URL { Learning.folder.appendingPathComponent("memory.json") }
     /// Held while everything is read back, so no window is decided before the lessons are in
-    /// (a window you taught Lunchbox to float would otherwise tile after a relaunch).
+    /// (a window you taught LunchboxWM to float would otherwise tile after a relaunch).
     private let loading = DispatchGroup()
 
     var isOn: Bool { state.withLock { $0.on } }
@@ -135,7 +135,7 @@ final class Learning {
 
     // MARK: Float or tile
 
-    /// The first time Lunchbox sees a window that could tile: how it behaves. Runs on the window's
+    /// The first time LunchboxWM sees a window that could tile: how it behaves. Runs on the window's
     /// app queue; nil when learning is off. `read` reads the window over Accessibility (outside
     /// the lock); its title is used here and not kept.
     ///
@@ -171,7 +171,7 @@ final class Learning {
         return Verdict(decision: decision, behavior: kind.behavior)
     }
 
-    /// The window classifier Lunchbox ships with.
+    /// The window classifier LunchboxWM ships with.
     static let model = BehaviorModel.base
 
     /// What was decided for a window, if anything.
@@ -184,13 +184,13 @@ final class Learning {
         state.withLock { $0.on ? $0.seen[id]?.behavior : nil }
     }
 
-    /// The size a window had when it first appeared, before Lunchbox tiled it.
+    /// The size a window had when it first appeared, before LunchboxWM tiled it.
     func openingSize(of id: CGWindowID) -> CGSize? {
         state.withLock { s in s.seen[id].map { CGSize(width: $0.features.width, height: $0.features.height) } }
     }
 
     /// You floated a tiled window or tiled a floating one. It's learned right away, so the
-    /// next window of the same kind follows. False for a window Lunchbox never decided about.
+    /// next window of the same kind follows. False for a window LunchboxWM never decided about.
     @discardableResult
     func corrected(_ id: CGWindowID, to choice: FloatChoice, by gesture: FloatGesture) -> Bool {
         let now = Self.now
@@ -220,7 +220,7 @@ final class Learning {
     }
 
     /// A window closed: how long it lived with its choice is a quiet hint. `lifetime` is from
-    /// when Lunchbox first saw it; `counts` is false for a window that was open before Lunchbox
+    /// when LunchboxWM first saw it; `counts` is false for a window that was open before LunchboxWM
     /// started, or closed because its app quit. Only a close that says something is written
     /// down, which keeps the log to a few kilobytes a day.
     func closed(_ id: CGWindowID, lifetime: Double, counts: Bool) {
@@ -346,8 +346,8 @@ final class Learning {
 
     // MARK: Undo
 
-    /// You pressed the undo key for something Lunchbox did on its own. Undone twice in a row,
-    /// Lunchbox forgets that lesson (and stops doing it) until you teach it again. True then.
+    /// You pressed the undo key for something LunchboxWM did on its own. Undone twice in a row,
+    /// LunchboxWM forgets that lesson (and stops doing it) until you teach it again. True then.
     @discardableResult
     func undone(_ key: String) -> Bool {
         let stopped = state.withLock { $0.ledger.undone(key) }
@@ -360,7 +360,7 @@ final class Learning {
         return stopped
     }
 
-    /// Something Lunchbox did on its own stood.
+    /// Something LunchboxWM did on its own stood.
     func kept(_ key: String) {
         state.withLock { $0.ledger.kept(key) }
         scheduleSave()
@@ -368,7 +368,7 @@ final class Learning {
 
     // MARK: Lessons
 
-    /// What Lunchbox learned, in words, each with the key `forget` takes. Main thread.
+    /// What LunchboxWM learned, in words, each with the key `forget` takes. Main thread.
     func lessons() -> [(key: String, text: String)] {
         let s = state.withLock { $0 }
         guard s.on else { return [] }
@@ -429,7 +429,7 @@ final class Learning {
         learningLog.notice("forgot \(key, privacy: .public)")
     }
 
-    /// Settings › Reset What Lunchbox Learned: forgets every lesson and deletes the folder,
+    /// Settings › Reset What LunchboxWM Learned: forgets every lesson and deletes the folder,
     /// the time back counted in it too. Windows open now stay as they are.
     func reset() {
         TimeBackLedger.shared.reset()
@@ -446,7 +446,7 @@ final class Learning {
             arrangeLog.erase()
             workspaceLog.erase()
             try? FileManager.default.removeItem(at: Learning.folder)
-            learningLog.notice("forgot everything Lunchbox learned")
+            learningLog.notice("forgot everything LunchboxWM learned")
         }
     }
 

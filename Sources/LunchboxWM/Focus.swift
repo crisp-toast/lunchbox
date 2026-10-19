@@ -5,7 +5,7 @@ import AppKit
 /// Since macOS 14, an app in the background can't reliably activate another app
 /// through public API (setting AXFrontmost is often ignored). The window server's
 /// own calls still work; yabai, AeroSpace and Amethyst use the same two. They're
-/// looked up at runtime, so if a future macOS removes them Lunchbox falls back to
+/// looked up at runtime, so if a future macOS removes them LunchboxWM falls back to
 /// the Accessibility route instead of failing to launch.
 enum WindowFocus {
     private typealias SetFrontProcess = @convention(c) (UnsafeMutablePointer<ProcessSerialNumber>, UInt32, UInt32) -> Int32

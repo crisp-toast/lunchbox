@@ -6,7 +6,7 @@ compatibility_date = "2026-10-01"
 [vars]
 SITE_URL = "https://lunchboxwm.com"
 STRIPE_PRICE_ID = "price_REPLACE_ME"
-EMAIL_FROM = "Lunchbox <support@sentientdonut.com>"
+EMAIL_FROM = "LunchboxWM <support@sentientdonut.com>"
 SUPPORT_EMAIL = "support@sentientdonut.com"
 
 # Refunded and charged-back orders, as one-way hashes (see functions/api/revoked.js).

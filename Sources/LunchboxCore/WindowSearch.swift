@@ -34,7 +34,7 @@ public struct WindowSearch: Sendable {
     private let entries: [Entry]
     private let windowsPerApp: [String: Int]
 
-    /// `windows` in the order ties should keep: Lunchbox passes the most recently used first.
+    /// `windows` in the order ties should keep: LunchboxWM passes the most recently used first.
     public init(_ windows: [SearchableWindow]) {
         entries = windows.map { Entry(window: $0, titleWords: Self.words(in: $0.title, splittingHumps: true),
                                       appWords: Self.words(in: $0.appName, splittingHumps: true)) }

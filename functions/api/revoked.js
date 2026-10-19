@@ -1,5 +1,5 @@
 // GET /api/revoked : the licenses that no longer work (refunded or charged back), as one-way
-// hashes of their orders. Licensed copies of Lunchbox check this about once a week; the request
+// hashes of their orders. Licensed copies of LunchboxWM check this about once a week; the request
 // carries nothing about the Mac or the license. Cached for an hour.
 export async function onRequestGet({ request, env }) {
   const cache = typeof caches !== "undefined" ? caches.default : null;

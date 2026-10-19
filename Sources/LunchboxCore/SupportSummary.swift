@@ -3,17 +3,17 @@ import Foundation
 
 /// The support summary Settings › Copy Diagnostics puts on the clipboard, for someone to paste
 /// into an email. It's made of plain facts that can't hold anything private: a window is its
-/// app's bundle ID and what Lunchbox made of it, never its title; the license is only whether
+/// app's bundle ID and what LunchboxWM made of it, never its title; the license is only whether
 /// there is one; and every log line goes through `scrub` first.
 public struct SupportSummary: Sendable {
     public struct Screen: Sendable {
         public var name: String
-        /// Top-left-origin points, like the rest of Lunchbox.
+        /// Top-left-origin points, like the rest of LunchboxWM.
         public var frame: CGRect
         public var visible: CGRect
         public var scale: Double
         public var isMain: Bool
-        /// Lunchbox tiles on it (Use All Displays, or the main display).
+        /// LunchboxWM tiles on it (Use All Displays, or the main display).
         public var tiled: Bool
 
         public init(name: String, frame: CGRect, visible: CGRect, scale: Double, isMain: Bool, tiled: Bool) {
@@ -30,11 +30,11 @@ public struct SupportSummary: Sendable {
         public var id: UInt32
         /// The app's bundle ID.
         public var app: String
-        /// How Lunchbox handles it now: "tiled", "floats", "minimized"…
+        /// How LunchboxWM handles it now: "tiled", "floats", "minimized"…
         public var state: String
         /// What the window classifier made of it (it runs while learning is on).
         public var kind: WindowBehavior?
-        /// The size limits Lunchbox learned for it.
+        /// The size limits LunchboxWM learned for it.
         public var limits: SizeLimits?
         public var resizable: Bool
 
@@ -73,7 +73,7 @@ public struct SupportSummary: Sendable {
         }
     }
 
-    /// "Lunchbox 1.0 (52), release build".
+    /// "LunchboxWM 1.0 (52), release build".
     public var app: String
     /// "macOS 15.7.1 (24G231), Mac16,10".
     public var system: String
@@ -85,9 +85,9 @@ public struct SupportSummary: Sendable {
     /// From 1.
     public var currentWorkspace: Int
     public var workspaces: [Workspace]
-    /// Windows Lunchbox knows that aren't in a tile: floating, minimized, waiting.
+    /// Windows LunchboxWM knows that aren't in a tile: floating, minimized, waiting.
     public var untiled: [Window]
-    /// Errors from Lunchbox's log in the last day, oldest first, already through `scrub`.
+    /// Errors from LunchboxWM's log in the last day, oldest first, already through `scrub`.
     public var errors: [String]
     public var made: Date
 
@@ -110,7 +110,7 @@ public struct SupportSummary: Sendable {
         let stamp = DateFormatter()
         stamp.locale = Locale(identifier: "en_US_POSIX")
         stamp.dateFormat = "yyyy-MM-dd HH:mm ZZZZZ"
-        var out = ["Lunchbox diagnostics, \(stamp.string(from: made))", app, system, "License: \(license)"]
+        var out = ["LunchboxWM diagnostics, \(stamp.string(from: made))", app, system, "License: \(license)"]
         out += settings.map { "  \($0)" }
 
         out += ["", "Displays (\(screens.count))"]

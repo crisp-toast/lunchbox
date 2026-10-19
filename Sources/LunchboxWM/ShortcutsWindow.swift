@@ -179,7 +179,7 @@ final class ShortcutsWindow: NSObject, NSWindowDelegate {
         window.delegate = self
         window.minSize = NSSize(width: 660, height: 420)
 
-        let intro = NSTextField(wrappingLabelWithString: "Click any shortcut and press new keys. Lunchbox won't let two commands share keys, or pick a combination that would get in the way of typing.")
+        let intro = NSTextField(wrappingLabelWithString: "Click any shortcut and press new keys. LunchboxWM won't let two commands share keys, or pick a combination that would get in the way of typing.")
         intro.font = .systemFont(ofSize: 13)
         intro.textColor = .secondaryLabelColor
         message.font = .systemFont(ofSize: 12, weight: .medium)

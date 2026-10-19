@@ -18,7 +18,7 @@ import Testing
         #expect(FileSearch.isHidden(Self.home + "/Library/Preferences/com.apple.finder.plist", home: Self.home))
         #expect(FileSearch.isHidden(Self.home + "/Library/Application Support/Code/notes.json", home: Self.home))
         #expect(FileSearch.isHidden(Self.cloud + "/.Trash/old.pdf", home: Self.home))
-        #expect(FileSearch.isHidden(Self.home + "/code/tessel/.build/debug/Lunchbox", home: Self.home))
+        #expect(FileSearch.isHidden(Self.home + "/code/tessel/.build/debug/LunchboxWM", home: Self.home))
         #expect(FileSearch.isHidden(Self.home + "/code/site/node_modules/react/index.js", home: Self.home))
         #expect(FileSearch.isHidden("/Applications/Notes.app", home: Self.home))
         #expect(FileSearch.isHidden("/Applications/Xcode.app/Contents/Info.plist", home: Self.home))
@@ -70,7 +70,7 @@ import Testing
         #expect(FileSearch.place(of: Self.cloud + "/Desktop/A&M Info/A&M Info.pages", home: Self.home) == 2)
         #expect(FileSearch.place(of: Self.cloud + "/Group 1286.pdf", home: Self.home) == 1)
         #expect(FileSearch.place(of: "/Volumes/Master Storage/Projects/lunchbox/demo.mp4", home: Self.home) == 1)
-        #expect(FileSearch.place(of: Self.home + "/code/tessel/Sources/Lunchbox/Launcher.swift", home: Self.home) == 0)
+        #expect(FileSearch.place(of: Self.home + "/code/tessel/Sources/LunchboxWM/Launcher.swift", home: Self.home) == 0)
     }
 
     @Test func termsAndMatching() {
@@ -118,12 +118,12 @@ import Testing
     }
 
     @Test func notWithFullDiskAccess() {
-        // Lunchbox can already read Desktop, Documents and Downloads: nothing to ask.
+        // LunchboxWM can already read Desktop, Documents and Downloads: nothing to ask.
         #expect(!FolderAccess.offers(query: "budget", answer: nil, fullDiskAccess: true))
     }
 
     @Test func answersAreKeptByName() {
-        // UserDefaults keeps the raw value; a value Lunchbox doesn't know means not answered.
+        // UserDefaults keeps the raw value; a value LunchboxWM doesn't know means not answered.
         #expect(FolderAccess.Answer(rawValue: "chosen") == .chosen)
         #expect(FolderAccess.Answer(rawValue: "dismissed") == .dismissed)
         #expect(FolderAccess.Answer(rawValue: "later") == nil)
@@ -142,7 +142,7 @@ import Testing
         // Documents, pictures and downloads in Desktop, Documents and Downloads, and in iCloud Drive.
         #expect(shown("/Users/t/Documents/Taxes/2026 return.pdf", false))
         #expect(shown("/Users/t/Desktop/Screenshot 2026-10-18.png", false))
-        #expect(shown("/Users/t/Downloads/Lunchbox.dmg", false))
+        #expect(shown("/Users/t/Downloads/LunchboxWM.dmg", false))
         #expect(shown("/Users/t/Library/Mobile Documents/com~apple~CloudDocs/Desktop/Plan.pages", false))
         #expect(shown("/Users/t/Library/CloudStorage/Dropbox/Contracts/lease.docx", false))
         #expect(shown("/Users/t/Documents/Taxes", true))

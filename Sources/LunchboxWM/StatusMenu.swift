@@ -38,7 +38,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         if !trusted {
-            menu.addItem(disabled: "Lunchbox needs Accessibility access to move windows.")
+            menu.addItem(disabled: "LunchboxWM needs Accessibility access to move windows.")
             menu.addItem(action("Allow Accessibility Access…") { [weak self] in self?.onGrantAccess?() })
             menu.addItem(.separator())
         } else {
@@ -75,7 +75,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             if Learning.shared.isOn {
                 let floats = tiler.focusedFloats
                 let float = action(floats == true ? "Tile This Window" : "Float This Window") { [weak self] in self?.tiler.toggleFloating() }
-                float.toolTip = "Lunchbox learns from this: the next window like it does the same."
+                float.toolTip = "LunchboxWM learns from this: the next window like it does the same."
                 float.isEnabled = tiler.enabled && floats != nil
                 menu.addItem(float)
             }
@@ -88,8 +88,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
-        // The time Lunchbox gave back this week, once there's any. How it's counted is in its
-        // tooltip and in What Lunchbox Learned.
+        // The time LunchboxWM gave back this week, once there's any. How it's counted is in its
+        // tooltip and in What LunchboxWM Learned.
         let week = TimeBackLedger.shared.week
         let unlicensed = licensing.map { $0.license == nil } ?? false
         if trusted, !week.isEmpty {
@@ -106,7 +106,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
                 menu.addItem(disabled: TimeBackWords.trialLine(daysLeft: days, soFar: soFar))
             case .ended: menu.addItem(disabled: "Free trial ended")
             }
-            menu.addItem(action("Buy Lunchbox – $9.99…") { [weak self] in self?.onBuy?() })
+            menu.addItem(action("Buy LunchboxWM – $9.99…") { [weak self] in self?.onBuy?() })
             menu.addItem(action("Enter License…") { [weak self] in self?.onEnterLicense?() })
             menu.addItem(.separator())
         }
@@ -122,7 +122,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         displays.toolTip = "Turn off to tile only on the main display, for example when the other display is a dummy plug."
         options.addItem(displays)
         let login = action("Launch at Login", checked: LoginItem.isEnabled) { LoginItem.set(!LoginItem.isEnabled) }
-        login.toolTip = "Also brings Lunchbox back by itself if it ever quits unexpectedly."
+        login.toolTip = "Also brings LunchboxWM back by itself if it ever quits unexpectedly."
         options.addItem(login)
         options.addItem(action("Keyboard Shortcuts…") { [weak self] in self?.onShowShortcuts?() })
         options.addItem(action("Welcome & Setup…") { [weak self] in self?.onShowWelcome?() })
@@ -135,13 +135,13 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             guard let self else { return }
             self.tiler.setLearning(!Learning.shared.isOn)
         }
-        learning.toolTip = "Lunchbox learns which windows you float, how you arrange your apps, and which Workspace each app lives in. All on this Mac."
+        learning.toolTip = "LunchboxWM learns which windows you float, how you arrange your apps, and which Workspace each app lives in. All on this Mac."
         learning.isEnabled = tiler.enabled
         options.addItem(learning)
         if Learning.shared.isOn {
-            let learned = NSMenuItem(title: "What Lunchbox Learned", action: nil, keyEquivalent: "")
+            let learned = NSMenuItem(title: "What LunchboxWM Learned", action: nil, keyEquivalent: "")
             let lessons = NSMenu()
-            lessons.addItem(action("How Lunchbox Sees Your Windows…") { [weak self] in self?.onShowWindowClasses?() })
+            lessons.addItem(action("How LunchboxWM Sees Your Windows…") { [weak self] in self?.onShowWindowClasses?() })
             lessons.addItem(.separator())
             let line = NSMenuItem(title: TimeBackWords.menuLine(week), action: nil, keyEquivalent: "")
             line.isEnabled = false
@@ -162,7 +162,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
                 }
             }
             lessons.addItem(.separator())
-            lessons.addItem(action("Reset What Lunchbox Learned…") { Self.confirmReset() })
+            lessons.addItem(action("Reset What LunchboxWM Learned…") { Self.confirmReset() })
             learned.submenu = lessons
             options.addItem(learned)
         }
@@ -173,14 +173,14 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         settings.submenu = options
         menu.addItem(settings)
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit Lunchbox", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit LunchboxWM", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
     /// The working behind this week's number, for a tooltip.
     private static func howCounted(_ week: TimeBack.Tally) -> String {
         let rows = TimeBackWords.breakdown(week)
         return (TimeBackWords.howCounted + (rows.isEmpty ? [] : ["", "This week:"] + rows)
-            + ["", "Counted on this Mac only. Reset What Lunchbox Learned clears it."]).joined(separator: "\n")
+            + ["", "Counted on this Mac only. Reset What LunchboxWM Learned clears it."]).joined(separator: "\n")
     }
 
     /// A small grey note in a menu.
@@ -199,8 +199,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private static func confirmReset() {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "Forget everything Lunchbox learned about how you work?"
-        alert.informativeText = "Your windows stay where they are, and the count of time Lunchbox gave back starts over. Nothing Lunchbox learned ever left this Mac."
+        alert.messageText = "Forget everything LunchboxWM learned about how you work?"
+        alert.informativeText = "Your windows stay where they are, and the count of time LunchboxWM gave back starts over. Nothing LunchboxWM learned ever left this Mac."
         alert.addButton(withTitle: "Forget Everything")
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn { Learning.shared.reset() }

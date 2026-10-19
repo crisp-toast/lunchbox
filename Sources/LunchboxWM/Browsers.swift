@@ -55,7 +55,7 @@ enum Browsers {
         let script = "tell application id \"\(bundleID)\"\n  \(body)\n  activate\nend tell"
 
         // osascript runs off the main thread: the first time, macOS asks whether
-        // Lunchbox may control the browser and the call waits for that answer.
+        // LunchboxWM may control the browser and the call waits for that answer.
         DispatchQueue.global(qos: .userInitiated).async {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")

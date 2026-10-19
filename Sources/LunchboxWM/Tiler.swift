@@ -2,7 +2,7 @@ import AppKit
 import os
 import LunchboxCore
 
-/// Lunchbox's log subsystem: Console and `log stream` filter by it, and Copy Diagnostics reads its errors.
+/// LunchboxWM's log subsystem: Console and `log stream` filter by it, and Copy Diagnostics reads its errors.
 let logSubsystem = "com.sentientdonut.lunchbox"
 let log = Logger(subsystem: logSubsystem, category: "tiler")
 
@@ -21,14 +21,14 @@ final class ManagedWindow {
     var tabs = 0
     /// Whether it can be resized at all (a fixed-size window tiles at its own size).
     var resizable = true
-    /// The size it had after Lunchbox last placed it: a different size later means it
+    /// The size it had after LunchboxWM last placed it: a different size later means it
     /// resized itself.
     var settledSize: CGSize?
-    /// When Lunchbox first saw it.
+    /// When LunchboxWM first saw it.
     let seenAt = CACurrentMediaTime()
-    /// It opened just now: only new windows are placed by what Lunchbox learned.
+    /// It opened just now: only new windows are placed by what LunchboxWM learned.
     var isNew: Bool { CACurrentMediaTime() - seenAt < 10 }
-    /// It opened while Lunchbox was running (not one already open when it started), so how
+    /// It opened while LunchboxWM was running (not one already open when it started), so how
     /// long it lived means something.
     var openedWhileRunning = false
     /// Its title when Summon last opened, so Summon can find it. Kept in memory only.
@@ -62,7 +62,7 @@ private struct WindowInfo {
     /// How many tabs its native tab bar shows (0 without one). macOS lists only the tab in
     /// front; each tab is a window of its own, and the ones behind aren't on screen.
     let tabs: Int
-    /// Whether it floats, by what you taught Lunchbox (nil unless Learning is on).
+    /// Whether it floats, by what you taught LunchboxWM (nil unless Learning is on).
     let learned: FloatDecision?
 }
 
@@ -90,13 +90,13 @@ final class Tiler {
     /// The number of Workspaces changed (the shortcuts for the new ones start working).
     var onSpaceCountChange: ((Int) -> Void)?
     private(set) var displays: [Display] = []
-    /// Off: Lunchbox uses only the main display and ignores the others (e.g. a dummy display plug).
+    /// Off: LunchboxWM uses only the main display and ignores the others (e.g. a dummy display plug).
     private(set) var useAllDisplays = UserDefaults.standard.object(forKey: "useAllDisplays") as? Bool ?? true
-    /// The displays Lunchbox tiles on.
+    /// The displays LunchboxWM tiles on.
     private var activeDisplays: [Display] {
         useAllDisplays ? displays : displays.filter(\.isMain)
     }
-    /// When Lunchbox last gave a window focus itself.
+    /// When LunchboxWM last gave a window focus itself.
     private var lastActivation: CFTimeInterval = 0
     private var apps: [pid_t: AppHandle] = [:]
     private var windows: [CGWindowID: ManagedWindow] = [:]
@@ -114,7 +114,7 @@ final class Tiler {
     private var recentlyFocused: [CGWindowID] = []
     private var lastFocused: [Int: CGWindowID] = [:]
     private var savedPlacement: [CGWindowID: (space: Int, display: String)] = [:]
-    /// Each layout as it was when Lunchbox last ran (or was paused), by "space|display".
+    /// Each layout as it was when LunchboxWM last ran (or was paused), by "space|display".
     /// A window coming back takes its old spot: same stack, column order and shares.
     private var savedLayouts: [String: Layout] = [:]
     private var settlingUntil: [CGWindowID: CFTimeInterval] = [:]
@@ -122,7 +122,7 @@ final class Tiler {
     /// Windows that moved on their own, waiting to hold still before they go back.
     private var pendingReassert: [CGWindowID: DispatchWorkItem] = [:]
     /// When the user last let go of a dragged window. Dropped at a screen edge, macOS 15 and
-    /// later animates it into a tile of its own right after Lunchbox sends it back.
+    /// later animates it into a tile of its own right after LunchboxWM sends it back.
     private var droppedAt: [CGWindowID: CFTimeInterval] = [:]
     private var draggedByUser = Set<CGWindowID>()
     private var mouseDown: CGPoint?
@@ -158,7 +158,7 @@ final class Tiler {
         defaults.removeObject(forKey: "appSizes")
     }
 
-    /// Reads where every window was when Lunchbox last ran or was paused, so the
+    /// Reads where every window was when LunchboxWM last ran or was paused, so the
     /// windows still open go back to the same Workspace, display and spot.
     /// Window numbers stay the same while a window lives, so this survives a relaunch.
     private func loadSaved() {
@@ -187,7 +187,7 @@ final class Tiler {
         guard !enabled else { return }
         enabled = true
         initialScanDone = false
-        // Windows put back after Lunchbox starts again count as time back; after a pause, they
+        // Windows put back after LunchboxWM starts again count as time back; after a pause, they
         // only undo the pause.
         countsRestores = !startedBefore
         startedBefore = true
@@ -299,7 +299,7 @@ final class Tiler {
     }
 
     /// Moves every window parked for another space back onto its display.
-    /// Runs synchronously so it finishes before Lunchbox quits.
+    /// Runs synchronously so it finishes before LunchboxWM quits.
     func revealHiddenWindows() {
         shelf.hide(animated: false)
         for s in spaces.indices { for uuid in spaces[s].keys { spaces[s][uuid]?.spotlight = nil } }
@@ -325,7 +325,7 @@ final class Tiler {
         guard enabled, running.activationPolicy == .regular, pid != getpid(), apps[pid] == nil else { return }
         let app = AppHandle(pid: pid, bundleID: running.bundleIdentifier)
         apps[pid] = app
-        // An app Lunchbox is holding a tile for has started: from now on it's this process.
+        // An app LunchboxWM is holding a tile for has started: from now on it's this process.
         for e in expected where e.pid == nil && e.bundleID == running.bundleIdentifier { e.pid = pid }
         // Started right after a key press or click (Spotlight, Finder, a launcher): you opened it.
         if scan, Self.secondsSinceInput() < 1.5 { launchedByYou[pid] = CACurrentMediaTime() }
@@ -351,7 +351,7 @@ final class Tiler {
         }
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .defaultMode)
         app.observer = observer
-        // Windows it made while Lunchbox couldn't listen yet won't be announced.
+        // Windows it made while LunchboxWM couldn't listen yet won't be announced.
         if app.observerAttempts > 0 { scheduleScan(app, after: [0]) }
     }
 
@@ -484,7 +484,7 @@ final class Tiler {
             for (app, infos) in results { infos.forEach { all.append((app, $0)) } }
             all.sort { ($0.1.frame.minX, $0.1.frame.minY) < ($1.1.frame.minX, $1.1.frame.minY) }
             for (app, info) in all { self.consider(info, app: app, onScreen: onScreen, shown: shown) }
-            // Windows closed while Lunchbox wasn't running don't come back, and their
+            // Windows closed while LunchboxWM wasn't running don't come back, and their
             // numbers get reused by new windows: forget their spots.
             let alive = allWindowIDs()
             if !alive.isEmpty { self.savedPlacement = self.savedPlacement.filter { alive.contains($0.key) } }
@@ -582,7 +582,7 @@ final class Tiler {
         let spot = place(of: info.id)
         // A dialog floats, centered on the screen it opened on, instead of slicing the
         // tiled windows apart: once, the first time it's on screen (apps often make the
-        // window a moment before showing it). Ones open before Lunchbox started stay put.
+        // window a moment before showing it). Ones open before LunchboxWM started stay put.
         if info.dialog, !centeredDialogs.contains(info.id) {
             if !initialScanDone {
                 centeredDialogs.insert(info.id)
@@ -619,7 +619,7 @@ final class Tiler {
             // sight, not gone: they keep their tiles.
             && (onScreen.contains(info.id) || window.hidden
                 || (spot != nil && isOutOfView(info.id, shown: shown)))
-        // A new window going against the rules because of what you taught Lunchbox: one quiet line.
+        // A new window going against the rules because of what you taught LunchboxWM: one quiet line.
         if initialScanDone, window.isNew, info.windowLike, onScreen.contains(info.id), savedPlacement[info.id] == nil,
            !announced.contains(info.id), let d = Learning.shared.decision(for: info.id), d.source == .learned {
             announced.insert(info.id)
@@ -651,7 +651,7 @@ final class Tiler {
             }
             insert(window)
             if initialScanDone {
-                // New to Lunchbox: straight into its tile, not on a glide from wherever its app put it.
+                // New to LunchboxWM: straight into its tile, not on a glide from wherever its app put it.
                 if CACurrentMediaTime() - window.seenAt < 2 { arriving.insert(info.id) }
                 if isBursting(app.pid) {
                     heldArrivals[app.pid, default: []].append(info.id)
@@ -689,7 +689,7 @@ final class Tiler {
             return true
         }
         if !wantsTile, initialScanDone, onScreen.contains(info.id), !info.minimized {
-            // The app Lunchbox is holding a tile for answered with something that doesn't tile: a
+            // The app LunchboxWM is holding a tile for answered with something that doesn't tile: a
             // welcome window or a template chooser (Xcode, Pages), a dialog, a fixed-size window.
             // Once the app has finished starting up, that's its answer for now, so the gap closes
             // in a moment (a window-like one waits a little longer: its real window may be right
@@ -721,10 +721,10 @@ final class Tiler {
         return window
     }
 
-    /// Whether a window tiles: what the rules say, unless you taught Lunchbox otherwise
+    /// Whether a window tiles: what the rules say, unless you taught LunchboxWM otherwise
     /// (Learning, off by default). Your own choice for this window always stands. Otherwise
     /// a window Summon opened tiles as the rules say, and a window already tiled (or tiled
-    /// before a relaunch or a pause) stays tiled: what Lunchbox learns never moves a window
+    /// before a relaunch or a pause) stays tiled: what LunchboxWM learns never moves a window
     /// that's already in place.
     private func tiles(_ info: WindowInfo, rule: Bool, placed: Bool) -> Bool {
         guard info.windowLike, let learned = Learning.shared.decision(for: info.id) ?? info.learned else { return rule }
@@ -737,7 +737,7 @@ final class Tiler {
     }
 
     /// Floats the focused window, or tiles a floating one (the `float` command and menu item,
-    /// with Learning on). Lunchbox learns from it: the next window of the same kind follows.
+    /// with Learning on). LunchboxWM learns from it: the next window of the same kind follows.
     func toggleFloating() {
         guard enabled, let id = focusedID else { return }
         toggleFloating(id)
@@ -786,13 +786,13 @@ final class Tiler {
         showRing(on: w.id)
     }
 
-    // MARK: Learning: what Lunchbox does on its own
+    // MARK: Learning: what LunchboxWM does on its own
 
     /// `learning-lived:<seconds>`: counts that much window time in each Workspace at once, to
     /// try Workspace homes without waiting ten minutes.
     func countLivedForTesting(_ seconds: Double) { learningTick(seconds: seconds, testing: true) }
 
-    /// Settings › Learn Where Windows Go. Windows already open stay as they are until Lunchbox
+    /// Settings › Learn Where Windows Go. Windows already open stay as they are until LunchboxWM
     /// looks at them again.
     func setLearning(_ on: Bool) {
         Learning.shared.setSwitch(on, alive: allWindowIDs())
@@ -804,12 +804,12 @@ final class Tiler {
         onChange?()
     }
 
-    /// Says what Lunchbox did on its own, and which key undoes it.
+    /// Says what LunchboxWM did on its own, and which key undoes it.
     private let quietLine = QuietLineView()
     /// Names the undo key for a Workspace, like "Left ⌘ 1" (set by the app, which knows the keys).
     var undoKeyName: ((Int) -> String?)?
 
-    /// What Lunchbox just did on its own, undoable for a few seconds with ⌘ and the key of the
+    /// What LunchboxWM just did on its own, undoable for a few seconds with ⌘ and the key of the
     /// Workspace you were in (Etiquette). Things done within a second of each other (windows
     /// coming back after a login) share one line and one undo.
     private struct Automatic {
@@ -833,10 +833,10 @@ final class Tiler {
         var display: Display?
     }
     private var automatic: Automatic?
-    /// Windows Lunchbox opened in their app's Workspace while you stayed here: their app reaching
+    /// Windows LunchboxWM opened in their app's Workspace while you stayed here: their app reaching
     /// for focus isn't you asking to go there.
     private var placedForYou: [CGWindowID: CFTimeInterval] = [:]
-    /// Windows that answered something you opened from Lunchbox (Summon): they come to you.
+    /// Windows that answered something you opened from LunchboxWM (Summon): they come to you.
     private var requested = Set<CGWindowID>()
     /// New windows whose learned float or tile was already announced.
     private var announced = Set<CGWindowID>()
@@ -844,7 +844,7 @@ final class Tiler {
     /// window goes to its home, you go with it.
     private var launchedByYou: [pid_t: CFTimeInterval] = [:]
     /// Arrangements you made (or let stand), and since when, by "space|display". `byYou`: you
-    /// made it (moved, sized or dragged windows into it), rather than letting Lunchbox's stand.
+    /// made it (moved, sized or dragged windows into it), rather than letting LunchboxWM's stand.
     private var standing: [String: (arrangement: Arrangement, display: String, since: CFTimeInterval, byYou: Bool)] = [:]
     private var learningTimer: Timer?
     private var learningTicks = 0
@@ -876,7 +876,7 @@ final class Tiler {
         log.notice("on its own: \(String(describing: action), privacy: .public)")
     }
 
-    /// ⌘ and the key of the Workspace you were in, right after Lunchbox did something on its own:
+    /// ⌘ and the key of the Workspace you were in, right after LunchboxWM did something on its own:
     /// undo it. False when there's nothing to undo, so the key does what it always does.
     private func undoAutomatic(pressed index: Int) -> Bool {
         guard let a = automatic, a.from == index, CACurrentMediaTime() < a.until else { return false }
@@ -886,7 +886,7 @@ final class Tiler {
         for undo in a.undos.reversed() {
             switch undo {
             case .float(let id):
-                if place(of: id) == nil { toggleFloating(id) } // tiles it; Lunchbox learns from that
+                if place(of: id) == nil { toggleFloating(id) } // tiles it; LunchboxWM learns from that
             case .tile(let id):
                 if place(of: id) != nil { toggleFloating(id) }
             case .layout(let space, let display, let applied, var plain):
@@ -925,7 +925,7 @@ final class Tiler {
         return true
     }
 
-    /// Something you opened from Lunchbox is on its way to this app: its window comes to you.
+    /// Something you opened from LunchboxWM is on its way to this app: its window comes to you.
     private func isRequested(_ w: ManagedWindow) -> Bool {
         if requested.contains(w.id) { return true }
         let now = CACurrentMediaTime()
@@ -938,7 +938,7 @@ final class Tiler {
         return false
     }
 
-    /// You opened this window yourself, just now (outside Lunchbox): you go where it goes.
+    /// You opened this window yourself, just now (outside LunchboxWM): you go where it goes.
     private func openedByYou(_ w: ManagedWindow) -> Bool {
         if let at = launchedByYou[w.pid], CACurrentMediaTime() - at < 30 { return true }
         return NSWorkspace.shared.frontmostApplication?.processIdentifier == w.pid && Self.secondsSinceInput() < 2
@@ -1042,7 +1042,7 @@ final class Tiler {
         }
     }
 
-    /// You arranged a layout (or let Lunchbox's arrangement stand): from now on it counts,
+    /// You arranged a layout (or let LunchboxWM's arrangement stand): from now on it counts,
     /// for as long as it stays the same. `shaped`: you resized a lone window (or Tidied it),
     /// and that shape is kept right away.
     private func noteArranged(space: Int, display uuid: String, byYou: Bool = true, shaped: Bool = false) {
@@ -1119,7 +1119,7 @@ final class Tiler {
     /// Set once the windows that were already open at launch are placed, so
     /// only windows opened afterwards count as new.
     private var initialScanDone = false
-    /// Tiling has started before in this run of Lunchbox (so this start is a resume).
+    /// Tiling has started before in this run of LunchboxWM (so this start is a resume).
     private var startedBefore = false
     /// Windows put back where they were count as time back: true after a launch, not a resume.
     private var countsRestores = false
@@ -1141,7 +1141,7 @@ final class Tiler {
         let fresh = saved == nil && initialScanDone && window.isNew
         let app = window.handle.app.bundleID
         var space = saved?.space ?? currentSpace
-        // Learned: a new window you didn't open from Lunchbox goes to the Workspace its app lives in.
+        // Learned: a new window you didn't open from LunchboxWM goes to the Workspace its app lives in.
         var home: Int?
         if fresh, let app {
             home = Learning.shared.home(for: app, requested: isRequested(window), current: currentSpace,
@@ -1180,7 +1180,7 @@ final class Tiler {
         } else if fresh {
             TimeBackLedger.shared.count(.tiled)
         } else if saved != nil, countsRestores {
-            TimeBackLedger.shared.count(.restored) // back in its Workspace and spot after Lunchbox started again
+            TimeBackLedger.shared.count(.restored) // back in its Workspace and spot after LunchboxWM started again
         }
     }
 
@@ -1197,7 +1197,7 @@ final class Tiler {
     /// What each window that can't fill a tile takes (see `SizeLimits`): fixed for one that
     /// can't be resized, learned from how the others answer being asked for a size.
     private var limits: [CGWindowID: SizeLimits] = [:]
-    /// Limits saved when Lunchbox last ran, waiting for their windows to be seen again.
+    /// Limits saved when LunchboxWM last ran, waiting for their windows to be seen again.
     private var savedLimits: [String: SavedLimits.Entry] = [:]
 
     private struct SavedLimits: Codable {
@@ -1490,7 +1490,7 @@ final class Tiler {
                 // it, not to whichever tile is nearest the middle of the screen.
                 let before = place(of: id) == nil ? lastFocused[currentSpace] : nil
                 forget(id)
-                // An app Lunchbox is holding a tile for closed what it showed instead (Xcode's welcome
+                // An app LunchboxWM is holding a tile for closed what it showed instead (Xcode's welcome
                 // window, say) and has nothing else up: no window is coming, so close the gap now.
                 let pending = expected.filter { $0.answeredOtherwise && ($0.pid == app.pid || ($0.pid == nil && $0.bundleID == app.bundleID)) }
                 if !pending.isEmpty, !windows.values.contains(where: { $0.pid == app.pid && !$0.minimized && !$0.hidden }) {
@@ -1559,7 +1559,7 @@ final class Tiler {
         }
     }
 
-    /// Something Lunchbox opened (from Summon) is on its way: when its app comes
+    /// Something LunchboxWM opened (from Summon) is on its way: when its app comes
     /// forward, its window joins the Workspace being viewed.
     private var expectedArrival: (bundleID: String, until: CFTimeInterval)?
 
@@ -1578,10 +1578,10 @@ final class Tiler {
     private var summonedArrival: (bundleID: String, existing: Set<CGWindowID>, until: CFTimeInterval)?
     /// Windows tiled because they answered a Summon open, though their app doesn't call them standard.
     private var adopted: Set<CGWindowID> = []
-    /// Windows something moved onto a display Lunchbox doesn't manage (Use All Displays
+    /// Windows something moved onto a display LunchboxWM doesn't manage (Use All Displays
     /// off): agents test there, on a display Tyler can't see. Left alone while there.
     private var offDisplay: Set<CGWindowID> = []
-    /// Apps an agent is testing on the spoof display: Lunchbox doesn't tile their windows
+    /// Apps an agent is testing on the spoof display: LunchboxWM doesn't tile their windows
     /// at all, so opening one never shuffles Tyler's layout. Set with leave-app:<bundle id>.
     private var leftAloneApps: Set<String> = []
 
@@ -1594,7 +1594,7 @@ final class Tiler {
             return
         }
         // Windows it still has on the unmanaged display stay there, not on Tyler's screen.
-        // Lunchbox never tracked where they went, so ask where they are now.
+        // LunchboxWM never tracked where they went, so ask where they are now.
         let mine = windows.values.filter { $0.handle.app.bundleID == bundleID }
         guard let app = mine.first?.handle.app else {
             leftAloneApps.remove(bundleID)
@@ -1793,7 +1793,7 @@ final class Tiler {
     }
 
     /// macOS just handed focus to a window parked in another space. Take it back
-    /// to the window Lunchbox had focused here, so typing can't land out of sight.
+    /// to the window LunchboxWM had focused here, so typing can't land out of sight.
     private func reclaimFocus() {
         let visible = visibleFrames()
         if let id = focusedID, visible[id] != nil {
@@ -1820,7 +1820,7 @@ final class Tiler {
         app.queue.async { element.setPosition(origin) }
     }
 
-    /// A dialog can tell Lunchbox it exists a moment before the window server shows it,
+    /// A dialog can tell LunchboxWM it exists a moment before the window server shows it,
     /// and nothing more happens after that. Look again until it's up.
     private func centerOnceShown(_ info: WindowInfo, app: AppHandle) {
         guard dialogsAwaitingScreen.insert(info.id).inserted else { return }
@@ -1844,7 +1844,7 @@ final class Tiler {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.1) { [weak self] in self?.dialogsAwaitingScreen.remove(info.id) }
     }
 
-    /// Some apps move a window they just opened after Lunchbox has placed it (Little Arc
+    /// Some apps move a window they just opened after LunchboxWM has placed it (Little Arc
     /// animates itself to the middle of the screen). Watch it for its first moments and,
     /// as soon as it holds still anywhere but its tile, put it straight back.
     private func confirmPlacement(of id: CGWindowID, poll: Int = 0, last: CGRect? = nil, corrected: CGRect? = nil) {
@@ -1856,7 +1856,7 @@ final class Tiler {
                 DispatchQueue.main.async {
                     guard let actual, let w = self.windows[id], let target = w.target, !w.hidden else { return }
                     var corrected = corrected
-                    // Centered where Lunchbox put it at another size is a window that can't fill its tile
+                    // Centered where LunchboxWM put it at another size is a window that can't fill its tile
                     // (`learnLimits` handles it); anywhere else, it moved.
                     let moved = abs(actual.midX - target.midX) > 3 || abs(actual.midY - target.midY) > 3
                     if moved, last.map({ actual.isClose(to: $0, tolerance: 1) }) == true,
@@ -1900,7 +1900,7 @@ final class Tiler {
             return
         }
         let now = CACurrentMediaTime()
-        // Moves just after a drop count even while Lunchbox's own glide back settles: the check
+        // Moves just after a drop count even while LunchboxWM's own glide back settles: the check
         // below waits for the window to hold still and acts only on a real difference.
         let justDropped = now - (droppedAt[id] ?? 0) < 1.5
         guard now > settlingUntil[id] ?? 0 || justDropped, let w = windows[id], !w.hidden, w.target != nil else { return }
@@ -1930,7 +1930,7 @@ final class Tiler {
                     guard let actual, let w = self.windows[id], let target = w.target, !w.hidden,
                           !actual.isClose(to: target, tolerance: 2) else { return }
                     if self.isOnUnmanagedDisplay(actual) { self.leaveAlone(id); return }
-                    // Centered where Lunchbox put it at another size: it can't fill its tile. That's
+                    // Centered where LunchboxWM put it at another size: it can't fill its tile. That's
                     // for `learnLimits`, not a reason to move it.
                     if abs(actual.midX - target.midX) <= 3, abs(actual.midY - target.midY) <= 3 {
                         if w.resizable { self.learnLimits(of: id, askedFor: target) }
@@ -2014,7 +2014,7 @@ final class Tiler {
                 spaces[currentSpace][d.uuid] = layout
             } else if Learning.shared.isOn {
                 // Dragged out of its tile, it glides back. Dragged out again right away,
-                // it stays where you put it, floating, and Lunchbox learns from that.
+                // it stays where you put it, floating, and LunchboxWM learns from that.
                 let now = CACurrentMediaTime()
                 if let last = lastDragOut, last.id == id, now - last.at < 10,
                    Learning.shared.corrected(id, to: .float, by: .dragOut) {
@@ -2098,7 +2098,7 @@ final class Tiler {
         }
     }
 
-    /// Moves windows from displays Lunchbox doesn't tile on (unplugged, or ignored
+    /// Moves windows from displays LunchboxWM doesn't tile on (unplugged, or ignored
     /// because "Use All Displays" is off) onto the main display.
     private func mergeInactiveDisplays() {
         guard let main = displays.first(where: \.isMain) else { return }
@@ -2221,7 +2221,7 @@ final class Tiler {
         var saved: [String: Layout] = [:]
         for (s, layouts) in spaces.enumerated() {
             for (uuid, waiting) in layouts {
-                let layout = waiting.withoutPlaceholders() // they only last while Lunchbox waits
+                let layout = waiting.withoutPlaceholders() // they only last while LunchboxWM waits
                 guard !layout.isEmpty else { continue }
                 for id in layout.windows { placement[String(id)] = "\(s)|\(uuid)" }
                 saved["\(s)|\(uuid)"] = layout
@@ -2253,10 +2253,10 @@ final class Tiler {
     func perform(_ action: KeyAction) {
         guard enabled else { return }
         checkForGhosts()
-        // Lunchbox's idea of the focused window can go stale (a click it never heard
+        // LunchboxWM's idea of the focused window can go stale (a click it never heard
         // about, an app that didn't come forward). Acting on the wrong window is what
         // made "down" look like "up", so ask the front app which window really has
-        // focus, unless Lunchbox focused one itself a moment ago and the app may still
+        // focus, unless LunchboxWM focused one itself a moment ago and the app may still
         // be catching up.
         let recentlyFocused = CACurrentMediaTime() - lastActivation < 0.35
         if case .switchSpace = action {} else if !recentlyFocused,
@@ -2268,7 +2268,7 @@ final class Tiler {
                 app.recordLatency(CACurrentMediaTime() - t0, calls: 2)
                 DispatchQueue.main.async {
                     guard let self else { return }
-                    log.debug("resolve \(front.bundleIdentifier ?? "?", privacy: .public): \(id.map(String.init) ?? "nil", privacy: .public), Lunchbox had \(self.focusedID.map(String.init) ?? "nil", privacy: .public)")
+                    log.debug("resolve \(front.bundleIdentifier ?? "?", privacy: .public): \(id.map(String.init) ?? "nil", privacy: .public), LunchboxWM had \(self.focusedID.map(String.init) ?? "nil", privacy: .public)")
                     self.focusedID = id
                     self.run(action)
                 }
@@ -2479,7 +2479,7 @@ final class Tiler {
 
     func switchSpace(to index: Int, focusing preferred: CGWindowID?) {
         guard enabled, (0..<spaceCount).contains(index) else { return }
-        // Right after Lunchbox did something on its own, the key of the Workspace you were in undoes it.
+        // Right after LunchboxWM did something on its own, the key of the Workspace you were in undoes it.
         if preferred == nil, undoAutomatic(pressed: index) { return }
         let display = focusedID.flatMap { id in windows[id].flatMap { w in displays.first { $0.frame.contains((w.target ?? w.frame).center) } } }
         guard index != currentSpace else {
@@ -2577,17 +2577,17 @@ final class Tiler {
         let running = NSWorkspace.shared.frontmostApplication
         let front = running.flatMap { apps[$0.processIdentifier] }
         let known = focusedID.flatMap { id in visibleFrames()[id] != nil ? windows[id] : nil }
-        log.notice("close: front \(running?.bundleIdentifier ?? "?", privacy: .public) (tracked: \(front != nil)), Lunchbox focus \(self.focusedID.map(String.init) ?? "nil", privacy: .public)")
+        log.notice("close: front \(running?.bundleIdentifier ?? "?", privacy: .public) (tracked: \(front != nil)), LunchboxWM focus \(self.focusedID.map(String.init) ?? "nil", privacy: .public)")
         if let front, known?.handle.app !== front {
-            // The front app's own key window: a dialog, or a window Lunchbox doesn't tile.
+            // The front app's own key window: a dialog, or a window LunchboxWM doesn't tile.
             front.queue.async {
                 if let window = front.element.element(kAXFocusedWindowAttribute) { Self.pressClose(window) }
             }
             scheduleScan(front, after: [0.3, 1.0])
             return
         }
-        // The window Lunchbox has focused here. Also used when the front app isn't one
-        // Lunchbox tiles (a helper that took focus, or Lunchbox itself).
+        // The window LunchboxWM has focused here. Also used when the front app isn't one
+        // LunchboxWM tiles (a helper that took focus, or LunchboxWM itself).
         guard let known else { return }
         let element = known.handle.element
         known.handle.app.queue.async { Self.pressClose(element) }
@@ -2652,7 +2652,7 @@ final class Tiler {
         let title: String
         /// The Workspace it's tiled in, from 0; nil when it floats or is minimized.
         let space: Int?
-        /// The display it's on, by name, when Lunchbox tiles more than one; else nil.
+        /// The display it's on, by name, when LunchboxWM tiles more than one; else nil.
         let display: String?
         let minimized: Bool
     }
@@ -2772,7 +2772,7 @@ final class Tiler {
             TimeBackLedger.shared.count(.summoned)
         }
         if w.minimized {
-            // Restore it; Lunchbox tiles it again when it comes back.
+            // Restore it; LunchboxWM tiles it again when it comes back.
             let element = w.handle.element
             w.handle.app.queue.async { element.set(kAXMinimizedAttribute, false) }
         }
@@ -2813,7 +2813,7 @@ final class Tiler {
     private(set) var newWindowSupport: [String: Bool] = [:]
 
     /// Whether an app can open a new window: true/false when known, nil while
-    /// Lunchbox looks at its menus (then `changed` runs once with the answer).
+    /// LunchboxWM looks at its menus (then `changed` runs once with the answer).
     func supportsNewWindow(pid: pid_t, bundleID: String?, changed: @escaping () -> Void) -> Bool? {
         guard let bundleID else { return false }
         if let known = newWindowSupport[bundleID] { return known }
@@ -2862,7 +2862,7 @@ final class Tiler {
 
     // MARK: Placeholders
 
-    /// A window Lunchbox knows is on its way, and the tile it holds for it.
+    /// A window LunchboxWM knows is on its way, and the tile it holds for it.
     private final class Expected {
         let id: CGWindowID
         let bundleID: String
@@ -2919,9 +2919,9 @@ final class Tiler {
     /// now, so a slow launch never looks like nothing happened. The windows here
     /// glide aside and a placeholder holds the exact spot and size the window
     /// will get; the app's first new window takes it (`takePlaceholder`). Only
-    /// for opens Lunchbox is sure of, never just any app starting up.
+    /// for opens LunchboxWM is sure of, never just any app starting up.
     /// - another: hold one more even if the app already has one waiting (⇧↩ twice).
-    /// - since: when the click was, so a window that beat Lunchbox here counts.
+    /// - since: when the click was, so a window that beat LunchboxWM here counts.
     /// - point: where you are, which picks the display (the mouse, by default).
     func expectWindow(from bundleID: String, another: Bool = false, since: CFTimeInterval? = nil, near point: CGPoint? = nil) {
         guard enabled, initialScanDone, !Self.floatingApps.contains(bundleID), !leftAloneApps.contains(bundleID),
@@ -2966,7 +2966,7 @@ final class Tiler {
         log.notice("holding a tile for \(bundleID, privacy: .public) in space \(self.currentSpace + 1)")
     }
 
-    /// A new window from an app Lunchbox is holding a tile for takes that tile,
+    /// A new window from an app LunchboxWM is holding a tile for takes that tile,
     /// share and all, so it's the only thing that moves. False when no tile is
     /// waiting for it here: one left in another Workspace (you moved on while the
     /// app started) is let go, and the window joins the Workspace in view.
@@ -3238,7 +3238,7 @@ final class Tiler {
 
     /// A window settled at another size than it was asked for. Look again a moment later
     /// (a slow app may still be catching up), and if it's still that size, centered where
-    /// Lunchbox put it, remember what it takes and lay out around it.
+    /// LunchboxWM put it, remember what it takes and lay out around it.
     private func learnLimits(of id: CGWindowID, askedFor target: CGRect) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
             guard let self, let w = self.windows[id], !w.hidden, w.target == target else { return } // moved on since
@@ -3290,7 +3290,7 @@ final class Tiler {
         for uuid in spaces[currentSpace].keys { spaces[currentSpace][uuid]?.balance() }
         for id in spaces[currentSpace].values.flatMap(\.windows) {
             if let w = windows[id], !w.hidden { w.target = nil }
-            // Start over on what each window takes, in case Lunchbox ever learned it wrong.
+            // Start over on what each window takes, in case LunchboxWM ever learned it wrong.
             if windows[id]?.resizable == true { limits[id] = nil }
         }
         relayout(animated: true)
@@ -3311,7 +3311,7 @@ final class Tiler {
     // MARK: Diagnostics
 
     /// For Copy Diagnostics: each Workspace's tiles, and the windows that aren't in one, as their
-    /// apps' bundle IDs and what Lunchbox made of them. Never titles.
+    /// apps' bundle IDs and what LunchboxWM made of them. Never titles.
     func supportWindows() -> (workspaces: [SupportSummary.Workspace], untiled: [SupportSummary.Window]) {
         func entry(_ w: ManagedWindow, _ state: String) -> SupportSummary.Window {
             SupportSummary.Window(id: w.id, app: w.handle.app.bundleID ?? "no bundle ID", state: state,

@@ -1,5 +1,5 @@
-// WindowLab: opens every kind of window Lunchbox has to handle, on command, and reports
-// where each one is. For testing Lunchbox in a VM, never on a Mac someone is using.
+// WindowLab: opens every kind of window LunchboxWM has to handle, on command, and reports
+// where each one is. For testing LunchboxWM in a VM, never on a Mac someone is using.
 //
 //   scripts/windowlab/build.sh            builds build/WindowLab.app
 //   windowlab <command>                   (scripts/windowlab/windowlab, a distributed notification)

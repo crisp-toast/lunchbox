@@ -3,7 +3,7 @@
 import Foundation
 
 extension BehaviorModel {
-    /// The base window classifier Lunchbox ships with, trained on labeled windows from test
+    /// The base window classifier LunchboxWM ships with, trained on labeled windows from test
     /// machines, never on anyone's own windows.
     public static let base: BehaviorModel? = try? JSONDecoder().decode(BehaviorModel.self, from: Data(baseJSON.utf8))
 

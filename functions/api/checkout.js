@@ -1,9 +1,9 @@
-// POST /api/checkout : the Buy buttons. Opens Stripe's hosted checkout for one Lunchbox license.
+// POST /api/checkout : the Buy buttons. Opens Stripe's hosted checkout for one LunchboxWM license.
 // A plain form post works without JavaScript; the page adds an attempt id so a double click
 // (or a resubmitted form) reuses the same Checkout Session instead of opening two.
 
 const REQUIREMENTS =
-  "Lunchbox runs on Macs with Apple silicon (M1 or later) and macOS 14 Sonoma or later. " +
+  "LunchboxWM runs on Macs with Apple silicon (M1 or later) and macOS 14 Sonoma or later. " +
   "This is a one-time purchase in US dollars: no subscription. Not sure it fits? You have 14 days to ask for a refund.";
 
 export async function onRequestPost({ request, env }) {
@@ -26,11 +26,11 @@ export async function onRequestPost({ request, env }) {
     allow_promotion_codes: "true",
     "consent_collection[terms_of_service]": "required",
     "custom_text[terms_of_service_acceptance][message]":
-      `I agree to the [Terms of Sale and License](${site}/terms.html). I want Lunchbox delivered right away, ` +
+      `I agree to the [Terms of Sale and License](${site}/terms.html). I want LunchboxWM delivered right away, ` +
       `and I understand that this ends the EU/UK right to cancel; the [14-day refund](${site}/refunds.html) still applies.`,
     "custom_text[submit][message]": REQUIREMENTS,
-    "payment_intent_data[description]": "Lunchbox Window Manager license",
-    "payment_intent_data[statement_descriptor_suffix]": "LUNCHBOX",
+    "payment_intent_data[description]": "LunchboxWM license",
+    "payment_intent_data[statement_descriptor_suffix]": "LUNCHBOXWM",
     success_url: `${site}/thanks.html?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${site}/#pricing`,
   });

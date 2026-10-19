@@ -1,6 +1,6 @@
 import Foundation
 
-/// Something that happened, as Lunchbox writes it down to learn from: when, and nothing it
+/// Something that happened, as LunchboxWM writes it down to learn from: when, and nothing it
 /// doesn't need. Window titles, keystrokes and file names never go in an event.
 public protocol LoggedEvent: Codable, Sendable {
     /// Seconds since 1970.
@@ -61,7 +61,7 @@ public struct EventLog<Event: LoggedEvent> {
     }
 
     /// Every event still young enough, oldest first. A line that can't be read (cut off
-    /// mid-write, or from a newer Lunchbox) is skipped.
+    /// mid-write, or from a newer LunchboxWM) is skipped.
     public func read(now: Double = Date().timeIntervalSince1970) -> [Event] {
         let decoder = JSONDecoder()
         var events: [Event] = []
@@ -112,7 +112,7 @@ public struct EventLog<Event: LoggedEvent> {
 }
 
 /// The learning folder is yours alone, and stays out of Time Machine and other backups:
-/// what Lunchbox learns stays on this Mac.
+/// what LunchboxWM learns stays on this Mac.
 enum PrivateFolder {
     static func make(_ folder: URL) throws {
         let fm = FileManager.default

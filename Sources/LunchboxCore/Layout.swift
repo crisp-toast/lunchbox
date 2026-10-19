@@ -264,7 +264,7 @@ public struct Layout: Equatable, Sendable {
     // MARK: Restoring
 
     /// Puts a window back in the spot it had in `saved`, an earlier copy of this
-    /// layout (from before Lunchbox relaunched), going by the windows already back:
+    /// layout (from before LunchboxWM relaunched), going by the windows already back:
     /// into the stack it shared with them, at the same place in it, or as a
     /// column of its own in the same order among theirs, with the shares it had.
     /// Restoring every window of `saved`, in any order, gives `saved` again.
@@ -455,7 +455,7 @@ public struct Layout: Equatable, Sendable {
     /// step back would then do nothing either. So:
     /// - a step that wouldn't change the window doesn't happen;
     /// - a step that reaches a limit partway stops where the window stops;
-    /// - a share already past where the window stops (shrunk before Lunchbox knew its minimum) is
+    /// - a share already past where the window stops (shrunk before LunchboxWM knew its minimum) is
     ///   skipped over, so the step starts where the window starts moving.
     mutating func visibly(_ id: WindowID, _ delta: Double, in rect: CGRect, gap: CGFloat, limits: [WindowID: SizeLimits],
                           apply: (inout Layout, Double) -> Bool) -> Bool {

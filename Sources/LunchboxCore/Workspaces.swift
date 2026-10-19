@@ -3,7 +3,7 @@ import Foundation
 /// "Sends new windows to the Workspace they belong in": where you keep each app.
 ///
 /// An app gets a home when you move one of its windows to a Workspace yourself (⌘⇧ and the
-/// Workspace's number), and Lunchbox trusts that home once the app's windows have spent ten
+/// Workspace's number), and LunchboxWM trusts that home once the app's windows have spent ten
 /// minutes there, all told, and nine tenths of their time since the move. Moving one of its
 /// windows somewhere else starts over from there. Hiding a window (to the last Workspace) is
 /// putting it away, not a home, so it doesn't count as a move.
@@ -18,7 +18,7 @@ public struct WorkspaceMemory: Codable, Equatable, Sendable {
 
     public private(set) var homes: [String: Home] = [:]
 
-    /// Window time in its home before Lunchbox trusts it.
+    /// Window time in its home before LunchboxWM trusts it.
     public static let settleSeconds = 600.0
     /// The share of the app's window time that must be in its home.
     public static let share = 0.9
@@ -39,7 +39,7 @@ public struct WorkspaceMemory: Codable, Equatable, Sendable {
         homes[app] = home
     }
 
-    /// The Workspace the app lives in, once Lunchbox is sure of it.
+    /// The Workspace the app lives in, once LunchboxWM is sure of it.
     public func home(of app: String) -> Int? {
         guard let home = homes[app] else { return nil }
         let there = home.lived[home.space]
@@ -53,7 +53,7 @@ public struct WorkspaceMemory: Codable, Equatable, Sendable {
     }
 
     /// Where a new window of `app` opens: its home, or nil for "here, as always".
-    /// - requested: Summon or the Dock opened it; what you open from Lunchbox always comes to you.
+    /// - requested: Summon or the Dock opened it; what you open from LunchboxWM always comes to you.
     /// - current: the Workspace you're in.
     /// - appSpaces: the Workspaces the app's other windows are in right now.
     /// - allowed: false once you've undone this twice in a row (`UndoLedger`).
@@ -69,11 +69,11 @@ public struct WorkspaceMemory: Codable, Equatable, Sendable {
         public enum Kind: String, Codable, Sendable {
             /// You moved a window of `app` to `space`.
             case moved
-            /// Lunchbox opened a new window of `app` in `space`, its home.
+            /// LunchboxWM opened a new window of `app` in `space`, its home.
             case placed
             /// You undid that.
             case undone
-            /// You forgot what Lunchbox knew about `app`.
+            /// You forgot what LunchboxWM knew about `app`.
             case forgot
         }
 

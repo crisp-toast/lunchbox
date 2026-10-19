@@ -3,7 +3,7 @@ import os
 
 /// One running app we manage windows for. Every Accessibility call to the app
 /// runs on its own serial queue, so a slow or hung app can only ever delay its
-/// own windows, never the keyboard, the animations of other apps, or Lunchbox.
+/// own windows, never the keyboard, the animations of other apps, or LunchboxWM.
 final class AppHandle {
     let pid: pid_t
     let bundleID: String?
@@ -62,7 +62,7 @@ final class WindowHandle {
     private static let queues = OSAllocatedUnfairLock(initialState: [CGWindowID: DispatchQueue]())
 
     /// The queue a window's moves go through, the same for every handle to it (a window
-    /// placed before Lunchbox registers it, then moved by the layout).
+    /// placed before LunchboxWM registers it, then moved by the layout).
     static func queue(for id: CGWindowID) -> DispatchQueue {
         queues.withLock { queues in
             if let queue = queues[id] { return queue }

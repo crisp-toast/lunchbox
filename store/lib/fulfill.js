@@ -11,7 +11,7 @@ export function licenseFor(session, env) {
 
 export function activateURL(env, license) {
   // Mail apps often drop custom schemes like lunchbox://, so the email links to a page
-  // on the site that opens Lunchbox. The key rides in the fragment, which never reaches a server.
+  // on the site that opens LunchboxWM. The key rides in the fragment, which never reaches a server.
   return `${env.SITE_URL}/activate.html#${license}`;
 }
 
@@ -22,19 +22,19 @@ export async function sendLicenses(env, { to, licenses, idempotencyKey, recovery
   const one = licenses.length === 1;
   const blocks = licenses.map((l) => `${l}\n\nActivate on this Mac: ${activateURL(env, l)}`).join("\n\n---\n\n");
   const text = [
-    recovery ? "Here is your Lunchbox license, as asked." : "Thanks for buying Lunchbox!",
+    recovery ? "Here is your LunchboxWM license, as asked." : "Thanks for buying LunchboxWM!",
     "",
     one ? "Your license:" : "Your licenses:",
     "",
     blocks,
     "",
-    "To activate: click the link above on the Mac where Lunchbox is installed, or open Lunchbox's menu bar icon, choose Enter License…, and paste the key.",
-    `Download Lunchbox: ${env.SITE_URL}/download/Lunchbox.dmg`,
+    "To activate: click the link above on the Mac where LunchboxWM is installed, or open LunchboxWM's menu bar icon, choose Enter License…, and paste the key.",
+    `Download LunchboxWM: ${env.SITE_URL}/download/LunchboxWM.dmg`,
     "",
-    "Your license covers you on all of your own Macs, and every future version of Lunchbox.",
+    "Your license covers you on all of your own Macs, and every future version of LunchboxWM.",
     "Questions, or want a refund within 14 days? Just reply to this email.",
     "",
-    recovery ? null : "At checkout you asked for Lunchbox to be delivered right away and acknowledged that this ends the EU/UK 14-day right to cancel. Our 14-day refund still applies.",
+    recovery ? null : "At checkout you asked for LunchboxWM to be delivered right away and acknowledged that this ends the EU/UK 14-day right to cancel. Our 14-day refund still applies.",
     "",
     "Sentient Donut LLC, 5900 Balcones Drive, Suite 100, Austin, Texas 78731, USA",
     `Terms: ${env.SITE_URL}/terms.html · Privacy: ${env.SITE_URL}/privacy.html`,
@@ -44,7 +44,7 @@ export async function sendLicenses(env, { to, licenses, idempotencyKey, recovery
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
     body: JSON.stringify({
       from: env.EMAIL_FROM, to: [to], reply_to: env.SUPPORT_EMAIL,
-      subject: recovery ? "Your Lunchbox license" : "Your Lunchbox license (and how to activate it)",
+      subject: recovery ? "Your LunchboxWM license" : "Your LunchboxWM license (and how to activate it)",
       text,
     }),
   });

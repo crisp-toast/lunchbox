@@ -169,7 +169,7 @@ public struct ArrangeEvent: LoggedEvent, Equatable {
     /// For `forgot`: the lesson's key.
     public var key: String?
     /// For `arranged`: you made this arrangement (moved, sized or dragged windows into it),
-    /// rather than letting one Lunchbox made stand. Missing in older logs.
+    /// rather than letting one LunchboxWM made stand. Missing in older logs.
     public var byYou: Bool?
 
     public static func arranged(_ a: Arrangement, on display: String, dwell: Double, byYou: Bool = false,

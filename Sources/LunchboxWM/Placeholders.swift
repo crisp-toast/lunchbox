@@ -1,7 +1,7 @@
 import AppKit
 import QuartzCore
 
-/// The tile Lunchbox holds for a window on its way (see `Tiler.expectWindow`): a
+/// The tile LunchboxWM holds for a window on its way (see `Tiler.expectWindow`): a
 /// soft frosted panel with the app's icon, breathing gently, in exactly the spot
 /// the window will get. It sits just above the desktop, under every real window,
 /// so it never covers anything: the arriving window glides in over it while it

@@ -6,7 +6,7 @@ import LunchboxCore
 enum CheatSheetContent {
     static let groupOrder = ["Windows", "Workspaces", "Summon", "Mouse", "Cheat Sheet"]
 
-    /// Only the Workspaces there are: with three, ⌘4 isn't Lunchbox's.
+    /// Only the Workspaces there are: with three, ⌘4 isn't LunchboxWM's.
     static func entries(keymap: Keymap, workspaceKeys: [Int64],
                         spaces: Int = Tiler.shared?.spaceCount ?? Command.defaultWorkspaces) -> [CheatEntry] {
         var all = Command.allCases.filter { $0.isActive(spaces: spaces) }.map { c in
@@ -147,7 +147,7 @@ final class HelpPanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         background.layer?.masksToBounds = true
         background.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.82).cgColor
 
-        let title = NSTextField(labelWithString: "Lunchbox Cheat Sheet")
+        let title = NSTextField(labelWithString: "LunchboxWM Cheat Sheet")
         title.font = .systemFont(ofSize: 13, weight: .semibold)
         title.textColor = .secondaryLabelColor
         let customize = NSButton(title: "Customize…", target: self, action: #selector(customize))

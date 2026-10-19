@@ -82,14 +82,14 @@ private func labeled() throws -> [Labeled] {
         #expect(rules(WindowTraits(app: "com.example.app")) == .document)
         #expect(rules(WindowTraits(app: "com.example.app", subrole: "AXFloatingWindow")) == .panel)
         #expect(rules(WindowTraits(app: "com.example.app", hasDefaultButton: true, hasCancelButton: true)) == .dialog)
-        // The screenshot toolbar calls itself a system dialog, but Lunchbox never touches the screenshot UI.
+        // The screenshot toolbar calls itself a system dialog, but LunchboxWM never touches the screenshot UI.
         #expect(rules(WindowTraits(app: "com.apple.screencaptureui", subrole: "AXSystemDialog", buttons: [], resizable: false)) == .panel)
         // Only overlays always float: System Settings and Calculator tile, Calculator at its own size.
         #expect(rules(WindowTraits(app: "com.apple.systempreferences", buttons: [.close, .minimize, .zoom])) == .document)
         #expect(rules(WindowTraits(app: "com.apple.calculator", resizable: false, minimizable: true)) == .document)
         // Can't be resized or minimized (an About box, a settings window): centered, like a dialog.
         #expect(rules(WindowTraits(app: "com.example.app", buttons: [.close, .minimize, .zoom], resizable: false, minimizable: false)) == .dialog)
-        // Read before Lunchbox noted whether it can be minimized: a minimize button stands in.
+        // Read before LunchboxWM noted whether it can be minimized: a minimize button stands in.
         #expect(rules(WindowTraits(app: "com.example.app", buttons: [.close, .minimize, .zoom], resizable: false)) == .document)
         #expect(rules(WindowTraits(app: "com.example.app", buttons: [.close], resizable: false)) == .dialog)
         // A "dialog" that resizes, has every title-bar button and asks nothing is a window (Little Arc).

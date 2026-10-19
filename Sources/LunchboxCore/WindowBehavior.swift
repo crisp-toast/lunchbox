@@ -8,7 +8,7 @@ public enum WindowBehavior: String, Codable, CaseIterable, Sendable {
     /// A tool window: an inspector, a palette, a settings or info window, a small companion
     /// window. It floats where it is.
     case panel
-    /// Here and gone: a progress or copy window, a splash or welcome screen, a pop-up. Lunchbox
+    /// Here and gone: a progress or copy window, a splash or welcome screen, a pop-up. LunchboxWM
     /// leaves it alone and never shuffles the tiles for it.
     case transient
     /// Picture in Picture, a mini player, a call's floating window: it floats, and stays in
@@ -18,13 +18,13 @@ public enum WindowBehavior: String, Codable, CaseIterable, Sendable {
     /// say so the usual way: it floats, centered.
     case dialog
 
-    /// Whether Lunchbox tiles it.
+    /// Whether LunchboxWM tiles it.
     public var tiles: Bool { self == .document }
 }
 
-/// What Lunchbox can read about a window when it appears: its Accessibility role and buttons,
+/// What LunchboxWM can read about a window when it appears: its Accessibility role and buttons,
 /// its window level and size, and its app. `title` is read for the decision and kept in memory
-/// only; nothing Lunchbox writes down contains it.
+/// only; nothing LunchboxWM writes down contains it.
 public struct WindowTraits: Codable, Equatable, Sendable {
     public var app: String
     public var appName: String?
@@ -37,7 +37,7 @@ public struct WindowTraits: Codable, Equatable, Sendable {
     public var title: String?
     public var buttons: WindowButtons
     public var resizable: Bool
-    /// Its minimize button is there and enabled. Nil for windows read before Lunchbox noted it
+    /// Its minimize button is there and enabled. Nil for windows read before LunchboxWM noted it
     /// (2026-10-17); a minimize button being there stands in for it then.
     public var minimizable: Bool?
     public var modal: Bool
@@ -101,11 +101,11 @@ public struct WindowTraits: Codable, Equatable, Sendable {
 
 extension WindowBehavior {
     /// Apps whose windows always float: overlays, not windows you work in. (Simulator,
-    /// Calculator, System Settings and the like tile, at the size they take.) Lunchbox never even
-    /// watches these two: the screenshot UI isn't a regular app, and Lunchbox is itself.
+    /// Calculator, System Settings and the like tile, at the size they take.) LunchboxWM never even
+    /// watches these two: the screenshot UI isn't a regular app, and LunchboxWM is itself.
     public static let floatingApps: Set<String> = ["com.apple.screencaptureui", "com.sentientdonut.lunchbox"]
 
-    /// What Lunchbox's hand-written rules do with a window, in the same terms, so the two can be
+    /// What LunchboxWM's hand-written rules do with a window, in the same terms, so the two can be
     /// compared:
     /// - a window of an app that always floats is left where it is;
     /// - a dialog floats, centered (`Dialogs.isDialog`); a "dialog" that resizes, has every
@@ -121,7 +121,7 @@ extension WindowBehavior {
         return r.tiles ? .document : .panel
     }
 
-    /// What can never be learned, because Lunchbox never asks the classifier: a window the rules
+    /// What can never be learned, because LunchboxWM never asks the classifier: a window the rules
     /// center (a dialog, an About box), and one that isn't window-like (no standard window's
     /// role, and not a resizable window with every title-bar button). Those get the rules.
     public static func hardRule(_ t: WindowTraits) -> WindowBehavior? {
@@ -137,7 +137,7 @@ struct RulesReading {
     let centered: Bool
     /// The rules tile it (at its own size, if it can't be resized).
     let tiles: Bool
-    /// Lunchbox asks the classifier about it (`windowLike`).
+    /// LunchboxWM asks the classifier about it (`windowLike`).
     let windowLike: Bool
 
     init(_ t: WindowTraits) {

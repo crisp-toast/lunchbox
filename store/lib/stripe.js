@@ -35,7 +35,7 @@ export async function sessionIdForPayment(env, paymentIntent) {
   return list.data?.[0]?.id || null;
 }
 
-/** Whether a session bought Lunchbox and is paid for: not still processing, not refunded or
+/** Whether a session bought LunchboxWM and is paid for: not still processing, not refunded or
  *  disputed, not someone else's product. */
 export function isPaidLunchbox(session, env) {
   if (!session || session.status !== "complete") return false;

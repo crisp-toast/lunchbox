@@ -1,27 +1,27 @@
-# Selling Lunchbox
+# Selling LunchboxWM
 
 How buying works, and the steps to switch it on. Everything in the repo is built and tested;
 the steps below need your accounts, so they're yours to do.
 
 ## How it works
 
-1. **Try:** anyone downloads `download/Lunchbox.dmg`. Every feature works for **7 days** from the
+1. **Try:** anyone downloads `download/LunchboxWM.dmg`. Every feature works for **7 days** from the
    first launch (`Trial.days` in `Sources/LunchboxCore/License.swift`). Then tiling pauses, windows
-   stay put, and Lunchbox offers Buy and Enter License.
-2. **Buy:** the pricing card's **Buy Lunchbox · $9.99** posts to `/api/checkout`, which opens
+   stay put, and LunchboxWM offers Buy and Enter License.
+2. **Buy:** the pricing card's **Buy LunchboxWM · $9.99** posts to `/api/checkout`, which opens
    Stripe's hosted checkout:
-   - one Lunchbox at $9.99 USD, with Stripe Tax adding sales tax or VAT;
+   - one LunchboxWM at $9.99 USD, with Stripe Tax adding sales tax or VAT;
    - the system requirements on the pay button;
    - a required Terms checkbox, which also records EU/UK consent to immediate delivery.
 
    A per-visit attempt id makes double clicks reuse one checkout.
 3. **Get the license:** Stripe returns the buyer to `thanks.html`, and `/api/license` reads the
-   paid session and shows the license, with **Activate Lunchbox on this Mac** (a `lunchbox://` link),
+   paid session and shows the license, with **Activate LunchboxWM on this Mac** (a `lunchbox://` link),
    Download and Copy. The same order always gives the same key, so a refresh is harmless.
    The webhook emails it too, with an `activate.html` link (mail apps drop `lunchbox://`) and the
    consent record. It's sent once, even when Stripe retries.
-4. **Activate:** the link, or Lunchbox's menu → Enter License… → paste. Checked offline against the
-   public key in `Sources/Lunchbox/Licensing.swift`: no account, no server, works on all their Macs.
+4. **Activate:** the link, or LunchboxWM's menu → Enter License… → paste. Checked offline against the
+   public key in `Sources/LunchboxWM/Licensing.swift`: no account, no server, works on all their Macs.
 5. **Lost it:** `recover.html` emails every license for that address, to that address.
 6. **Refunds:** 14 days, no questions. Refund from the Stripe Dashboard and the rest is automatic:
    - the webhook puts the order on the revoked list (`/api/revoked`, as one-way hashes);
@@ -40,7 +40,7 @@ leak it and anyone can.
 
 1. **Domain:** the store lives at `https://lunchboxwm.com` (`wrangler.toml` and `Licensing.site`).
    Register it (it was still unregistered on 2026-10-18), add it to Cloudflare as a site so
-   Cloudflare runs its DNS, and later attach it to the Pages project (step 5). Lunchbox was called
+   Cloudflare runs its DNS, and later attach it to the Pages project (step 5). LunchboxWM was called
    Tessel and sold from `tessel.sentientdonut.com` in testing; nothing points there any more.
 2. **Apple** (so buyers can open the app):
    - In the Developer Program, create a **Developer ID Application** certificate (Account Holder
@@ -48,12 +48,12 @@ leak it and anyone can.
    - Run `xcrun notarytool store-credentials lunchbox-notary --apple-id tyler@sentientdonut.com --team-id <TEAM>`,
      which asks for an app-specific password.
    - Then run `scripts/release.sh 1.0`. It builds, signs, notarizes and staples the app and the
-     DMG into `site/download/Lunchbox.dmg`.
+     DMG into `site/download/LunchboxWM.dmg`.
 3. **Stripe:**
    - Activate the account as Sentient Donut LLC.
    - Public details: support email `support@sentientdonut.com`; Terms, Privacy and Refund URLs
      on the store domain.
-   - Add a product "Lunchbox" with a **$9.99 one-time** price, tax behavior **exclusive** and tax
+   - Add a product "LunchboxWM" with a **$9.99 one-time** price, tax behavior **exclusive** and tax
      code `txcd_10202000` (downloadable software, personal use). Put its `price_…` id in
      `wrangler.toml`.
    - **Stripe Tax:** turn it on and add your registrations. Texas taxes software. Selling to
@@ -85,9 +85,9 @@ leak it and anyone can.
 
 ## Releases and auto-updates
 
-Lunchbox updates itself with [Sparkle](https://sparkle-project.org): it checks
+LunchboxWM updates itself with [Sparkle](https://sparkle-project.org): it checks
 `https://<domain>/appcast.xml` once a day, asks before installing, and accepts only updates signed
-with Lunchbox's update key.
+with LunchboxWM's update key.
 
 - **The public key** is `SUPublicEDKey` in `Resources/Info.plist`.
 - **The private key** is in this Mac's login Keychain (Sparkle's `generate_keys` put it there).
@@ -99,7 +99,7 @@ To ship version X:
 1. Optionally write release notes to `build/release/notes.html`.
 2. Run `scripts/release.sh X`. It builds, signs and notarizes, copies the DMG to
    `/Volumes/Master Storage/Projects/lunchbox/releases/`, regenerates `site/appcast.xml` (signed),
-   and puts `Lunchbox.dmg` and `Lunchbox-X.dmg` in `site/download/`.
+   and puts `LunchboxWM.dmg` and `LunchboxWM-X.dmg` in `site/download/`.
 3. Deploy the site (`npx wrangler pages deploy`). Running copies pick the update up within a day,
    or straight away with Settings › Check for Updates….
 

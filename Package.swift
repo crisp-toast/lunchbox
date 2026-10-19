@@ -2,10 +2,10 @@
 import PackageDescription
 
 let package = Package(
-    name: "Lunchbox",
+    name: "LunchboxWM",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "Lunchbox", targets: ["Lunchbox"]),
+        .executable(name: "LunchboxWM", targets: ["LunchboxWM"]),
     ],
     targets: [
         // Pure layout logic: no AppKit, no Accessibility. Fully unit-tested.
@@ -14,7 +14,7 @@ let package = Package(
         // Auto-updates for copies sold from the website. scripts/fetch-sparkle.sh puts it in Vendor/.
         .binaryTarget(name: "Sparkle", path: "Vendor/Sparkle.xcframework"),
         .executableTarget(
-            name: "Lunchbox",
+            name: "LunchboxWM",
             dependencies: ["LunchboxCore", "Sparkle"],
             // Sparkle.framework ships inside the app, in Contents/Frameworks.
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]

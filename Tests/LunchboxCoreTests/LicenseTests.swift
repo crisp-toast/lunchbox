@@ -38,10 +38,10 @@ import Testing
     }
 
     @Test func aKeyFromBeforeTheRenameStillWorks() throws {
-        // Signed by the same store key while Lunchbox was called Tessel (the owner's key is one).
+        // Signed by the same store key while LunchboxWM was called Tessel (the owner's key is one).
         let legacy = "tessel1.eyJwIjoidGVzc2VsIiwiZSI6ImJ1eWVyQGV4YW1wbGUuY29tIiwibyI6ImNzX3Rlc3RfYTFCMmMzIiwidCI6MTc5MjAwMDAwMH0.0qYx5WIOFT-ut7Oyb5MjBzK7PPlrNxafyApS0agOnLGYogKJdu0PyF8Hxrn7ELD20T_Q2w6529qJGxU8oTE7AQ"
         #expect(try #require(License.parse(legacy, publicKeyBase64: publicKey)).order == "cs_test_a1B2c3")
-        // But only as itself: Tessel's product under Lunchbox's prefix is no key at all.
+        // But only as itself: Tessel's product under LunchboxWM's prefix is no key at all.
         #expect(License.parse(legacy.replacingOccurrences(of: "tessel1.", with: "lunchbox1."), publicKeyBase64: publicKey) == nil)
     }
 

@@ -4,15 +4,15 @@ import LunchboxCore
 
 private let timeBackLog = Logger(subsystem: logSubsystem, category: "timeback")
 
-/// The time Lunchbox gives back (`TimeBack`, docs/worth-paying-for.md), counted where each thing
+/// The time LunchboxWM gives back (`TimeBack`, docs/worth-paying-for.md), counted where each thing
 /// happens: Tiler for windows it places and puts back, Learning for homes, corrections and
 /// undos, Summon for jumps.
 ///
 /// Kept as daily counts in the learning folder (timeback.json), under the same rules as the
 /// learning logs: yours alone, out of backups, days older than 90 pruned, and cleared by Reset
-/// What Lunchbox Learned. It counts whether or not learning is on, since most of it is plain
+/// What LunchboxWM Learned. It counts whether or not learning is on, since most of it is plain
 /// tiling. Only numbers and dates, and nothing leaves the Mac. It's shown in the menu, What
-/// Lunchbox Learned and the trial-end screen, and never as a notification.
+/// LunchboxWM Learned and the trial-end screen, and never as a notification.
 final class TimeBackLedger {
     static let shared = TimeBackLedger()
 
@@ -57,7 +57,7 @@ final class TimeBackLedger {
         }
     }
 
-    /// Lunchbox did something you'd otherwise do by hand (or you corrected it). Any thread.
+    /// LunchboxWM did something you'd otherwise do by hand (or you corrected it). Any thread.
     func count(_ action: TimeBackAction, times: Int = 1, at date: Date = Date()) {
         guard times > 0 else { return }
         state.withLock { $0.timeBack.count(action, times: times, at: date) }
@@ -74,7 +74,7 @@ final class TimeBackLedger {
         state.withLock { $0.timeBack.tally(from: start, through: end) }
     }
 
-    /// Reset What Lunchbox Learned: forgets every count.
+    /// Reset What LunchboxWM Learned: forgets every count.
     func reset() {
         state.withLock { s in
             s.timeBack = TimeBack()

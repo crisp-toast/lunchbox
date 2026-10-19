@@ -12,7 +12,7 @@ import QuartzCore
 /// being applied, so the window always heads for the newest target.
 ///
 /// Every final placement is read back. An app that's busy or swapped out can
-/// time out and silently ignore a move, which used to leave Lunchbox believing a
+/// time out and silently ignore a move, which used to leave LunchboxWM believing a
 /// window was somewhere it wasn't. Now the move is retried, and the frame the
 /// window really ended up with is reported through `onSettled`.
 final class Animator {
@@ -150,7 +150,7 @@ final class Animator {
             element.setPosition(target.origin)
             actual = element.frame
         } else {
-            // A window that won't take this size sits centered on its slot (until Lunchbox learns
+            // A window that won't take this size sits centered on its slot (until LunchboxWM learns
             // what it takes), not in its corner.
             actual = element.place(in: target, sizeFirst: sizeFirst)
         }

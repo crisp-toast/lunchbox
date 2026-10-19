@@ -1,4 +1,4 @@
-// POST /api/recover {email} : lost your license? We email every Lunchbox license bought with
+// POST /api/recover {email} : lost your license? We email every LunchboxWM license bought with
 // that address, to that address only. The answer never says whether the email bought anything.
 import { sessionsForEmail, isPaidLunchbox } from "../../store/lib/stripe.js";
 import { licenseFor, sendLicenses } from "../../store/lib/fulfill.js";

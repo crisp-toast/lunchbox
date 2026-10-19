@@ -5,11 +5,11 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Lunchbox</string>
+	<string>LunchboxWM</string>
 	<key>CFBundleExecutable</key>
-	<string>Lunchbox</string>
+	<string>LunchboxWM</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Lunchbox asks your browser to open Summon's web searches in its own window, as a new tab or a new tiled window, instead of a pop-up.</string>
+	<string>LunchboxWM asks your browser to open Summon's web searches in its own window, as a new tab or a new tiled window, instead of a pop-up.</string>
 	<key>NSDesktopFolderUsageDescription</key>
 	<string>Summon lists the files on your Desktop whose names match what you type.</string>
 	<key>NSDocumentsFolderUsageDescription</key>
@@ -23,7 +23,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Lunchbox</string>
+	<string>LunchboxWM</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

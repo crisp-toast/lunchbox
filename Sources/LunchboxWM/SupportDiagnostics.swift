@@ -65,16 +65,16 @@ enum SupportDiagnostics {
 
         let windows = tiler.supportWindows()
         return SupportSummary(
-            app: "Lunchbox \(version) (\(build)), \(Build.name)",
+            app: "LunchboxWM \(version) (\(build)), \(Build.name)",
             system: "macOS \(os.majorVersion).\(os.minorVersion)\(os.patchVersion > 0 ? ".\(os.patchVersion)" : "")\(osBuild), \(model)",
             license: license, settings: settings, screens: screens,
             currentWorkspace: tiler.currentSpace + 1, workspaces: windows.workspaces, untiled: windows.untiled
         )
     }
 
-    /// Lunchbox's errors and faults from the last day (since it started, if that's sooner: the log
+    /// LunchboxWM's errors and faults from the last day (since it started, if that's sooner: the log
     /// only gives a process its own), the latest `limit` of them, oldest first, each through
-    /// `SupportSummary.scrub`. A day keeps the read quick in a Lunchbox that has run for weeks.
+    /// `SupportSummary.scrub`. A day keeps the read quick in a LunchboxWM that has run for weeks.
     private static func recentErrors(limit: Int = 30) -> [String] {
         do {
             let store = try OSLogStore(scope: .currentProcessIdentifier)
@@ -90,7 +90,7 @@ enum SupportDiagnostics {
             }
             return lines
         } catch {
-            return ["couldn't read Lunchbox's log: \(SupportSummary.scrub(error.localizedDescription))"]
+            return ["couldn't read LunchboxWM's log: \(SupportSummary.scrub(error.localizedDescription))"]
         }
     }
 

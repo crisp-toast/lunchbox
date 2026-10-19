@@ -2,7 +2,7 @@ import AppKit
 import QuartzCore
 import LunchboxCore
 
-/// A pretend Mac screen for practicing Lunchbox's shortcuts during onboarding.
+/// A pretend Mac screen for practicing LunchboxWM's shortcuts during onboarding.
 /// It runs the same layout engine as the real thing on fake windows, so
 /// focusing, moving, resizing, Focus, Tidy and Workspaces behave exactly as
 /// they will on the desktop, without touching a single real window. Summon and

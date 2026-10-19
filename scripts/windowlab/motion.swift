@@ -1,7 +1,7 @@
 // motion <seconds> <owners,comma,separated> [step ...]
 // Records every frame of every window the owners have, every 2 ms, while it runs the steps
 // at their times, so a case's clock starts at the exact moment its trigger is posted.
-//   step: <ms>:lunchbox:<command>   posts a Lunchbox command
+//   step: <ms>:lunchbox:<command>   posts a LunchboxWM command
 //         <ms>:wl:<command>       posts a WindowLab command
 //         <ms>:sh:<command line>  runs a shell command (not waited for)
 //         <ms>:mark               just notes the time

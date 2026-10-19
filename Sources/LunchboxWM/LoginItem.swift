@@ -1,7 +1,7 @@
 import AppKit
 import ServiceManagement
 
-/// "Open at login", done as a launchd agent so Lunchbox also comes back by itself after a
+/// "Open at login", done as a launchd agent so LunchboxWM also comes back by itself after a
 /// crash, putting parked windows back where they belong (it doesn't after Quit).
 enum LoginItem {
     static let label = "com.sentientdonut.lunchbox.agent"
@@ -12,24 +12,39 @@ enum LoginItem {
     static func set(_ on: Bool) {
         do {
             if on { try agent.register() } else { try agent.unregister() }
+            UserDefaults.standard.set(on ? Bundle.main.bundlePath : nil, forKey: registeredFromKey)
         } catch {
             log.error("login item: \(error.localizedDescription, privacy: .public)")
         }
     }
 
+    /// Where the app was when it registered the login item.
+    private static let registeredFromKey = "loginItemRegisteredFrom"
+
     /// Earlier versions registered the app itself as the login item: switch to the agent, once.
+    /// And an app that's moved or been renamed since it registered (run from Downloads, then put
+    /// in Applications; Lunchbox.app, now LunchboxWM.app) registers again, or at login launchd
+    /// would look for it where it was.
     static func migrate() {
-        guard SMAppService.mainApp.status == .enabled else { return }
-        try? SMAppService.mainApp.unregister()
+        if SMAppService.mainApp.status == .enabled {
+            try? SMAppService.mainApp.unregister()
+            set(true)
+            return
+        }
+        // Not from launchd's own copy: taking the old registration out would end it.
+        guard isEnabled, !startedByLaunchd,
+              UserDefaults.standard.string(forKey: registeredFromKey) != Bundle.main.bundlePath else { return }
+        log.notice("login item: the app moved; registering it again from here")
+        try? agent.unregister()
         set(true)
     }
 
     /// Whether launchd started this copy (only then does it come back after a crash).
     static var startedByLaunchd: Bool { ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] == label }
 
-    /// Opened by hand while the agent is on: have launchd run Lunchbox instead, so it's
+    /// Opened by hand while the agent is on: have launchd run LunchboxWM instead, so it's
     /// looked after, and step aside. Returns true if this copy should quit, only once
-    /// launchd's copy is really running: opening Lunchbox must never end with no Lunchbox.
+    /// launchd's copy is really running: opening LunchboxWM must never end with no LunchboxWM.
     static func handOff() -> Bool {
         guard !startedByLaunchd, isEnabled else { return false }
         let kick = Process()
@@ -38,17 +53,17 @@ enum LoginItem {
         do { try kick.run() } catch { return false }
         kick.waitUntilExit()
         guard kick.terminationStatus == 0 else { return false }
-        // launchd waits out ThrottleInterval (5 s) after its last copy exited (Lunchbox was
+        // launchd waits out ThrottleInterval (5 s) after its last copy exited (LunchboxWM was
         // just quit, updated or reinstalled), so allow a little more than that.
         for _ in 0..<65 {
             if anotherProcessRunsThisApp() { return true }
             Thread.sleep(forTimeInterval: 0.1)
         }
-        log.error("login item: launchd didn't start Lunchbox; running this copy instead")
+        log.error("login item: launchd didn't start LunchboxWM; running this copy instead")
         return false
     }
 
-    /// Whether another process is running Lunchbox's executable. Unlike the list of running
+    /// Whether another process is running LunchboxWM's executable. Unlike the list of running
     /// apps, this sees launchd's copy the moment it starts, before it has set itself up as an app.
     private static func anotherProcessRunsThisApp() -> Bool {
         guard let mine = Bundle.main.executableURL?.resolvingSymlinksInPath().path else { return false }

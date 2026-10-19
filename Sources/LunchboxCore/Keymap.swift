@@ -10,7 +10,7 @@ public enum Command: String, CaseIterable, Codable, Sendable {
          moveToWorkspace7, moveToWorkspace8, moveToWorkspace9, hide
     case summon, cheatSheet
 
-    /// Lunchbox starts with three Workspaces; you can add more, up to nine (⌘1 to ⌘9).
+    /// LunchboxWM starts with three Workspaces; you can add more, up to nine (⌘1 to ⌘9).
     public static let defaultWorkspaces = 3
     public static let maxWorkspaces = 9
 
@@ -208,7 +208,7 @@ public struct Keymap: Equatable, Sendable {
     public static let numberKeys: [Int64] = [18, 19, 20, 21, 23, 22, 26, 28, 25]
 
     /// Workspaces are ⌘ and their number, and ⌘⇧ and the number carries the window there,
-    /// like ⌘⇧ and an arrow moves it. Left ⌘ only, like every Lunchbox shortcut, so right ⌘ and
+    /// like ⌘⇧ and an arrow moves it. Left ⌘ only, like every LunchboxWM shortcut, so right ⌘ and
     /// a number still does what it does in the app in front (a browser's tabs, say), and right
     /// ⌘⇧3, ⌘⇧4 and ⌘⇧5 still take screenshots; and only for Workspaces you have, so with three,
     /// ⌘⇧4 and ⌘⇧5 are the Mac's on either side.

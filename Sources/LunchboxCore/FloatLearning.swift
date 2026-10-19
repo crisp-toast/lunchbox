@@ -8,7 +8,7 @@ public enum FloatChoice: String, Codable, Sendable {
     public var opposite: FloatChoice { self == .tile ? .float : .tile }
 }
 
-/// What a window's title says about it, without keeping the title: Lunchbox never writes
+/// What a window's title says about it, without keeping the title: LunchboxWM never writes
 /// a title down, only which of these it was.
 public enum TitleKind: String, Codable, Sendable {
     /// No title at all (palettes, pop-overs, splash screens).
@@ -62,7 +62,7 @@ public struct WindowButtons: OptionSet, Codable, Hashable, Sendable {
     public static let fullScreen = WindowButtons(rawValue: 8)
 }
 
-/// What Lunchbox can tell about a window from Accessibility the moment it shows up:
+/// What LunchboxWM can tell about a window from Accessibility the moment it shows up:
 /// enough to recognize the same kind of window next time, and nothing personal.
 public struct FloatFeatures: Codable, Equatable, Sendable {
     /// The app's bundle ID.
@@ -80,8 +80,8 @@ public struct FloatFeatures: Codable, Equatable, Sendable {
     /// It has a native tab bar.
     public var tabs: Bool
     /// It wouldn't take the size of its tile (macOS has no Accessibility attribute for a
-    /// window's minimum or maximum size, so Lunchbox finds out when it asks). Only known
-    /// once Lunchbox has tiled it, so it's logged for later models but not in `signature`.
+    /// window's minimum or maximum size, so LunchboxWM finds out when it asks). Only known
+    /// once LunchboxWM has tiled it, so it's logged for later models but not in `signature`.
     public var sizeLimited: Bool
 
     public init(app: String, subrole: String?, resizable: Bool, buttons: WindowButtons, size: CGSize,
@@ -120,7 +120,7 @@ public struct FloatFeatures: Codable, Equatable, Sendable {
         screenShare < 0.12 ? "s" : screenShare < 0.4 ? "m" : "l"
     }
 
-    /// The kind of window in a few words, for the list of what Lunchbox learned: "small tool windows".
+    /// The kind of window in a few words, for the list of what LunchboxWM learned: "small tool windows".
     public var kindInWords: String {
         let size = ["s": "small", "m": "medium", "l": "large"][sizeClass] ?? ""
         guard standard else { return "\(size) panels" }
@@ -132,7 +132,7 @@ public struct FloatFeatures: Codable, Equatable, Sendable {
         }
     }
 
-    /// Windows with the same signature are the same kind of window: what you teach Lunchbox
+    /// Windows with the same signature are the same kind of window: what you teach LunchboxWM
     /// about one applies to the rest. Coarse on purpose, so a lesson carries over.
     public var signature: String {
         "\(app)|\(standard ? "std" : subrole ?? "-")|\(buttons.rawValue)|\(sizeClass)|\(title.rawValue)"
@@ -141,7 +141,7 @@ public struct FloatFeatures: Codable, Equatable, Sendable {
 
 /// Where a choice came from.
 public enum FloatSource: String, Codable, Sendable {
-    /// Lunchbox's built-in rules (standard windows tile; dialogs and a few apps float).
+    /// LunchboxWM's built-in rules (standard windows tile; dialogs and a few apps float).
     case rule
     /// What you taught it.
     case learned
@@ -149,7 +149,7 @@ public enum FloatSource: String, Codable, Sendable {
     case you
 }
 
-/// How you told Lunchbox it got a window wrong.
+/// How you told LunchboxWM it got a window wrong.
 public enum FloatGesture: String, Codable, Sendable {
     /// The Float/Tile command.
     case toggle
@@ -157,7 +157,7 @@ public enum FloatGesture: String, Codable, Sendable {
     case dragOut
 }
 
-/// One line in the log Lunchbox learns floating from.
+/// One line in the log LunchboxWM learns floating from.
 public struct FloatEvent: LoggedEvent, Equatable {
     public enum Kind: String, Codable, Sendable {
         /// You floated a tiled window, or tiled a floating one.
@@ -193,7 +193,7 @@ public struct FloatEvent: LoggedEvent, Equatable {
     static func tenths(_ seconds: Double) -> Double { (seconds * 10).rounded() / 10 }
 }
 
-/// What Lunchbox does with a window it just saw.
+/// What LunchboxWM does with a window it just saw.
 public struct FloatDecision: Codable, Equatable, Sendable {
     public var choice: FloatChoice
     public var source: FloatSource
@@ -214,7 +214,7 @@ public struct FloatDecision: Codable, Equatable, Sendable {
 /// It fails safe. With nothing learned it does exactly what the rules say. It only goes
 /// against the rules in the direction of your latest correction of that kind of window (or,
 /// failing that, of that app), so hints alone never move a window and it never undoes what
-/// you last told it. Windows you simply left as Lunchbox placed them don't count against a
+/// you last told it. Windows you simply left as LunchboxWM placed them don't count against a
 /// correction: that's not you saying so, and someone who finds the Float command after a
 /// year of tiling shouldn't have to say it ten times.
 public struct FloatClassifier: Sendable {
@@ -243,7 +243,7 @@ public struct FloatClassifier: Sendable {
 
     /// A correction you made: the strongest evidence there is.
     public static let correctionWeight = 1.0
-    /// A window that stayed open a while the way Lunchbox learned to place it: the lesson holds.
+    /// A window that stayed open a while the way LunchboxWM learned to place it: the lesson holds.
     public static let acceptedWeight = 0.25
     /// ...after this many seconds.
     public static let acceptedAfter = 60.0
@@ -266,7 +266,7 @@ public struct FloatClassifier: Sendable {
 
     public init() {}
 
-    /// Learns from a whole log at once, as when Lunchbox starts.
+    /// Learns from a whole log at once, as when LunchboxWM starts.
     public static func replay(_ events: [FloatEvent], now: Double) -> FloatClassifier {
         var model = FloatClassifier()
         for event in events.sorted(by: { $0.time < $1.time }) { model.learn(event, now: now) }
@@ -306,7 +306,7 @@ public struct FloatClassifier: Sendable {
         }
     }
 
-    /// The kinds of window Lunchbox now treats differently from its rules, with an example of
+    /// The kinds of window LunchboxWM now treats differently from its rules, with an example of
     /// each. `rule` says what the rules would do with a window.
     public func lessons(rule: (FloatFeatures) -> FloatChoice) -> [(signature: String, example: FloatFeatures, choice: FloatChoice)] {
         bySignature.compactMap { key, e in
@@ -317,7 +317,7 @@ public struct FloatClassifier: Sendable {
         .sorted { $0.signature < $1.signature }
     }
 
-    /// Whether a window just seen should tile or float. `rule` is what Lunchbox's built-in
+    /// Whether a window just seen should tile or float. `rule` is what LunchboxWM's built-in
     /// rules say. Pure arithmetic over two lookups: about a microsecond.
     public func decide(_ f: FloatFeatures, rule: FloatChoice) -> FloatDecision {
         let prior = rule == .float ? 1 - Self.rulePrior : Self.rulePrior

@@ -1,7 +1,7 @@
 import Foundation
 import LunchboxCore
 
-// Trains Lunchbox's window classifier and says how it does against the hand-written rules.
+// Trains LunchboxWM's window classifier and says how it does against the hand-written rules.
 //
 //   swift run -c release LunchboxTrain Training/windows.jsonl [--write Sources/LunchboxCore/BehaviorModelWeights.swift]
 //   swift run -c release LunchboxTrain Training/windows.jsonl --features <path>   (each window's views, for experiments)
@@ -42,7 +42,7 @@ let classes = WindowBehavior.allCases
 print("\(examples.count) windows from \(Set(examples.map(\.app)).count) apps:",
       classes.map { c in "\(c.rawValue) \(examples.filter { $0.label == c }.count)" }.joined(separator: ", "))
 let asked = examples.filter { WindowBehavior.hardRule($0.traits) == nil }
-print("Lunchbox asks the classifier about \(asked.count) of them (window-like); the rules decide the other \(examples.count - asked.count).")
+print("LunchboxWM asks the classifier about \(asked.count) of them (window-like); the rules decide the other \(examples.count - asked.count).")
 
 if let i = args.firstIndex(of: "--features") {
     let rows = examples.map { ["id": $0.id, "structure": $0.structure, "title": $0.title] as [String: Any] }
@@ -232,7 +232,7 @@ if let i = args.firstIndex(of: "--write") {
     import Foundation
 
     extension BehaviorModel {
-        /// The base window classifier Lunchbox ships with, trained on labeled windows from test
+        /// The base window classifier LunchboxWM ships with, trained on labeled windows from test
         /// machines, never on anyone's own windows.
         public static let base: BehaviorModel? = try? JSONDecoder().decode(BehaviorModel.self, from: Data(baseJSON.utf8))
 

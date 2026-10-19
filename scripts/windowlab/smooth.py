@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoothness benchmark, for a test VM (never a Mac someone is using). While Lunchbox rearranges
+"""Smoothness benchmark, for a test VM (never a Mac someone is using). While LunchboxWM rearranges
 windows, `motion` (motion.swift, copied into the guest's home) records every window's frame every
 2 ms; this reports per case how many separate motions each window makes, how many stops on the way
 it holds (and how many whole layouts), how long until everything settles, how far edges that should

@@ -1,7 +1,7 @@
-# Making Lunchbox worth $9.99
+# Making LunchboxWM worth $9.99
 
 For Tyler, 2026-10-17. The question: get window decisions above 95% correct, or use Laya or
-Julia 1 some other way, so that Lunchbox feels like a power tool that people want to pay for
+Julia 1 some other way, so that LunchboxWM feels like a power tool that people want to pay for
 because it really saves them time.
 
 ## The short answer
@@ -9,7 +9,7 @@ because it really saves them time.
 1. **The decision you'd notice is close to 95%, not above it.** Whether a window tiles or
    floats is right **92% of the time (77 of 84)** on apps the classifier never saw, against 86%
    for the rules alone. The exact placement (tile, float, or float centered) is right 87% of the
-   time. This said 98% and 92% until Lunchbox's rules changed on 2026-10-17 (Calculator, System
+   time. This said 98% and 92% until LunchboxWM's rules changed on 2026-10-17 (Calculator, System
    Settings and QuickTime tile now); measured against the new rules, the classifier's lead is
    smaller. Every miss costs one correction, and that kind of window is right from then on.
 2. **Laya and Julia 1 lose in the other jobs too.** On finding a window by typing, plain word
@@ -17,7 +17,7 @@ because it really saves them time.
    either one now; it would add 40–650 MiB for nothing a user would feel.
 3. **What gets people to pay is seeing their own time come back.** Four things, in order:
    - turn learning on by default;
-   - count the time Lunchbox gives back, honestly, and show it in the menu and on the
+   - count the time LunchboxWM gives back, honestly, and show it in the menu and on the
      trial-end screen (**built**, see [Item 1, as built](#item-1-as-built-2026-10-17));
    - let Summon jump to any window by a word in its title (**built**, see 4 below);
    - sell "you never set it up" against the free tiling managers, which make you write rules.
@@ -25,7 +25,7 @@ because it really saves them time.
 ## 1. Accuracy, as you'd see it
 
 Held out by app (each app judged by a model that never saw it), on the 84 labeled windows from 52
-apps, against Lunchbox's rules as of 2026-10-17 (main's cbfafb9):
+apps, against LunchboxWM's rules as of 2026-10-17 (main's cbfafb9):
 
 | | Tiles or floats | Exact placement (tile / float / float centered) |
 |---|---|---|
@@ -47,14 +47,14 @@ floats centered.
   TextEdit's Settings instead: tiles-or-floats becomes 93% and exact placement 85%.
 
 **The 4 misses that only change where a floating window sits:**
-- **Settings windows Lunchbox centers:** Terminal's settings ("General") and iTerm's Settings,
+- **Settings windows LunchboxWM centers:** Terminal's settings ("General") and iTerm's Settings,
   which macOS marks as dialogs, and TextEdit's Spelling and Grammar, which the classifier calls
   a dialog. The labels say they should stay where the app put them.
 - **Finder's Connect to Server:** it floats where it opened, but the label says it should be
   centered.
 
-The screenshot toolbar (⇧⌘5) is no longer counted as a miss: Lunchbox never touches it. The
-screenshot UI isn't a regular app, so Lunchbox doesn't watch it.
+The screenshot toolbar (⇧⌘5) is no longer counted as a miss: LunchboxWM never touches it. The
+screenshot UI isn't a regular app, so LunchboxWM doesn't watch it.
 
 **What's behind these numbers:**
 - 84 windows is a small set.
@@ -91,7 +91,7 @@ Details are in [system-one-research.md](system-one-research.md#round-3-other-job
   ("the bill I need to pay" for INV-2026-0042.pdf).
 - **The words people actually type** are handled best by plain matching, instantly, at 0 MB.
 - **A command that picks the wrong action** moves windows you're looking at, which breaks
-  Lunchbox's own rule against being annoying. At 58%, that would happen about every other
+  LunchboxWM's own rule against being annoying. At 58%, that would happen about every other
   command.
 - **If you want typed commands later:**
   - fine-tune Laya (it's built to be specialized) on a few thousand synthetic phrasings, with no
@@ -113,7 +113,7 @@ Details are in [system-one-research.md](system-one-research.md#round-3-other-job
   Witch) sell on that alone.
 
 **No study says how many minutes a day people spend arranging windows.** The closest research
-measures what task switching costs. So Lunchbox shouldn't claim a number. It should measure each
+measures what task switching costs. So LunchboxWM shouldn't claim a number. It should measure each
 person's own.
 
 ### 1. Turn learning on by default
@@ -123,7 +123,7 @@ person's own.
   new windows, never takes focus, shows nothing but the quiet line, and two undos make it stop.
 - **Open question 1 in learning.md:** I'd say yes, after a few days on your own Mac.
 
-### 2. Count the time Lunchbox gives back, and show it
+### 2. Count the time LunchboxWM gives back, and show it
 
 **Built on 2026-10-17.** What it counts, where, and what it says are in
 [Item 1, as built](#item-1-as-built-2026-10-17).
@@ -143,7 +143,7 @@ it on trust.
 
 **Where it shows:**
 - **The menu:** "This week: 23 minutes back · 412 windows placed."
-- **What Lunchbox Learned.**
+- **What LunchboxWM Learned.**
 - **The trial-end screen.**
 - **Never as a notification:** that would break the no-popups rule.
 
@@ -161,12 +161,12 @@ make, nothing more.
 
 It used to say only "Your free trial has ended." Instead (proposed wording):
 
-> **This week, Lunchbox gave you back 26 minutes.**
+> **This week, LunchboxWM gave you back 26 minutes.**
 > It placed 412 windows, put 9 apps back the way you like them, sent 41 windows to their
 > Workspace, and put everything back the 6 times your display came back. It learned 14 things
 > about how you work.
 >
-> **Keep Lunchbox: $9.99, once.** What it learned stays on your Mac either way.
+> **Keep LunchboxWM: $9.99, once.** What it learned stays on your Mac either way.
 
 - **The lessons are listed, never held hostage.** That's loss aversion, done honestly.
 - **Two days before the end,** the menu's trial line can carry the number too: "Free trial: 2
@@ -189,9 +189,9 @@ typing a word from a window's title lists that window, and ↩ goes to it.
 Against free tools, the pitch isn't tiling. It's the config file you'll never write. Proposed
 copy, not published (site copy stays yours):
 - **Headline:** **The tiling window manager you never set up.**
-- **Sub:** *No float rules, no config file, nothing to learn first. Fix a window once and Lunchbox
+- **Sub:** *No float rules, no config file, nothing to learn first. Fix a window once and LunchboxWM
   gets it right from then on. On your Mac, with no account.*
-- **Under the price:** *7 days free, then $9.99 once. Before you decide, Lunchbox shows you how
+- **Under the price:** *7 days free, then $9.99 once. Before you decide, LunchboxWM shows you how
   many minutes it gave you back.*
 - **A 20-second demo:**
   - plug in a display, and every window goes back;
@@ -214,7 +214,7 @@ copy, not published (site copy stays yours):
 ## Decisions for you
 
 1. **Learning on by default** at launch?
-2. **Settings windows** Lunchbox centers (ones macOS marks as dialogs, and fixed-size ones that
+2. **Settings windows** LunchboxWM centers (ones macOS marks as dialogs, and fixed-size ones that
    can't be minimized): center them (as today), or leave them where the app put them?
 3. **The seconds per action** in the ledger: are the proposals above conservative enough?
    Built as proposed. Three of them lean generous; see "Where the count leans generous" below.
@@ -230,7 +230,7 @@ Summon's window search and the classifier retrained against main's rules. `swift
 ### The count
 
 `TimeBack` ([TimeBack.swift](../Sources/LunchboxCore/TimeBack.swift)) keeps how many times a day
-Lunchbox did each thing. The seconds are constants on `TimeBackAction`, in that file and nowhere
+LunchboxWM did each thing. The seconds are constants on `TimeBackAction`, in that file and nowhere
 else, and the menu's "how it's counted" line is made from them, so it can't drift.
 
 | Counted | Seconds | Where |
@@ -238,7 +238,7 @@ else, and the menu's "how it's counted" line is made from them, so it can't drif
 | A new window tiled into place | 2 | `Tiler.insert` (a window that opened under 10 s ago), and `takePlaceholder` (a window filling the tile Summon or a Dock click held for it) |
 | An app opening into its usual spot and share | 2 | The same two places, when the usual spot was used: a lone window's shape, or a learned four-window shape (`.anchored`) instead of the 2×2 grid |
 | A new window sent to its Workspace | 3 | `Learning.placed`, from `placedInHome` |
-| A window put back | 2 | `welcomeBackDisplays`, when a display really comes back (plugged in, or awake again), and `insert`, for windows back in their Workspace and spot after Lunchbox starts again |
+| A window put back | 2 | `welcomeBackDisplays`, when a display really comes back (plugged in, or awake again), and `insert`, for windows back in their Workspace and spot after LunchboxWM starts again |
 | A jump to a window from Summon | 1 | `bringForward`, behind both of Summon's jumps (to an app, and to a window by its title), when it took you somewhere: another window, another Workspace, or out of the Dock |
 | A correction or an undo | −3 | `Learning.corrected` (Float/Tile This Window, the double drag) and `Learning.undone` (the undo key) |
 
@@ -249,7 +249,7 @@ else, and the menu's "how it's counted" line is made from them, so it can't drif
 - **Minutes** are whole minutes, rounded down, after corrections, and never below zero.
 - **"Windows placed"** is tiled + usual spot + sent + put back.
 - **Not counted:**
-  - windows Lunchbox tiles when it first starts (they were already open);
+  - windows LunchboxWM tiles when it first starts (they were already open);
   - learned floats (a plain Mac floats every window);
   - windows back from full screen (macOS puts those back itself);
   - your own moves, sends, Focus and Tidy;
@@ -260,14 +260,14 @@ else, and the menu's "how it's counted" line is made from them, so it can't drif
 
 ### Kept on the Mac
 
-- **The file:** `timeback.json` in `~/Library/Application Support/Lunchbox/Learning/`, written by
-  `TimeBackLedger` ([TimeBackLedger.swift](../Sources/Lunchbox/TimeBackLedger.swift)) on its own
+- **The file:** `timeback.json` in `~/Library/Application Support/LunchboxWM/Learning/`, written by
+  `TimeBackLedger` ([TimeBackLedger.swift](../Sources/LunchboxWM/TimeBackLedger.swift)) on its own
   queue, a couple of seconds after things settle, and replaced in one step.
 - **The same rules as the event logs:**
   - the file is 0600, and the folder is 0700 and out of backups (`TimeBackFile`, through the same
     `PrivateFolder` helper as `EventLog`);
-  - days older than 90 are pruned when Lunchbox starts and on every write;
-  - Reset What Lunchbox Learned clears it.
+  - days older than 90 are pruned when LunchboxWM starts and on every write;
+  - Reset What LunchboxWM Learned clears it.
 - **Only dates and numbers,** like `{"days":{"2026-10-17":{"sent":2,"tiled":31}}}`. There are no
   app names and no titles, and the test `onlyNumbersAndDatesAreKept` checks it.
 - **Nothing leaves the Mac:** `NothingLeavesThisMac` still passes.
@@ -276,17 +276,17 @@ else, and the menu's "how it's counted" line is made from them, so it can't drif
 
 - **The menu:** "This week: 23 minutes back · 412 windows placed", above the trial lines, once
   anything has been counted. Its tooltip shows the working: each count times its seconds.
-- **What Lunchbox Learned:** the same line, then a short grey note: "Counted at 2 s a window placed,
+- **What LunchboxWM Learned:** the same line, then a short grey note: "Counted at 2 s a window placed,
   3 s one sent to its Workspace, 1 s a Summon jump, and −3 s a correction or undo."
 - **The trial line, in the last two days:** "Free trial: 2 days left · 21 minutes back so far".
   It only does this from the first whole minute.
 - **The trial-end screen** (`LicenseWindow`):
   - a small "Your free trial has ended" line above the heading;
-  - the heading, like "This week, Lunchbox gave you back 26 minutes.";
+  - the heading, like "This week, LunchboxWM gave you back 26 minutes.";
   - what it did and learned: "It placed 412 windows, put 9 apps back the way you like them, sent
     41 windows to their Workspace, and put everything back the 6 times your display came back.
     It learned 14 things about how you work.";
-  - then **Keep Lunchbox: $9.99, once.** What it learned stays on your Mac either way.
+  - then **Keep LunchboxWM: $9.99, once.** What it learned stays on your Mac either way.
 
   Parts with nothing to count are left out. Under a minute, the heading stays "Your free trial
   has ended". With nothing learned, the last line says "Your windows stay right where they are
@@ -297,7 +297,7 @@ else, and the menu's "how it's counted" line is made from them, so it can't drif
 
 ### Trying it
 
-- `timeback-add:<action>:<count>[:<days ago>]` counts as if Lunchbox had done it. The actions are
+- `timeback-add:<action>:<count>[:<days ago>]` counts as if LunchboxWM had done it. The actions are
   `tiled`, `arranged`, `sent`, `restored`, `summoned`, `corrected` and `displayReturned`.
 - `dump` shows `timeBack`: the week's line, its seconds and its breakdown, and the daily counts.
 - `license:snapshot:<png>:ended` draws the trial-end screen.
@@ -305,7 +305,7 @@ else, and the menu's "how it's counted" line is made from them, so it can't drif
 ### Tested in the VM (tessel-vm, macOS 27, 2026-10-17)
 
 - **Real actions, counted live:**
-  - **Relaunch:** installing the build relaunched Lunchbox, and the 11 open windows went back to
+  - **Relaunch:** installing the build relaunched LunchboxWM, and the 11 open windows went back to
     their Workspaces and spots: 11 put back.
   - **Pause and resume:** added nothing.
   - **Summon:** three Summon opens of running apps counted 3 jumps.
@@ -321,7 +321,7 @@ else, and the menu's "how it's counted" line is made from them, so it can't drif
   - **Two real lessons,** for the trial-end screen: Terminal's lone size, and Terminal's home in
     Workspace 1.
   - **What they show:** the menu line, the trial line ("Free trial: 2 days left · 16 minutes back
-    so far"), What Lunchbox Learned, and the trial-end screen. The guest was put back afterwards:
+    so far"), What LunchboxWM Learned, and the trial-end screen. The guest was put back afterwards:
     trial start restored, learning reset and off.
 
 ### The example's numbers don't add up
@@ -334,10 +334,10 @@ same.
 ### Where the count leans generous
 
 Everything above is set low, except three things, worth deciding on (decision 3):
-- **Put back after Lunchbox restarts** counts windows a plain Mac would never have moved, since
-  there's no Lunchbox to restart. It's in because the proposal lists "after a restart". Dropping
+- **Put back after LunchboxWM restarts** counts windows a plain Mac would never have moved, since
+  there's no LunchboxWM to restart. It's in because the proposal lists "after a restart". Dropping
   it is one line in `Tiler.insert`.
-- **At login,** the windows macOS reopens after Lunchbox's first look count as new windows
+- **At login,** the windows macOS reopens after LunchboxWM's first look count as new windows
   tiled, though a plain Mac reopens them where they were.
 - **When a display comes back,** macOS puts some windows back on it by itself.
 

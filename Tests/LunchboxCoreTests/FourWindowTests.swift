@@ -89,7 +89,7 @@ import Testing
 
     @Test func onlyAShapeYouMadeAndKeptCounts() {
         var m = ArrangementMemory()
-        m.learn(.arranged(claudeLeft, on: display, dwell: 600, at: 100), now: 100) // Lunchbox's, let stand
+        m.learn(.arranged(claudeLeft, on: display, dwell: 600, at: 100), now: 100) // LunchboxWM's, let stand
         #expect(m.anchoredShape(display: display, apps: others) == nil)
         m.learn(.arranged(claudeLeft, on: display, dwell: 10, byYou: true, at: 200), now: 200) // not long enough yet
         #expect(m.anchoredShape(display: display, apps: others) == nil)
@@ -103,7 +103,7 @@ import Testing
         let right = arrangement([["mail", "notes", "safari"], [claude]])
         m.learn(.arranged(right, on: display, dwell: 40, byYou: true, at: 200), now: 200)
         #expect(m.anchoredShape(display: display, apps: others)?.shape.side == "right")
-        // You went back to a grid with Claude in it, and kept it: Lunchbox stops.
+        // You went back to a grid with Claude in it, and kept it: LunchboxWM stops.
         m.learn(.arranged(arrangement([[claude, "mail"], ["notes", "safari"]]), on: display, dwell: 60, byYou: true, at: 300), now: 300)
         #expect(m.anchoredShape(display: display, apps: others) == nil)
     }

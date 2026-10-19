@@ -1,7 +1,7 @@
 import AppKit
 import LunchboxCore
 
-/// Settings › What Lunchbox Learned › How Lunchbox Sees Your Windows: every window open right now,
+/// Settings › What LunchboxWM Learned › How LunchboxWM Sees Your Windows: every window open right now,
 /// what the window classifier makes of it, how sure it is, and what the hand-written rules would
 /// have done. Titles are shown here and kept nowhere.
 final class WindowClassesWindow: NSObject, NSTableViewDataSource, NSTableViewDelegate {
@@ -23,7 +23,7 @@ final class WindowClassesWindow: NSObject, NSTableViewDataSource, NSTableViewDel
         var decideMs: Double
     }
 
-    /// Reads and classifies every window of every app Lunchbox tiles. Off the main thread.
+    /// Reads and classifies every window of every app LunchboxWM tiles. Off the main thread.
     static func survey(screens: [CGRect]) -> Survey {
         var rows: [Row] = []
         var read = 0.0, decide = 0.0
@@ -75,7 +75,7 @@ final class WindowClassesWindow: NSObject, NSTableViewDataSource, NSTableViewDel
                 let differ = survey.rows.filter(\.byModel).count
                 let n = max(1, survey.rows.count)
                 self.footer.stringValue = String(
-                    format: "%d windows, %d where Lunchbox goes against the old rules (listed first). Reading them took %.1f ms a window; deciding, %.3f ms a window. %@",
+                    format: "%d windows, %d where LunchboxWM goes against the old rules (listed first). Reading them took %.1f ms a window; deciding, %.3f ms a window. %@",
                     survey.rows.count, differ, survey.readMs / Double(n), survey.decideMs / Double(n),
                     Learning.model.map { "The model learned from \($0.trainedOn) windows of test apps; never from yours." } ?? "")
             }
@@ -85,9 +85,9 @@ final class WindowClassesWindow: NSObject, NSTableViewDataSource, NSTableViewDel
     private func build() {
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 860, height: 480), styleMask: [.titled, .closable, .resizable],
                          backing: .buffered, defer: false)
-        w.title = "How Lunchbox Sees Your Windows"
+        w.title = "How LunchboxWM Sees Your Windows"
         w.isReleasedWhenClosed = false
-        let columns: [(String, String, CGFloat)] = [("app", "App", 140), ("title", "Window", 280), ("lunchbox", "Lunchbox", 110),
+        let columns: [(String, String, CGFloat)] = [("app", "App", 140), ("title", "Window", 280), ("lunchbox", "LunchboxWM", 110),
                                                     ("sure", "Sure", 60), ("rules", "Old rules", 110), ("does", "So it", 120)]
         for (id, name, width) in columns {
             let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(id))

@@ -1,7 +1,7 @@
 // POST /api/stripe-webhook : Stripe tells us what happened to a purchase.
 // Listen for checkout.session.completed and checkout.session.async_payment_succeeded (paid:
 // email the license), and charge.refunded and charge.dispute.created (refunded or charged
-// back: the license goes on the revoked list, and Lunchbox switches it off within a week).
+// back: the license goes on the revoked list, and LunchboxWM switches it off within a week).
 import { getSession, isPaidLunchbox, sessionIdForPayment, verifyWebhook } from "../../store/lib/stripe.js";
 import { licenseFor, sendLicenses } from "../../store/lib/fulfill.js";
 import { revocationHash } from "../../store/lib/license.js";
@@ -30,7 +30,7 @@ export async function onRequestPost({ request, env }) {
   }
   // Re-read the session from Stripe (with line items) rather than trusting the payload alone.
   const session = await getSession(env, object.id);
-  if (!isPaidLunchbox(session, env)) return new Response("not a paid Lunchbox purchase");
+  if (!isPaidLunchbox(session, env)) return new Response("not a paid LunchboxWM purchase");
   const license = await licenseFor(session, env);
   await sendLicenses(env, { to: session.customer_details.email, licenses: [license], idempotencyKey: `lunchbox-license-${session.id}` });
   return new Response("sent");

@@ -4,7 +4,7 @@ import LunchboxCore
 
 /// Watches the keyboard with a CGEventTap on its own high-priority thread, so a
 /// busy main thread can never delay typing. Key presses are matched against the
-/// user's keymap; anything that isn't a Lunchbox shortcut passes straight through.
+/// user's keymap; anything that isn't a LunchboxWM shortcut passes straight through.
 ///
 /// It also sees mouse presses and drags, for one thing: dragging the edge of a centered window
 /// (alone, or in Focus) stretches both sides, the way macOS resizes with ⌥ held, since the
@@ -108,7 +108,7 @@ final class HotkeyTap {
             ready.signal()
             CFRunLoopRun()
         }
-        thread.name = "Lunchbox hotkeys"
+        thread.name = "LunchboxWM hotkeys"
         thread.qualityOfService = .userInteractive
         thread.start()
         ready.wait()

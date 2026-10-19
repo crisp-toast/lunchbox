@@ -11,7 +11,7 @@ const fixture = JSON.parse(readFileSync(new URL("./fixture.json", import.meta.ur
 const env = {
   STRIPE_SECRET_KEY: "sk_test_x", STRIPE_WEBHOOK_SECRET: "whsec_test", STRIPE_PRICE_ID: "price_lunchbox",
   LICENSE_PRIVATE_KEY: JSON.stringify(fixture.privateJwk), RESEND_API_KEY: "re_x",
-  EMAIL_FROM: "Lunchbox <support@example.com>", SUPPORT_EMAIL: "support@example.com", SITE_URL: "https://lunchbox.example",
+  EMAIL_FROM: "LunchboxWM <support@example.com>", SUPPORT_EMAIL: "support@example.com", SITE_URL: "https://lunchbox.example",
 };
 
 const session = (over = {}) => ({
@@ -54,7 +54,7 @@ beforeEach(() => {
 
 const get = (id) => licenseGet({ request: new Request(`https://lunchbox.example/api/license?session_id=${id}`), env });
 
-test("thank-you page gets the license for a paid Lunchbox purchase, the same on every refresh", async () => {
+test("thank-you page gets the license for a paid LunchboxWM purchase, the same on every refresh", async () => {
   const first = await (await get("cs_test_abcdefghij1")).json();
   const again = await (await get("cs_test_abcdefghij1")).json();
   assert.equal(first.status, "paid");
@@ -119,7 +119,7 @@ test("webhook refuses forged or stale calls and skips unpaid sessions", async ()
   assert.equal((await hook(event, await signed(JSON.stringify(event), "whsec_wrong"))).status, 400);
   assert.equal((await hook(event, await signed(JSON.stringify(event), env.STRIPE_WEBHOOK_SECRET, 1000))).status, 400);
   sessions.cs_test_abcdefghij1 = session({ payment_status: "unpaid" });
-  assert.equal(await (await hook(event)).text(), "not a paid Lunchbox purchase");
+  assert.equal(await (await hook(event)).text(), "not a paid LunchboxWM purchase");
   assert.equal(emails.length, 0);
 });
 
@@ -138,7 +138,7 @@ test("lost license: emails the buyer's licenses, and answers the same either way
 
 import { onRequestPost as checkoutPost } from "../../functions/api/checkout.js";
 
-test("checkout: one Lunchbox, tax on, terms required, requirements shown; double clicks reuse the session", async () => {
+test("checkout: one LunchboxWM, tax on, terms required, requirements shown; double clicks reuse the session", async () => {
   const calls = [];
   globalThis.fetch = async (input, init = {}) => {
     calls.push({ url: String(input), key: init.headers["Idempotency-Key"], body: new URLSearchParams(init.body) });

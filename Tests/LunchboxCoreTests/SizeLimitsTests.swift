@@ -293,7 +293,7 @@ import Testing
     }
 
     @Test func aShareShrunkBeforeTheMinimumWasKnownIsSkipped() {
-        // Shrunk to a fifth of the screen before Lunchbox learned the window won't go under 1000.
+        // Shrunk to a fifth of the screen before LunchboxWM learned the window won't go under 1000.
         var l = layout([[1], [2]])
         l.columns[0].weight = 0.2
         l.columns[1].weight = 0.8

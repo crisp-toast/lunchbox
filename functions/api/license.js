@@ -1,5 +1,5 @@
 // GET /api/license?session_id=cs_… : the thank-you page asks for the license of the
-// purchase it was sent back from. Works on refresh, and only for a paid Lunchbox purchase.
+// purchase it was sent back from. Works on refresh, and only for a paid LunchboxWM purchase.
 import { getSession, isPaidLunchbox } from "../../store/lib/stripe.js";
 import { licenseFor } from "../../store/lib/fulfill.js";
 

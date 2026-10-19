@@ -52,7 +52,7 @@ enum WindowReader {
 
 /// `snapshot:<path>` writes every window of every app, as `WindowTraits` with titles, to a
 /// JSON Lines file: how the labeled set the window classifier learns from is built, in the
-/// test VMs. It's never run on its own, and Lunchbox never writes titles anywhere else.
+/// test VMs. It's never run on its own, and LunchboxWM never writes titles anywhere else.
 enum WindowCensus {
     struct Record: Codable {
         var id: CGWindowID

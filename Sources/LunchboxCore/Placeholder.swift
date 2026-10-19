@@ -1,4 +1,4 @@
-/// A tile held for a window that's on its way: Lunchbox makes room the moment it
+/// A tile held for a window that's on its way: LunchboxWM makes room the moment it
 /// knows a window is coming (Summon, a Dock click), and the window takes the
 /// spot when it appears. In a layout a placeholder is just another window ID,
 /// so it gets exactly the slot and size the new window would.
@@ -30,7 +30,7 @@ extension Layout {
         return true
     }
 
-    /// The layout as it should be saved: placeholders only last while Lunchbox waits.
+    /// The layout as it should be saved: placeholders only last while LunchboxWM waits.
     public func withoutPlaceholders() -> Layout {
         var copy = self
         // The one that made the grid goes last, so the grid can go back to how it was.

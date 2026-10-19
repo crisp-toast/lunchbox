@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Issue or check Lunchbox licenses by hand (support, press, gifts), with the real signing key.
+// Issue or check LunchboxWM licenses by hand (support, press, gifts), with the real signing key.
 //   node scripts/license.mjs issue <email> [order]   order defaults to manual-<date>
 //   node scripts/license.mjs check <key>
 //   node scripts/license.mjs revoke <order>         prints the command that switches a license off

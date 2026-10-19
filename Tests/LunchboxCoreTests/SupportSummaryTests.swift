@@ -6,7 +6,7 @@ import Testing
 /// Copy Diagnostics: what goes to support says enough to help, and nothing private.
 @Suite struct SupportSummaryText {
     let summary = SupportSummary(
-        app: "Lunchbox 1.0 (52), release build",
+        app: "LunchboxWM 1.0 (52), release build",
         system: "macOS 15.7.1 (24G231), Mac16,10",
         license: "free trial, 5 days left",
         settings: ["Accessibility: allowed", "tiling: on"],
@@ -31,7 +31,7 @@ import Testing
 
     @Test func saysWhatSupportNeeds() {
         let text = summary.text
-        for part in ["Lunchbox 1.0 (52), release build", "macOS 15.7.1 (24G231), Mac16,10", "License: free trial, 5 days left",
+        for part in ["LunchboxWM 1.0 (52), release build", "macOS 15.7.1 (24G231), Mac16,10", "License: free trial, 5 days left",
                      "LG UltraFine (main): 2560×1440 at 0,0, @2x, usable 2560×1415 at 0,25",
                      "AOC28E850.HDR: 1920×1080 at -1920,0, @2x, usable 1920×1050 at -1920,30, not tiled",
                      "Workspaces: 2, current 1", "Workspace 1 (current)", "Workspace 2: no windows",
@@ -71,7 +71,7 @@ import Testing
     let home = "/Users/pat"
 
     @Test func fileAndFolderNamesInQuotesGo() {
-        let line = "couldn't write the learning log: The file “Secret plans.json” couldn’t be saved in the folder “Lunchbox”."
+        let line = "couldn't write the learning log: The file “Secret plans.json” couldn’t be saved in the folder “LunchboxWM”."
         #expect(SupportSummary.scrub(line, home: home) == "couldn't write the learning log: The file “…” couldn’t be saved in the folder “…”.")
     }
 

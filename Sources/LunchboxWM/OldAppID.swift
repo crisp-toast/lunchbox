@@ -1,10 +1,11 @@
 import AppKit
 
-/// Lunchbox was called Tessel (com.tyleryouens.tessel) until it went on sale. On a Mac that had
-/// Tessel, Lunchbox stops it whenever it starts, and the first time also takes over its settings
-/// (license, trial, shortcuts, Workspaces, layouts) and what it learned. Tessel's login item keeps
-/// coming back until Tessel.app is deleted (scripts/build.sh says so). Customers never had Tessel;
-/// this is for the Macs Lunchbox was built and tested on.
+/// LunchboxWM was called Tessel (com.tyleryouens.tessel) until it went on sale, and Lunchbox for
+/// a day after. On a Mac that had Tessel, LunchboxWM stops it whenever it starts, and the first
+/// time also takes over its settings (license, trial, shortcuts, Workspaces, layouts). What either
+/// earlier name learned moves into LunchboxWM's folder. Tessel's login item keeps coming back
+/// until Tessel.app is deleted (scripts/build.sh says so). Customers never had the earlier names;
+/// this is for the Macs LunchboxWM was built and tested on.
 ///
 /// Not carried over: Accessibility (macOS asks again for the new app; onboarding walks through
 /// it) and the Keychain's copy of the trial's start (reading Tessel's item would ask for the
@@ -18,6 +19,7 @@ enum OldAppID {
         // Every launch: Tessel's login item comes back at each login (macOS reloads it for as long
         // as Tessel.app exists, even in the Trash), and two window managers fight.
         let hadLoginItem = stopTessel()
+        moveSupportFolder()
         let defaults = UserDefaults.standard
         guard !defaults.bool(forKey: doneKey) else { return }
         defaults.set(true, forKey: doneKey)
@@ -26,20 +28,8 @@ enum OldAppID {
             for (key, value) in old where defaults.object(forKey: key) == nil { defaults.set(value, forKey: key) }
             log.notice("carried over \(old.count) settings from Tessel")
         }
-        // Lunchbox opens at login where Tessel did: set up like a first launch, once it's running.
+        // LunchboxWM opens at login where Tessel did: set up like a first launch, once it's running.
         if hadLoginItem { defaults.removeObject(forKey: "loginItemConfigured") }
-
-        // What it learned, its window classes and its state (Learning, classes.json…).
-        let support = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
-        let from = support.appendingPathComponent("Tessel"), to = support.appendingPathComponent("Lunchbox")
-        if FileManager.default.fileExists(atPath: from.path), !FileManager.default.fileExists(atPath: to.path) {
-            do {
-                try FileManager.default.moveItem(at: from, to: to)
-                log.notice("moved Tessel's Application Support folder to Lunchbox's")
-            } catch {
-                log.error("couldn't move Tessel's Application Support folder: \(error.localizedDescription, privacy: .public)")
-            }
-        }
     }
 
     /// Stops Tessel and unloads its login item, if either is there (Tessel puts parked windows
@@ -54,6 +44,23 @@ enum OldAppID {
         for _ in 0..<50 where running.contains(where: { !$0.isTerminated }) { Thread.sleep(forTimeInterval: 0.1) }
         if loaded || !running.isEmpty { log.notice("stopped Tessel") }
         return loaded
+    }
+
+    /// What it learned, its window classes and its state (Learning, classes.json…), from the folder
+    /// of whichever earlier name has one.
+    private static func moveSupportFolder() {
+        let files = FileManager.default
+        let support = files.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+        let to = support.appendingPathComponent("LunchboxWM")
+        guard !files.fileExists(atPath: to.path),
+              let from = ["Lunchbox", "Tessel"].map({ support.appendingPathComponent($0) }).first(where: { files.fileExists(atPath: $0.path) })
+        else { return }
+        do {
+            try files.moveItem(at: from, to: to)
+            log.notice("moved \(from.lastPathComponent, privacy: .public)'s Application Support folder to LunchboxWM's")
+        } catch {
+            log.error("couldn't move \(from.lastPathComponent, privacy: .public)'s Application Support folder: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private static func launchctl(_ arguments: String...) -> Bool {

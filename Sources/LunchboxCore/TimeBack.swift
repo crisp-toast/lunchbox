@@ -1,6 +1,6 @@
 import Foundation
 
-/// Something Lunchbox did that you'd otherwise do by hand on a plain Mac (docs/worth-paying-for.md).
+/// Something LunchboxWM did that you'd otherwise do by hand on a plain Mac (docs/worth-paying-for.md).
 /// Each counts at a conservative number of seconds, kept here and nowhere else.
 public enum TimeBackAction: String, Codable, CaseIterable, Sendable {
     /// A new window tiled into place.
@@ -9,12 +9,12 @@ public enum TimeBackAction: String, Codable, CaseIterable, Sendable {
     case arranged
     /// A new window sent to the Workspace its app lives in.
     case sent
-    /// A window put back where it was: its display came back (after waking, say), or Lunchbox
+    /// A window put back where it was: its display came back (after waking, say), or LunchboxWM
     /// started again after a restart.
     case restored
     /// A jump to a window from Summon.
     case summoned
-    /// You corrected what Lunchbox did, or undid it.
+    /// You corrected what LunchboxWM did, or undid it.
     case corrected
     /// A display came back. Counted for the words on the trial-end screen only: the windows
     /// that went back to it count as `restored`.
@@ -42,7 +42,7 @@ public enum TimeBackAction: String, Codable, CaseIterable, Sendable {
     }
 }
 
-/// The time Lunchbox gives back: how many times it did each `TimeBackAction` on each day. It
+/// The time LunchboxWM gives back: how many times it did each `TimeBackAction` on each day. It
 /// counts the drags and moves you didn't make, nothing more ("time back", never
 /// "productivity"), and every place that shows the number says how it was counted.
 ///
@@ -52,7 +52,7 @@ public struct TimeBack: Codable, Equatable, Sendable {
     public static let keptDays = 90
 
     /// Counts by day ("2026-10-17", in your time zone), then by action. An action this
-    /// version doesn't know (written by a newer Lunchbox) is kept and left out of tallies.
+    /// version doesn't know (written by a newer LunchboxWM) is kept and left out of tallies.
     public private(set) var days: [String: [String: Int]] = [:]
 
     public init() {}
@@ -65,7 +65,7 @@ public struct TimeBack: Codable, Equatable, Sendable {
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
-    /// Lunchbox did `action` (`times` times at once) at `date`.
+    /// LunchboxWM did `action` (`times` times at once) at `date`.
     public mutating func count(_ action: TimeBackAction, times: Int = 1, at date: Date, in calendar: Calendar = .current) {
         guard times > 0 else { return }
         days[Self.day(of: date, in: calendar), default: [:]][action.rawValue, default: 0] += times
@@ -117,13 +117,13 @@ public struct TimeBack: Codable, Equatable, Sendable {
 
         public var isEmpty: Bool { counts.values.allSatisfy { $0 == 0 } }
 
-        /// Seconds back, after corrections (below zero if Lunchbox cost you time).
+        /// Seconds back, after corrections (below zero if LunchboxWM cost you time).
         public var seconds: Int { counts.reduce(0) { $0 + $1.key.seconds * $1.value } }
 
         /// Whole minutes back, rounded down, never below zero.
         public var minutes: Int { max(0, seconds / 60) }
 
-        /// Windows Lunchbox put in place for you: tiled, in their usual spot, sent to their
+        /// Windows LunchboxWM put in place for you: tiled, in their usual spot, sent to their
         /// Workspace, or put back.
         public var windowsPlaced: Int { counts.reduce(0) { $0 + ($1.key.placesAWindow ? $1.value : 0) } }
     }
@@ -169,7 +169,7 @@ public struct TimeBackFile {
     }
 }
 
-/// The words wherever the time back shows: the menu, What Lunchbox Learned and the trial-end
+/// The words wherever the time back shows: the menu, What LunchboxWM Learned and the trial-end
 /// screen. Never a notification or a popup (Etiquette).
 public enum TimeBackWords {
     /// "23 minutes back", "under a minute back", or "no time back yet".
@@ -224,7 +224,7 @@ public enum TimeBackWords {
         /// Above the heading, when the heading is about the week: why the window opened.
         public var eyebrow: String?
         public var heading: String
-        /// What Lunchbox did this week and what it learned, when it did anything.
+        /// What LunchboxWM did this week and what it learned, when it did anything.
         public var summary: String?
         public var keep: String
         public var stays: String
@@ -247,9 +247,9 @@ public enum TimeBackWords {
         let gaveBack = week.minutes >= 1
         return TrialEnd(
             eyebrow: gaveBack ? ended : nil,
-            heading: gaveBack ? "This week, Lunchbox gave you back \(count(week.minutes, "minute"))." : ended,
+            heading: gaveBack ? "This week, LunchboxWM gave you back \(count(week.minutes, "minute"))." : ended,
             summary: sentences.isEmpty ? nil : sentences.joined(separator: " "),
-            keep: "Keep Lunchbox: $9.99, once.",
+            keep: "Keep LunchboxWM: $9.99, once.",
             stays: lessons > 0 ? "What it learned stays on your Mac either way." : "Your windows stay right where they are either way."
         )
     }

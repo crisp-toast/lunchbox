@@ -100,7 +100,7 @@ public enum BehaviorFeatures {
 }
 
 /// Apple's on-device word vectors, averaged over a title's words: what a title means, beyond
-/// the words Lunchbox knows. Loads in about a millisecond, about 0.02 ms a word; nil when the
+/// the words LunchboxWM knows. Loads in about a millisecond, about 0.02 ms a word; nil when the
 /// Mac has none for English.
 public final class TitleMeaning: @unchecked Sendable {
     public static let shared = TitleMeaning()
@@ -212,7 +212,7 @@ public enum BehaviorDecision {
     }
 
     /// The safety floor around what the model says:
-    /// - the rules decide every window Lunchbox never asks the model about: an app's that always
+    /// - the rules decide every window LunchboxWM never asks the model about: an app's that always
     ///   floats, and (`hardRule`) dialogs, About boxes and the like, and windows that aren't
     ///   window-like;
     /// - the model only counts when it's at least `threshold` sure.

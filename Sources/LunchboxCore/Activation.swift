@@ -1,4 +1,4 @@
-/// What Lunchbox does when one of an app's windows in another Workspace takes focus.
+/// What LunchboxWM does when one of an app's windows in another Workspace takes focus.
 public enum ForeignFocus: Equatable, Sendable {
     /// Summon opened something in the app: its window joins this Workspace.
     case bringHere
@@ -12,7 +12,7 @@ public enum ForeignFocus: Equatable, Sendable {
     /// macOS handed focus over by itself (right after a close or a switch): stay put.
     case stay
 
-    /// - placedForYou: Lunchbox just opened this window in its app's Workspace while you stayed
+    /// - placedForYou: LunchboxWM just opened this window in its app's Workspace while you stayed
     ///   here. Its app reaching for focus isn't you asking to go there.
     public static func decide(summoned: Bool, fromDockMenu: Bool, fromDockClick: Bool,
                               windowHere: WindowID?, settling: Bool, placedForYou: Bool = false) -> ForeignFocus {

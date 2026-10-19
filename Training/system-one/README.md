@@ -1,8 +1,8 @@
-# Benchmarking open System One models on Lunchbox's windows
+# Benchmarking open System One models on LunchboxWM's windows
 
 `bench.py` asks an open System One decision model (Laya-multilingual Core ML on the Neural Engine,
 or Julia 1 on CPU) what kind of window each labeled window is, zero-shot, and compares it with
-Lunchbox's rules. `hybrid.py` checks whether those answers help Lunchbox's own small classifier,
+LunchboxWM's rules. `hybrid.py` checks whether those answers help LunchboxWM's own small classifier,
 leave-one-app-out. `bench2.py` and `eval2.py` try other question designs and label-free
 calibration. `texttasks.py` tries the models on two text jobs instead (finding a window by
 describing it, and plain-English commands), and `embedprobe.swift` runs the same jobs with the

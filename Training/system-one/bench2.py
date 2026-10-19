@@ -18,7 +18,7 @@ Questions (asked about the state; all in one request)
                 cascade: asking something > video or call > temporary > main window or not.
   coarse        two-way choice, tile or float, then a four-way choice among the floating kinds.
 
-Label-free corrections (computed from unlabeled windows, so a shipped Lunchbox could do the same
+Label-free corrections (computed from unlabeled windows, so a shipped LunchboxWM could do the same
 with the windows it sees on a Mac)
   raw           as the model says.
   batch         batch calibration: divide each option's probability by its mean over all windows.

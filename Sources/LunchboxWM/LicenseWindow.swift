@@ -13,7 +13,7 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
     private let field = NSTextField()
     private let message = NSTextField(wrappingLabelWithString: "")
     private let activate = NSButton(title: "Activate", target: nil, action: nil)
-    private let buy = NSButton(title: "Buy Lunchbox – $9.99…", target: nil, action: nil)
+    private let buy = NSButton(title: "Buy LunchboxWM – $9.99…", target: nil, action: nil)
     private let lost = NSButton(title: "Lost your license?", target: nil, action: nil)
 
     init(licensing: Licensing) {
@@ -22,7 +22,7 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
     }
 
     /// Shows the window. `error` explains why it opened (a link with a bad key);
-    /// `activated` thanks the buyer after a link activated Lunchbox.
+    /// `activated` thanks the buyer after a link activated LunchboxWM.
     func show(error: String? = nil, activated: License? = nil) {
         let window = configure(error: error, activated: activated)
         NSApp.activate(ignoringOtherApps: true)
@@ -47,10 +47,10 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
         let ended = (licensing.trial == .ended || trialEnded) && licensing.license == nil
         eyebrow.isHidden = true
         if let license = licensing.license {
-            heading.stringValue = "Lunchbox is licensed"
+            heading.attributedStringValue = Brand.wordmark("LunchboxWM is licensed", font: heading.font ?? .systemFont(ofSize: 19, weight: .semibold))
             setDetail("Licensed to \(license.email). Paste a different key below to replace it.")
         } else if ended {
-            // Your week, in numbers Lunchbox counted on this Mac (docs/worth-paying-for.md), and
+            // Your week, in numbers LunchboxWM counted on this Mac (docs/worth-paying-for.md), and
             // what it learned, which stays either way.
             let words = TimeBackWords.trialEnded(week: trialWeek(), lessons: Learning.shared.lessons().count)
             eyebrow.stringValue = words.eyebrow ?? ""
@@ -63,7 +63,7 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
             if case .active(let left) = licensing.trial { day = " Your free trial has \(left) day\(left == 1 ? "" : "s") left." } else { day = "" }
             setDetail("Paste the license key from your email, or click the activation link in it." + day)
         }
-        message.stringValue = error ?? activated.map { "Activated. Thanks for buying Lunchbox, \($0.email)!" } ?? ""
+        message.stringValue = error ?? activated.map { "Activated. Thanks for buying LunchboxWM, \($0.email)!" } ?? ""
         message.textColor = activated == nil ? .systemRed : .systemGreen
         message.isHidden = message.stringValue.isEmpty
         buy.isHidden = licensing.license != nil
@@ -108,7 +108,7 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
     private func makeWindow() -> NSWindow {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 300),
                               styleMask: [.titled, .closable], backing: .buffered, defer: false)
-        window.title = "Lunchbox License"
+        window.title = "LunchboxWM License"
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.appearance = NSAppearance(named: .aqua)

@@ -249,7 +249,7 @@ final class NumberDot: NSView {
     }
 }
 
-/// One line saying what Lunchbox just did on its own, and which key undoes it: a small frosted
+/// One line saying what LunchboxWM just did on its own, and which key undoes it: a small frosted
 /// pill near the bottom of the screen for a couple of seconds. Click-through, never focused,
 /// one at a time (a newer line replaces it), and gone on its own.
 final class QuietLineView {

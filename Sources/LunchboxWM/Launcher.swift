@@ -9,7 +9,7 @@ import LunchboxCore
 /// in their titles, from a snapshot taken as the panel opens, so typing never
 /// waits on another app. Spotlight's index is searched for files and folders as
 /// you type, listed after the windows. Apps you open often rise. macOS hides the
-/// files in Desktop, Documents and Downloads until you let Lunchbox in, so until
+/// files in Desktop, Documents and Downloads until you let LunchboxWM in, so until
 /// you've answered, file searches end with a row that asks (FolderAccess).
 final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     struct App {
@@ -30,7 +30,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         case file(URL)
         /// Nothing matched: search the web for the text, or open it if it's an address.
         case web(String)
-        /// Let Lunchbox into Desktop, Documents and Downloads, so their files show: Return
+        /// Let LunchboxWM into Desktop, Documents and Downloads, so their files show: Return
         /// brings up macOS's prompts, ⇧↩ hides the row for good.
         case folderAccess
 
@@ -82,11 +82,11 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     private var fileQuery: NSMetadataQuery?
     private var fileSearch: DispatchWorkItem?
     /// The files behind `fileRows`: Spotlight's answer, and a fresh process's answer for the
-    /// folders macOS let Lunchbox into since it started (`searchAfresh`).
+    /// folders macOS let LunchboxWM into since it started (`searchAfresh`).
     private var spotlightPaths: [String] = []
     private var freshPaths: [String] = []
     private var freshSearch: Process?
-    /// Folders Lunchbox could read once you chose the folder offer, this time Lunchbox is running.
+    /// Folders LunchboxWM could read once you chose the folder offer, this time LunchboxWM is running.
     private var newlyAllowedFolders: [String] = []
     private var icons: [String: NSImage] = [:]
     /// Checked as the panel opens, while the folder offer is unanswered.
@@ -219,7 +219,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
 
     // MARK: Windows
 
-    /// Takes the open windows with the titles Lunchbox last read, so the first keystroke already
+    /// Takes the open windows with the titles LunchboxWM last read, so the first keystroke already
     /// finds them, then reads every title again (each app on its own queue) and searches anew.
     /// Typing itself never asks another app for anything. Fresh titles can put a window above
     /// the top row: like new files, a row you moved to stays highlighted; otherwise the top row is.
@@ -292,7 +292,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         var newWindow = false
         if reachable, let running {
             // Only apps with a real New Window command get the ⇧↩ line; the
-            // first time, Lunchbox looks at the app's menus and redraws.
+            // first time, LunchboxWM looks at the app's menus and redraws.
             newWindow = tiler.supportsNewWindow(pid: running.processIdentifier, bundleID: app.bundleID) { [weak self] in
                 self?.refreshKeepingSelection()
             } ?? false
@@ -350,9 +350,9 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     }
 
     /// Spotlight keeps answering a running app as it did when the app first asked, so files in a
-    /// folder macOS let Lunchbox into since it started stay hidden from `NSMetadataQuery` until
-    /// Lunchbox starts again. Until then, a new `mdfind` searches those folders, and Spotlight
-    /// answers it afresh: it's Lunchbox's own child, so macOS gives it Lunchbox's permissions.
+    /// folder macOS let LunchboxWM into since it started stay hidden from `NSMetadataQuery` until
+    /// LunchboxWM starts again. Until then, a new `mdfind` searches those folders, and Spotlight
+    /// answers it afresh: it's LunchboxWM's own child, so macOS gives it LunchboxWM's permissions.
     private func searchAfresh(_ terms: [String]) {
         let mdfind = Process()
         mdfind.executableURL = URL(fileURLWithPath: "/usr/bin/mdfind")
@@ -425,7 +425,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         set { UserDefaults.standard.set(newValue?.rawValue, forKey: "summonFolderAccess") }
     }
 
-    /// Whether Lunchbox can read every folder (Full Disk Access): only then does macOS's own list of
+    /// Whether LunchboxWM can read every folder (Full Disk Access): only then does macOS's own list of
     /// permissions open for reading. Trying asks nothing.
     private static func hasFullDiskAccess() -> Bool {
         let fd = Darwin.open("/Library/Application Support/com.apple.TCC/TCC.db", O_RDONLY)
@@ -434,7 +434,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         return true
     }
 
-    /// Reads each folder once, which is what makes macOS ask whether Lunchbox may see its files,
+    /// Reads each folder once, which is what makes macOS ask whether LunchboxWM may see its files,
     /// then opens Summon on the same search again. Only choosing the row ever does this.
     private func askForFolderAccess() {
         let query = field.stringValue
@@ -520,7 +520,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
 
     /// Opens a search or address in the default browser's own window: a new tab in
     /// its window in this Workspace, or a new window here when it has none, so it
-    /// never pops up somewhere Lunchbox then has to tidy (like Little Arc).
+    /// never pops up somewhere LunchboxWM then has to tidy (like Little Arc).
     private func openWeb(_ url: URL) {
         guard let bundleID = Self.defaultBrowser.flatMap({ Bundle(path: $0.path)?.bundleIdentifier }),
               Browsers.canScript(bundleID),
@@ -599,7 +599,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)),
              #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
             // ⇧↩ opens a new window. Read the modifiers from the keyboard itself:
-            // the panel doesn't activate Lunchbox, so NSApp.currentEvent can be stale.
+            // the panel doesn't activate LunchboxWM, so NSApp.currentEvent can be stale.
             let flags = NSEvent.modifierFlags.union(NSApp.currentEvent?.modifierFlags ?? [])
             openSelection(newWindow: flags.contains(.shift))
         case #selector(NSResponder.cancelOperation(_:)): hide()
@@ -644,7 +644,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             return ("Search the web for “\(text)”", "\(Self.searchEngine.name)\(inBrowser)", browser?.path ?? "/Applications/Safari.app")
         case .folderAccess:
             return ("Find files on your Desktop and in Documents too",
-                    "macOS will ask you to let Lunchbox into Desktop, Documents and Downloads", Self.desktopFolderIcon)
+                    "macOS will ask you to let LunchboxWM into Desktop, Documents and Downloads", Self.desktopFolderIcon)
         }
     }
 
@@ -739,7 +739,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     }
 }
 
-/// A borderless panel that can take typing without activating Lunchbox, so the
+/// A borderless panel that can take typing without activating LunchboxWM, so the
 /// app you were in stays in front (the way Spotlight behaves).
 final class LauncherPanel: NSPanel {
     override var canBecomeKey: Bool { true }

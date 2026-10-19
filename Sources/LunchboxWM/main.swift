@@ -60,7 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.onCopyDiagnostics = { [weak self] in self?.copyDiagnostics() }
         licensing.onChange = { [weak self] in self?.licenseChanged() }
         licensing.onRevoked = { [weak self] license in
-            self?.licenseWindow.show(error: "The license for \(license.email) was refunded, so it no longer unlocks Lunchbox. If that's a mistake, write to support@sentientdonut.com.")
+            self?.licenseWindow.show(error: "The license for \(license.email) was refunded, so it no longer unlocks LunchboxWM. If that's a mistake, write to support@sentientdonut.com.")
             self?.checkTrial()
         }
         shortcuts.onChange = { KeymapStore.save($0) }
@@ -121,7 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.refresh()
         checkTrial()
         licensing.checkRevocationIfDue()
-        // Look again now and then, and after sleep: a trial can end while Lunchbox runs, and a
+        // Look again now and then, and after sleep: a trial can end while LunchboxWM runs, and a
         // licensed copy checks for refunds about once a week.
         trialTimer = Timer.scheduledTimer(withTimeInterval: 1800, repeats: true) { [weak self] _ in
             self?.checkTrial()
@@ -165,7 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: License
 
-    /// The trial ran out: tiling pauses (windows stay where they are) and Lunchbox says why, once.
+    /// The trial ran out: tiling pauses (windows stay where they are) and LunchboxWM says why, once.
     private func checkTrial() {
         guard !licensing.canTile, tiler.enabled else { return }
         log.notice("trial ended; pausing tiling")
@@ -199,10 +199,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The distributed notification scripts post commands to (README, Scripting).
     static let commandChannel = Notification.Name("com.sentientdonut.lunchbox.command")
 
-    /// Lets scripts drive Lunchbox without the keyboard, e.g.
+    /// Lets scripts drive LunchboxWM without the keyboard, e.g.
     /// `osascript -l JavaScript -e '…postNotificationName("<commandChannel>", "pause")…'`.
     /// Any process on the Mac can post these, so the builds customers get take only what an agent
-    /// needs there: pause, resume, retile and balance. Everything else (pressing keys with Lunchbox's
+    /// needs there: pause, resume, retile and balance. Everything else (pressing keys with LunchboxWM's
     /// Accessibility permission, dump, license:, find:, leave-app:…) exists only in development
     /// builds (see `Build`), and isn't in a release binary at all.
     private func listenForCommands() {
@@ -235,7 +235,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #if DEBUG || LUNCHBOX_DEV
     /// The commands for tests, demos and agents on test Macs: focus-/move-left|right|up|down, grow,
     /// shrink, space-1…9, send-1…9, workspaces-3…9, dump (writes the state to
-    /// ~/Library/Application Support/Lunchbox/state.json), press:, license:, timeback-add:… (README, Scripting).
+    /// ~/Library/Application Support/LunchboxWM/state.json), press:, license:, timeback-add:… (README, Scripting).
     private func runDevelopment(_ command: String) {
         if command.hasPrefix("license:") {
             // license:<key> activates; license:window shows the window; license:remove forgets it.
@@ -256,7 +256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         // leave-app:<bundle id> / manage-app:<bundle id>: an agent testing that app on the
-        // spoof display asks Lunchbox to stop tiling its windows, then to resume.
+        // spoof display asks LunchboxWM to stop tiling its windows, then to resume.
         if command.hasPrefix("leave-app:") || command.hasPrefix("manage-app:") {
             let leave = command.hasPrefix("leave-app:")
             tiler.setLeftAlone(String(command.drop(while: { $0 != ":" }).dropFirst()), leave)
@@ -291,8 +291,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             tiler.expectWindow(from: String(command.dropFirst(7)), another: true)
             return
         }
-        // classes shows How Lunchbox Sees Your Windows; classify writes the same, without titles, to
-        // ~/Library/Application Support/Lunchbox/classes.json, for agents checking the classifier.
+        // classes shows How LunchboxWM Sees Your Windows; classify writes the same, without titles, to
+        // ~/Library/Application Support/LunchboxWM/classes.json, for agents checking the classifier.
         if command == "classes" { windowClasses.show(); return }
         if command == "classify" { writeClasses(); return }
         // snapshot:<path> appends every window of every app (with titles) to a JSON Lines file,
@@ -306,7 +306,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             tiler.countLivedForTesting(Double(command.dropFirst(15)) ?? 0)
             return
         }
-        // timeback-add:<action>:<count>[:<days ago>] counts time back as if Lunchbox had done it
+        // timeback-add:<action>:<count>[:<days ago>] counts time back as if LunchboxWM had done it
         // (tiled, arranged, sent, restored, summoned, corrected, displayReturned), to try the
         // menu line and the trial-end screen without a week of windows.
         if command.hasPrefix("timeback-add:") {
@@ -413,7 +413,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             let n = Double(max(1, survey.rows.count))
             let report: [String: Any] = ["windows": rows, "readMsPerWindow": survey.readMs / n, "decideMsPerWindow": survey.decideMs / n]
-            let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Lunchbox")
+            let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/LunchboxWM")
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: dir.appendingPathComponent("classes.json"))
             }
@@ -421,7 +421,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func dumpState() {
-        let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Lunchbox")
+        let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/LunchboxWM")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         var state = tiler.stateDescription()
         state["spaceKeys"] = tap.spaceKeys
@@ -445,9 +445,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-// Lunchbox was Tessel: on a Mac that had it, take over from it, once.
+// LunchboxWM was Tessel: on a Mac that had it, take over from it, once.
 OldAppID.carryOver()
-// One Lunchbox at a time; and when it's set to open at login, launchd runs it, so it comes
+// One LunchboxWM at a time; and when it's set to open at login, launchd runs it, so it comes
 // back by itself after a crash.
 if LoginItem.anotherCopyIsRunning() { exit(0) }
 if LoginItem.handOff() { exit(0) }

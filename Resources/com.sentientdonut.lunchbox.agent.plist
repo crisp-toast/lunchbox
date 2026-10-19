@@ -7,7 +7,7 @@
 	<key>Label</key>
 	<string>com.sentientdonut.lunchbox.agent</string>
 	<key>BundleProgram</key>
-	<string>Contents/MacOS/Lunchbox</string>
+	<string>Contents/MacOS/LunchboxWM</string>
 	<key>RunAtLoad</key>
 	<true/>
 	<key>KeepAlive</key>
