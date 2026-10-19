@@ -19,10 +19,9 @@ public struct SearchableWindow: Equatable, Sendable {
 
 /// Finds open windows by the words typed into Summon ("invoice", "lunch", "Tiler").
 ///
-/// Plain word-prefix matching, the way `words_match` in Training/system-one/texttasks.py
-/// does it: a query word finds a window when it starts a word in the window's title or its
-/// app's name. On the probe's title words it picked the right window 15 times in 15, better
-/// than the System One models, with no model and no wait. Each window's words are split once,
+/// Plain word-prefix matching: a query word finds a window when it starts a word in the window's
+/// title or its app's name. On a probe of real titles it picked the right window 15 times in 15,
+/// with no model and no wait. Each window's words are split once,
 /// when the list is made, so typing only compares short strings.
 public struct WindowSearch: Sendable {
     private struct Entry: Sendable {
@@ -45,10 +44,12 @@ public struct WindowSearch: Sendable {
 
     /// The windows the query finds, best first.
     ///
-    /// A window is found when one of the query's words starts a word in its title or app
-    /// name. Windows that match more of the words come first, and once some window matches
-    /// more words than another, the other is left out: "lunch thursday" lists the lunch email,
-    /// not every window with a word starting "t". A word found in the title counts for more
+    /// A window is found when at least half of the query's words each start a word in its title
+    /// or app name: one typo is forgiven ("lunch thursdy" still finds the lunch email), but one
+    /// common word out of a longer search isn't a match ("app store connect website" doesn't list
+    /// a window of Study App). Windows that match more of the words come first, and once some
+    /// window matches more words than another, the other is left out: "lunch thursday" lists the
+    /// lunch email, not every window with a word starting "t". A word found in the title counts for more
     /// than one found only in the app's name. Ties keep the order the windows were given in.
     ///
     /// `listedApps`: bundle IDs Summon already shows as app rows. An app's only window,
@@ -66,7 +67,7 @@ public struct WindowSearch: Sendable {
                 if title { inTitle += 1 }
                 if entry.titleWords.contains(q) || entry.appWords.contains(q) { whole += 1 }
             }
-            guard words > 0 else { continue }
+            guard words > 0, words * 2 >= wanted.count else { continue }
             if inTitle == 0, listedApps.contains(entry.window.appID), windowsPerApp[entry.window.appID] == 1 { continue }
             found.append((entry.window, words, words * 100 + inTitle * 10 + whole))
         }

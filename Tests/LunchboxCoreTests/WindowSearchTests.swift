@@ -2,8 +2,7 @@ import Testing
 @testable import LunchboxCore
 
 @Suite struct WindowSearching {
-    /// The desktop from Training/system-one/texttasks.py, the probe that compared word matching
-    /// with Laya and Julia 1.
+    /// A probe desktop: 15 windows a person might have open, each found by its own words.
     static let desktop: [(String, String)] = [
         ("Slack", "#design-reviews"), ("Slack", "Huddle with Maya"), ("Mail", "Re: lunch Thursday? — Inbox"),
         ("Preview", "INV-2026-0042.pdf"), ("Google Chrome", "Pull request #142 · crisp-toast/tessel"),
@@ -60,6 +59,17 @@ import Testing
         // A word nothing has doesn't hide what the other words find.
         #expect(titles("lunch thursdy") == ["Re: lunch Thursday? — Inbox"])
         #expect(titles("slack design") == ["#design-reviews"])
+    }
+
+    @Test func oneCommonWordOutOfALongSearchIsNoMatch() {
+        // The search that listed Study App first: only "app" matched, one word of four.
+        let search = WindowSearch(Self.windows([("Study App", "Study App"), ("Arc", "App Store Connect")]))
+        #expect(search.find("app store connect website").map(\.title) == ["App Store Connect"])
+        let none = WindowSearch(Self.windows([("Study App", "Study App")]))
+        #expect(none.find("app store connect website").isEmpty)
+        // Half the words is enough: a typo, or a word the title doesn't have.
+        #expect(none.find("study ap").map(\.title) == ["Study App"])
+        #expect(none.find("study notes").map(\.title) == ["Study App"])
     }
 
     @Test func titleWordsCountForMoreThanTheAppsName() {
