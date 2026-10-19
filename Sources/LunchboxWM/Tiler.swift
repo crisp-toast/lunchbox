@@ -1044,7 +1044,6 @@ final class Tiler {
     /// A window was just made. Put it where it's going before it shows (`prePlace`), then
     /// lay it out the moment it's on screen instead of on the next routine scan.
     private func windowCreated(_ element: AXUIElement, app: AppHandle) {
-        noteCreated(by: app.pid)
         app.queue.async { [weak self] in
             let info = Self.readWindow(element, app: app)
             DispatchQueue.main.async {
@@ -1053,9 +1052,13 @@ final class Tiler {
                     self.scheduleScan(app, after: [0.03, 0.3])
                     return
                 }
-                // In a burst, windows wait where their app put them and go to their tiles together
-                // (a tile planned now would be one of a layout about to change again).
-                if !self.isBursting(app.pid) { self.prePlace(info, app: app) }
+                // Only windows that will tile make a burst: the helper windows, pop-ups and
+                // tooltips apps make alongside a real window (Claude, Arc) don't hold it back.
+                if info.tileable { self.noteCreated(by: app.pid) }
+                // In a burst, windows go to their tiles together (a tile planned now would be one of
+                // a layout about to change again), and wait out of sight until then rather than
+                // where their app put them.
+                self.prePlace(info, app: app, park: self.isBursting(app.pid))
                 self.scheduleScan(app, after: [0, 0.4])
                 // Some apps make their window seconds before they show it, while they start (Claude
                 // and other Electron apps): one that will tile is watched for longer, so it still
@@ -1083,7 +1086,7 @@ final class Tiler {
     /// Moves a window that was just made straight into the tile it's about to get. Apps often
     /// make a window a moment before showing it, so it shows up where it belongs instead of
     /// where its app put it; the rest of the layout makes room once it's on screen.
-    private func prePlace(_ info: WindowInfo, app: AppHandle) {
+    private func prePlace(_ info: WindowInfo, app: AppHandle, park: Bool = false) {
         guard initialScanDone, windows[info.id] == nil, info.tileable, info.tabs < 2,
               savedPlacement[info.id] == nil, fullScreenSpots[info.id] == nil,
               !leftAloneApps.contains(app.bundleID ?? ""), !Self.floatingApps.contains(app.bundleID ?? ""),
@@ -1094,7 +1097,13 @@ final class Tiler {
               // A tab being dragged out into a window of its own follows the mouse.
               NSEvent.pressedMouseButtons & 1 == 0 else { return }
         if !info.resizable { limits[info.id] = .fixed(info.frame.size) } // it goes in at its own size
-        guard let target = plannedFrame(for: info, app: app), !info.frame.isClose(to: target, tolerance: 1) else { return }
+        let planned = park ? CGRect(origin: Display.hidingSpot(in: displays), size: info.frame.size) : plannedFrame(for: info, app: app)
+        guard let target = planned else {
+            log.notice("window \(info.id) (\(app.bundleID ?? "?", privacy: .public)) arrives where its app put it")
+            return
+        }
+        guard !info.frame.isClose(to: target, tolerance: 1) else { return }
+        log.notice("window \(info.id) (\(app.bundleID ?? "?", privacy: .public)) \(park ? "waits out of sight for the rest of its burst" : "goes straight to its tile", privacy: .public)")
         let element = info.element, resizable = info.resizable
         WindowHandle.queue(for: info.id).async { [weak self] in
             guard let actual = element.place(in: target), resizable,
