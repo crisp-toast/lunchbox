@@ -54,7 +54,8 @@ way round; at the top of a stack ↓ makes it taller, at the bottom ↑. Only th
 its neighbor moves. A centered window (alone, or in Focus) grows with → and ↑ and shrinks with ←
 and ↓, around its center. + and − grow or shrink the window all round, like ⌘⇧+ and ⌘⇧−. A green outline
 around the window and a line at the bottom of the screen say it's on; it ends with Return,
-Esc, any other key, or after five seconds without one.
+Esc, any other key (⌘ and an arrow ends it and moves focus, as usual), or after five seconds
+without one.
 
 Workspaces are ⌘ and their number, and ⌘⇧ and the number takes the window along, like ⌘⇧ and an
 arrow moves it. Right ⌘ and a number still reaches the app in front (a browser's tabs, say), right
