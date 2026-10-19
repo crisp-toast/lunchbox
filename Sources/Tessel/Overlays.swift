@@ -27,7 +27,9 @@ final class FocusRing {
 
     var isShowing: Bool { shownOn != nil }
 
-    func flash(_ frame: CGRect, on displays: [Display]) {
+    /// - color: the accent color, or green while resize mode works on the window.
+    /// - hold: stay until `hide()` instead of fading after a moment.
+    func flash(_ frame: CGRect, on displays: [Display], color: NSColor = .controlAccentColor, hold: Bool = false) {
         guard let display = displays.first(where: { $0.frame.contains(frame.center) }) ?? displays.first,
               let screen = NSScreen.screens.first(where: {
                   ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == display.id
@@ -58,7 +60,7 @@ final class FocusRing {
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        ring.borderColor = NSColor.controlAccentColor.cgColor
+        ring.borderColor = color.cgColor
         ring.opacity = 1
         CATransaction.commit()
 
@@ -67,6 +69,7 @@ final class FocusRing {
         shownOn = display.id
 
         fade?.cancel()
+        guard !hold else { return }
         let work = DispatchWorkItem { [weak self] in
             CATransaction.begin()
             CATransaction.setAnimationDuration(0.25)
@@ -78,6 +81,19 @@ final class FocusRing {
         }
         fade = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.55, execute: work)
+    }
+
+    /// Fades the ring out now.
+    func hide() {
+        fade?.cancel()
+        guard let id = shownOn, let (panel, ring) = panels[id] else { return }
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(0.25)
+        CATransaction.setCompletionBlock { [weak self] in
+            if ring.opacity == 0 { panel.orderOut(nil); self?.shownOn = nil }
+        }
+        ring.opacity = 0
+        CATransaction.commit()
     }
 
     private func overlay(for id: CGDirectDisplayID, screen: NSScreen) -> (panel: NSPanel, ring: CALayer) {

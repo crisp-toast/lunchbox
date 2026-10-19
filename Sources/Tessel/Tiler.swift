@@ -2341,10 +2341,36 @@ final class Tiler {
 
     /// Resize mode on (⌘⇧R) or off: the line says what the arrows do while it's on.
     private func resizeMode(_ on: Bool) {
-        guard on else { quietLine.dismiss(); return }
+        guard on else { endResizeMode(); return }
         guard let id = focusedID, place(of: id) != nil else { quietLine.show("Resize: focus a tiled window first", on: focusedDisplay); return }
+        resizingWindow = id
         quietLine.show(Self.resizeHelp, on: focusedDisplay, seconds: HotkeyTap.resizeModeSeconds)
+        keepResizeModeOn()
         showRing(on: id)
+    }
+
+    /// The window resize mode is working on: outlined in green while the mode is on.
+    private var resizingWindow: CGWindowID?
+    private var resizeModeTimeout: DispatchWorkItem?
+
+    /// Resize mode ends by itself after a few seconds without a key (the event tap stops taking the
+    /// arrows then too): the outline goes with it.
+    private func keepResizeModeOn() {
+        // The arrows work on the focused window: if you clicked another, the outline goes to it.
+        if resizingWindow != nil, let id = focusedID, id != resizingWindow { resizingWindow = id }
+        resizeModeTimeout?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.endResizeMode() }
+        resizeModeTimeout = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + HotkeyTap.resizeModeSeconds, execute: work)
+    }
+
+    private func endResizeMode() {
+        resizeModeTimeout?.cancel()
+        resizeModeTimeout = nil
+        guard resizingWindow != nil else { return }
+        resizingWindow = nil
+        quietLine.dismiss()
+        ring.hide()
     }
 
     /// The display the focused window is on.
@@ -2354,6 +2380,7 @@ final class Tiler {
 
     /// Resize mode's arrows: they push the window's edge on their side (`Layout.resize(_:toward:)`).
     private func resize(toward direction: Direction) {
+        if resizingWindow != nil { keepResizeModeOn() }
         let horizontal = direction == .left || direction == .right
         guard let id = focusedID, let (space, uuid) = place(of: id), space == currentSpace,
               var layout = spaces[space][uuid], let d = activeDisplays.first(where: { $0.uuid == uuid }) else { return }
@@ -2372,6 +2399,7 @@ final class Tiler {
     }
 
     private func resize(by delta: Double) {
+        if resizingWindow != nil { keepResizeModeOn() }
         guard let id = focusedID, let (space, uuid) = place(of: id), space == currentSpace,
               var layout = spaces[space][uuid] else { return }
         if layout.resize(id, by: delta) {
@@ -3081,7 +3109,8 @@ final class Tiler {
         let moving = CACurrentMediaTime() < (settlingUntil[id] ?? 0)
         let frame = moving ? (w.target ?? w.frame) : w.frame
         ringWindow = id
-        ring.flash(frame, on: displays)
+        let resizing = resizingWindow == id
+        ring.flash(frame, on: displays, color: resizing ? .systemGreen : .controlAccentColor, hold: resizing)
         guard !moving else { return } // the move's own read-back corrects it
         let element = w.handle.element
         w.handle.app.queue.async { [weak self] in
@@ -3090,7 +3119,8 @@ final class Tiler {
                 guard let self, let actual, self.ringWindow == id, self.ring.isShowing,
                       !actual.isClose(to: frame, tolerance: 2) else { return }
                 self.windows[id]?.frame = actual
-                self.ring.flash(actual, on: self.displays)
+                let resizing = self.resizingWindow == id
+                self.ring.flash(actual, on: self.displays, color: resizing ? .systemGreen : .controlAccentColor, hold: resizing)
             }
         }
     }
@@ -3108,7 +3138,8 @@ final class Tiler {
             Learning.shared.sizeLimited(id) // it has a minimum or maximum size
         }
         if ringWindow == id, ring.isShowing, let target = w.target, !actual.isClose(to: target, tolerance: 2) {
-            ring.flash(actual, on: displays)
+            let resizing = resizingWindow == id
+            ring.flash(actual, on: displays, color: resizing ? .systemGreen : .controlAccentColor, hold: resizing)
         }
         if w.resizable, let target = w.target, abs(actual.width - target.width) > 2 || abs(actual.height - target.height) > 2 {
             learnLimits(of: id, askedFor: target)
