@@ -437,7 +437,12 @@ final class Tiler {
         // like any app window (Calculator, a game). One that can do neither is a small panel
         // (an About box, a progress window): it floats, centered, like a dialog.
         let minimizable = resizable || (element.element(kAXMinimizeButtonAttribute).map { $0.bool(kAXEnabledAttribute) } ?? false)
-        let panel = windowRole && !minimizable
+        // A downloaded app's disk image window ("drag the app to Applications"): Finder, titled
+        // with the image's name, drawn at the size its maker chose around a fixed picture. It
+        // floats at that size, centered, like a dialog.
+        let installer = windowRole && app.bundleID == "com.apple.finder"
+            && (element.string(kAXTitleAttribute).map(DiskImages.isMounted(named:)) ?? false)
+        let panel = windowRole && (!minimizable || installer)
         let standard = windowRole && !panel
         let minimized = element.isMinimized
         let fullScreen = element.isFullScreen
