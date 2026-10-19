@@ -1,6 +1,6 @@
 // GET /api/license?session_id=cs_… : the thank-you page asks for the license of the
-// purchase it was sent back from. Works on refresh, and only for a paid Tessel purchase.
-import { getSession, isPaidTessel } from "../../store/lib/stripe.js";
+// purchase it was sent back from. Works on refresh, and only for a paid Lunchbox purchase.
+import { getSession, isPaidLunchbox } from "../../store/lib/stripe.js";
 import { licenseFor } from "../../store/lib/fulfill.js";
 
 const json = (body, status = 200) =>
@@ -19,7 +19,7 @@ export async function onRequestGet({ request, env }) {
     // Some payment methods (bank debits) take a few days; the license is emailed when it clears.
     return json({ status: "processing", email: session.customer_details?.email });
   }
-  if (!isPaidTessel(session, env)) return json({ status: "unknown" }, 404);
+  if (!isPaidLunchbox(session, env)) return json({ status: "unknown" }, 404);
   const license = await licenseFor(session, env);
   return json({ status: "paid", email: session.customer_details?.email, license });
 }

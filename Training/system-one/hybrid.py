@@ -1,4 +1,4 @@
-"""Do System One answers help once a small head sees Tessel's labels? Leave-one-app-out.
+"""Do System One answers help once a small head sees Lunchbox's labels? Leave-one-app-out.
 
 Usage: python -I hybrid.py <windows.jsonl> <features.json> laya-A.json julia-A.json julia-B.json
 """
@@ -27,12 +27,12 @@ def logp(run):
 S = np.array([feats[i]["structure"] for i in ids])
 T = np.array([feats[i]["title"] for i in ids])
 sets = {
-    "Tessel's features (structure + title)": [S, T],
+    "Lunchbox's features (structure + title)": [S, T],
     "structure + Laya": [S, logp(runs["laya"])],
     "structure + Julia (A)": [S, logp(runs["juliaA"])],
-    "Tessel's features + Laya": [S, T, logp(runs["laya"])],
-    "Tessel's features + Julia (A)": [S, T, logp(runs["juliaA"])],
-    "Tessel's features + Julia (B)": [S, T, logp(runs["juliaB"])],
+    "Lunchbox's features + Laya": [S, T, logp(runs["laya"])],
+    "Lunchbox's features + Julia (A)": [S, T, logp(runs["juliaA"])],
+    "Lunchbox's features + Julia (B)": [S, T, logp(runs["juliaB"])],
     "Laya's answer alone, recalibrated": [logp(runs["laya"])],
     "Julia's answer alone, recalibrated (A)": [logp(runs["juliaA"])],
 }

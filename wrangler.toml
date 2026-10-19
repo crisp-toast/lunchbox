@@ -1,12 +1,12 @@
 # Cloudflare Pages: the site in site/, the store in functions/ (see docs/store.md).
-name = "tessel"
+name = "lunchbox"
 pages_build_output_dir = "site"
 compatibility_date = "2026-10-01"
 
 [vars]
-SITE_URL = "https://tessel.sentientdonut.com"
+SITE_URL = "https://lunchboxwm.com"
 STRIPE_PRICE_ID = "price_REPLACE_ME"
-EMAIL_FROM = "Tessel <support@sentientdonut.com>"
+EMAIL_FROM = "Lunchbox <support@sentientdonut.com>"
 SUPPORT_EMAIL = "support@sentientdonut.com"
 
 # Refunded and charged-back orders, as one-way hashes (see functions/api/revoked.js).
@@ -16,7 +16,7 @@ binding = "REVOKED"
 id = "REPLACE_ME"
 
 # Secrets (never in this file): set each once with
-#   npx wrangler pages secret put NAME --project-name tessel
+#   npx wrangler pages secret put NAME --project-name lunchbox
 # STRIPE_SECRET_KEY      a restricted key: Checkout Sessions read+write
 # STRIPE_WEBHOOK_SECRET  from the webhook endpoint you add in Stripe
 # LICENSE_PRIVATE_KEY    the JSON in ~/.config/sentient-donut/tessel-license-signing.jwk

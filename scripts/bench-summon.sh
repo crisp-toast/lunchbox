@@ -5,7 +5,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 OUT="$1"; HOURS="${2:-12}"
-cmd() { osascript -l JavaScript -e "ObjC.import('Foundation'); \$.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately('com.tyleryouens.tessel.command', '$1', \$(), true)" >/dev/null; }
+cmd() { osascript -l JavaScript -e "ObjC.import('Foundation'); \$.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately('com.sentientdonut.lunchbox.command', '$1', \$(), true)" >/dev/null; }
 idle() { echo $(( $(ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {print $NF; exit}') / 1000000000 )); }
 only_spoof() { bash ~/.claude/skills/mac-mini/scripts/spoof.sh info 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if len(d['displays'])==1 and d['displays'][0]['spoof'] else 1)"; }
 swiftc -O -o build/bench-summon scripts/bench-summon.swift || exit 1
@@ -16,7 +16,7 @@ until only_spoof && [ "$(idle)" -ge 600 ]; do
 done
 echo "starting at $(date)"
 cmd dump; sleep 0.5
-ws=$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/Library/Application Support/Tessel/state.json')))['currentSpace'])")
+ws=$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/Library/Application Support/Lunchbox/state.json')))['currentSpace'])")
 cmd space-3; sleep 1
 open -a Terminal; sleep 3   # one base window, in Workspace 3
 build/bench-summon "${RUNS:-8}" > "$OUT"; status=$?

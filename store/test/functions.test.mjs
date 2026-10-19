@@ -9,15 +9,15 @@ import { onRequestGet as revokedGet } from "../../functions/api/revoked.js";
 
 const fixture = JSON.parse(readFileSync(new URL("./fixture.json", import.meta.url), "utf8"));
 const env = {
-  STRIPE_SECRET_KEY: "sk_test_x", STRIPE_WEBHOOK_SECRET: "whsec_test", STRIPE_PRICE_ID: "price_tessel",
+  STRIPE_SECRET_KEY: "sk_test_x", STRIPE_WEBHOOK_SECRET: "whsec_test", STRIPE_PRICE_ID: "price_lunchbox",
   LICENSE_PRIVATE_KEY: JSON.stringify(fixture.privateJwk), RESEND_API_KEY: "re_x",
-  EMAIL_FROM: "Tessel <support@example.com>", SUPPORT_EMAIL: "support@example.com", SITE_URL: "https://tessel.example",
+  EMAIL_FROM: "Lunchbox <support@example.com>", SUPPORT_EMAIL: "support@example.com", SITE_URL: "https://lunchbox.example",
 };
 
 const session = (over = {}) => ({
   id: "cs_test_abcdefghij1", status: "complete", payment_status: "paid", created: 1792000000,
   customer_details: { email: "Buyer@Example.com" },
-  line_items: { data: [{ price: { id: "price_tessel" } }] },
+  line_items: { data: [{ price: { id: "price_lunchbox" } }] },
   payment_intent: { id: "pi_buyer", latest_charge: { refunded: false, disputed: false } }, ...over,
 });
 
@@ -52,9 +52,9 @@ beforeEach(() => {
   };
 });
 
-const get = (id) => licenseGet({ request: new Request(`https://tessel.example/api/license?session_id=${id}`), env });
+const get = (id) => licenseGet({ request: new Request(`https://lunchbox.example/api/license?session_id=${id}`), env });
 
-test("thank-you page gets the license for a paid Tessel purchase, the same on every refresh", async () => {
+test("thank-you page gets the license for a paid Lunchbox purchase, the same on every refresh", async () => {
   const first = await (await get("cs_test_abcdefghij1")).json();
   const again = await (await get("cs_test_abcdefghij1")).json();
   assert.equal(first.status, "paid");
@@ -79,7 +79,7 @@ test("full refunds and chargebacks go on the revoked list; partial refunds don't
   assert.equal(JSON.parse(env.REVOKED.store.get(`r:${hash}`)).order, "cs_test_abcdefghij1");
   env.REVOKED = kv();
   assert.equal(await (await hook({ type: "charge.dispute.created", created: 3, data: { object: { payment_intent: "pi_buyer" } } })).text(), "revoked (disputed)");
-  const list = await (await revokedGet({ request: new Request("https://tessel.example/api/revoked"), env })).json();
+  const list = await (await revokedGet({ request: new Request("https://lunchbox.example/api/revoked"), env })).json();
   assert.deepEqual(list, { revoked: [hash] });
 });
 
@@ -99,7 +99,7 @@ async function signed(body, secret = env.STRIPE_WEBHOOK_SECRET, t = Math.floor(D
 
 const hook = async (event, header) => {
   const body = JSON.stringify(event);
-  const request = new Request("https://tessel.example/api/stripe-webhook", { method: "POST", body, headers: { "Stripe-Signature": header ?? (await signed(body)) } });
+  const request = new Request("https://lunchbox.example/api/stripe-webhook", { method: "POST", body, headers: { "Stripe-Signature": header ?? (await signed(body)) } });
   return webhookPost({ request, env });
 };
 
@@ -110,8 +110,8 @@ test("webhook emails the license once per purchase, even when Stripe retries", a
   assert.equal(emails.length, 2);
   assert.equal(emails[0].key, emails[1].key); // Resend drops the repeat
   assert.deepEqual(emails[0].body.to, ["Buyer@Example.com"]);
-  assert.match(emails[0].body.text, /tessel1\./);
-  assert.match(emails[0].body.text, /https:\/\/tessel\.example\/activate\.html#tessel1\./);
+  assert.match(emails[0].body.text, /lunchbox1\./);
+  assert.match(emails[0].body.text, /https:\/\/lunchbox\.example\/activate\.html#lunchbox1\./);
 });
 
 test("webhook refuses forged or stale calls and skips unpaid sessions", async () => {
@@ -119,11 +119,11 @@ test("webhook refuses forged or stale calls and skips unpaid sessions", async ()
   assert.equal((await hook(event, await signed(JSON.stringify(event), "whsec_wrong"))).status, 400);
   assert.equal((await hook(event, await signed(JSON.stringify(event), env.STRIPE_WEBHOOK_SECRET, 1000))).status, 400);
   sessions.cs_test_abcdefghij1 = session({ payment_status: "unpaid" });
-  assert.equal(await (await hook(event)).text(), "not a paid Tessel purchase");
+  assert.equal(await (await hook(event)).text(), "not a paid Lunchbox purchase");
   assert.equal(emails.length, 0);
 });
 
-const recover = (email) => recoverPost({ request: new Request("https://tessel.example/api/recover", { method: "POST", body: JSON.stringify({ email }), headers: { "Content-Type": "application/json" } }), env });
+const recover = (email) => recoverPost({ request: new Request("https://lunchbox.example/api/recover", { method: "POST", body: JSON.stringify({ email }), headers: { "Content-Type": "application/json" } }), env });
 
 test("lost license: emails the buyer's licenses, and answers the same either way", async () => {
   sessions.cs_test_second00001 = session({ id: "cs_test_second00001", created: 1792100000 });
@@ -131,20 +131,20 @@ test("lost license: emails the buyer's licenses, and answers the same either way
   const missing = await (await recover("nobody@example.com")).json();
   assert.deepEqual(found, missing);
   assert.equal(emails.length, 1);
-  assert.equal((emails[0].body.text.match(/^tessel1\./gm) || []).length, 2);
-  assert.match(emails[0].key, /^tessel-recover-buyer@example\.com-\d{4}-\d{2}-\d{2}$/);
+  assert.equal((emails[0].body.text.match(/^lunchbox1\./gm) || []).length, 2);
+  assert.match(emails[0].key, /^lunchbox-recover-buyer@example\.com-\d{4}-\d{2}-\d{2}$/);
   assert.equal((await recover("not-an-email")).status, 400);
 });
 
 import { onRequestPost as checkoutPost } from "../../functions/api/checkout.js";
 
-test("checkout: one Tessel, tax on, terms required, requirements shown; double clicks reuse the session", async () => {
+test("checkout: one Lunchbox, tax on, terms required, requirements shown; double clicks reuse the session", async () => {
   const calls = [];
   globalThis.fetch = async (input, init = {}) => {
     calls.push({ url: String(input), key: init.headers["Idempotency-Key"], body: new URLSearchParams(init.body) });
     return new Response(JSON.stringify({ id: "cs_test_new0000001", url: "https://checkout.stripe.com/c/pay/cs_test_new0000001" }));
   };
-  const form = () => new Request("https://tessel.example/api/checkout", {
+  const form = () => new Request("https://lunchbox.example/api/checkout", {
     method: "POST", body: new URLSearchParams({ attempt: "6f1c2b9e-7d3a-4e5f-9a10-1b2c3d4e5f60" }),
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
   });
@@ -154,24 +154,24 @@ test("checkout: one Tessel, tax on, terms required, requirements shown; double c
   assert.equal(first.headers.get("Location"), "https://checkout.stripe.com/c/pay/cs_test_new0000001");
   assert.equal(calls[0].key, calls[1].key);
   const b = calls[0].body;
-  assert.equal(b.get("line_items[0][price]"), "price_tessel");
+  assert.equal(b.get("line_items[0][price]"), "price_lunchbox");
   assert.equal(b.get("line_items[0][quantity]"), "1");
   assert.equal(b.get("automatic_tax[enabled]"), "true");
   assert.equal(b.get("consent_collection[terms_of_service]"), "required");
   assert.match(b.get("custom_text[submit][message]"), /Apple silicon/);
-  assert.equal(b.get("success_url"), "https://tessel.example/thanks.html?session_id={CHECKOUT_SESSION_ID}");
+  assert.equal(b.get("success_url"), "https://lunchbox.example/thanks.html?session_id={CHECKOUT_SESSION_ID}");
 });
 
 test("checkout: if Stripe is down, the buyer lands back on pricing with a note, not an error page", async () => {
   globalThis.fetch = async () => new Response(JSON.stringify({ error: { message: "down" } }), { status: 500 });
-  const r = await checkoutPost({ request: new Request("https://tessel.example/api/checkout", { method: "POST" }), env });
+  const r = await checkoutPost({ request: new Request("https://lunchbox.example/api/checkout", { method: "POST" }), env });
   assert.equal(r.status, 303);
-  assert.equal(r.headers.get("Location"), "https://tessel.example/?checkout=unavailable#pricing");
+  assert.equal(r.headers.get("Location"), "https://lunchbox.example/?checkout=unavailable#pricing");
 });
 
 test("lost license works as a plain form too", async () => {
-  const r = await recoverPost({ request: new Request("https://tessel.example/api/recover", { method: "POST", body: new URLSearchParams({ email: "buyer@example.com" }), headers: { "Content-Type": "application/x-www-form-urlencoded" } }), env });
+  const r = await recoverPost({ request: new Request("https://lunchbox.example/api/recover", { method: "POST", body: new URLSearchParams({ email: "buyer@example.com" }), headers: { "Content-Type": "application/x-www-form-urlencoded" } }), env });
   assert.equal(r.status, 303);
-  assert.equal(r.headers.get("Location"), "https://tessel.example/recover.html?sent");
+  assert.equal(r.headers.get("Location"), "https://lunchbox.example/recover.html?sent");
   assert.equal(emails.length, 1);
 });

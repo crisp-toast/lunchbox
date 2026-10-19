@@ -1,6 +1,6 @@
 # Smoothness
 
-How rearranging looks, measured: every window's frame every 2 ms while Tessel moves windows around,
+How rearranging looks, measured: every window's frame every 2 ms while Lunchbox moves windows around,
 in test VMs, before and after the 2026-10-18 changes. The goal: every rearrangement is one
 deliberate move, never a window stopping, starting again, or moving twice.
 
@@ -111,14 +111,14 @@ macOS 26 runs), so it has no before there.
   that makes them all at once, up to 120 ms). The window that started the burst is usually placed
   before the burst is known, so it makes two moves.
 - **Windows that can't fill a tile fit at once.** Simulator's shape or a minimum size used to be
-  learned 0.15 s after the window went into its tile, and then it moved again. Tessel now learns it
+  learned 0.15 s after the window went into its tile, and then it moved again. Lunchbox now learns it
   from its first placement and sends the window straight to the frame it fits: one move, about
   170 ms sooner.
 - **An app's windows move together.** Moves went through one queue per app, so a Workspace switch
   revealed or parked an app's windows one after another (up to 60 ms apart), and a slow app's far
   longer. Each window has its own queue now.
 - **Slow and stalling apps snap.** A glide through an app that stalls stops and jumps (three
-  motions for one grow). Tessel judges each app by its slowest recent call, including reading which
+  motions for one grow). Lunchbox judges each app by its slowest recent call, including reading which
   window has focus before the move, and snaps instead; a glide that stalls partway finishes at once.
 - **Tidy glides.** It (and a dragged window let go, or one an app moved) used to snap, because a
   window without a target was treated as one whose size isn't known.
@@ -141,4 +141,4 @@ macOS 26 runs), so it has no before there.
 - **A new window overlaps its neighbors for about 160 ms** while they slide out from under it. That's
   by design (it goes straight into its tile, in front); the neighbors make room in one glide.
 - **An app restoring many windows** (16 TextEdit windows) still waits about 300 ms before they move,
-  while Tessel reads every window of an app that's busy restoring them; they then move once each.
+  while Lunchbox reads every window of an app that's busy restoring them; they then move once each.

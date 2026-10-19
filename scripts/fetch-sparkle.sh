@@ -1,5 +1,5 @@
 #!/bin/bash
-# Fetches Sparkle (Tessel's auto-updater) into Vendor/: the framework, wrapped as an
+# Fetches Sparkle (Lunchbox's auto-updater) into Vendor/: the framework, wrapped as an
 # xcframework for SwiftPM, and Sparkle's tools (generate_keys, sign_update, generate_appcast).
 # SwiftPM's own download of Sparkle's package stalls here, so this uses the official
 # release archive, checked against a pinned SHA-256. Run once per checkout.

@@ -8,26 +8,26 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="page.css">
-<title>Thanks for buying Tessel</title>
+<title>Thanks for buying Lunchbox</title>
 <meta name="robots" content="noindex">
 </head>
 <body>
-<header class="top"><a class="brand" href="./"><img src="logo.svg" alt="">Tessel</a></header>
+<header class="top"><a class="brand" href="./"><img src="logo.svg" alt="">Lunchbox</a></header>
 <main>
   <section id="loading"><h1>Finishing your purchase…</h1><p class="lede">Getting your license from Stripe. This takes a second.</p></section>
 
   <section id="paid" hidden>
     <span class="status ok">✓ Payment received</span>
-    <h1>Thanks! Tessel is yours.</h1>
+    <h1>Thanks! Lunchbox is yours.</h1>
     <p class="lede">Licensed to <strong id="email"></strong>. We've emailed this license there too.</p>
     <div class="card">
       <div class="btns">
-        <a class="btn dark" id="activate" href="#">Activate Tessel on this Mac</a>
-        <a class="btn" href="download/Tessel.dmg">Download Tessel</a>
+        <a class="btn dark" id="activate" href="#">Activate Lunchbox on this Mac</a>
+        <a class="btn" href="download/Lunchbox.dmg">Download Lunchbox</a>
       </div>
       <ol class="steps">
-        <li>Don't have Tessel yet? Download it, open it, and follow its short setup.</li>
-        <li>Click <strong>Activate Tessel on this Mac</strong>. If nothing happens, open Tessel's menu bar icon, choose <strong>Enter License…</strong>, and paste the key below.</li>
+        <li>Don't have Lunchbox yet? Download it, open it, and follow its short setup.</li>
+        <li>Click <strong>Activate Lunchbox on this Mac</strong>. If nothing happens, open Lunchbox's menu bar icon, choose <strong>Enter License…</strong>, and paste the key below.</li>
       </ol>
       <div class="key" id="key"></div>
       <div class="btns"><button class="btn" type="button" id="copy">Copy License</button></div>
@@ -64,7 +64,7 @@ async function load(attempt = 0) {
     if (d.status === "paid") {
       document.getElementById("email").textContent = d.email;
       document.getElementById("key").textContent = d.license;
-      document.getElementById("activate").href = "tessel://activate?key=" + encodeURIComponent(d.license);
+      document.getElementById("activate").href = "lunchbox://activate?key=" + encodeURIComponent(d.license);
       document.getElementById("copy").onclick = (e) => copyKey(d.license, e.currentTarget);
       return show("paid");
     }

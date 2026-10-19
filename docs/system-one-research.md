@@ -1,8 +1,8 @@
-# An on-device System One model for Tessel: research
+# An on-device System One model for Lunchbox: research
 
 2026-10-16. Tyler's direction is a fast, open-source, on-device "System One" decision model
 similar to Jev by TypeSafe AI, deciding how each window should behave from its text, not a
-JEPA-style model. This is what's out there, what fits Tessel, and what to try first.
+JEPA-style model. This is what's out there, what fits Lunchbox, and what to try first.
 
 ## What Jev is
 
@@ -41,7 +41,7 @@ deciding every new window. The ones that can fit are small non-generative encode
 All accuracy, latency and calibration numbers above are the projects' own and unverified. Every
 one of these projects is less than six weeks old.
 
-## How it would work in Tessel
+## How it would work in Lunchbox
 
 The `WindowTraits` reader, the safety floor of the old rules, the panel and the labeled windows
 all stay. A System One model would answer, on the window's app queue, at first sight:
@@ -70,13 +70,13 @@ Two notes on the format:
 
 ## Costs to weigh
 
-- **Size:** Tessel would bundle the model, because downloading it at runtime would add a network
+- **Size:** Lunchbox would bundle the model, because downloading it at runtime would add a network
   call. Laya-multilingual is about 650 MB at FP16 or about 330 MB at W8 (estimated from 322M
   parameters). Julia 1 is about 275 MB at FP16, or about 140 MB at 8 bits, once converted.
 - **Memory:** about 370 MB for Julia 1 on CPU. Neural Engine memory still needs measuring.
-- **macOS:** the Laya-CoreML Neural Engine package needs macOS 15. On macOS 14, Tessel would fall
+- **macOS:** the Laya-CoreML Neural Engine package needs macOS 15. On macOS 14, Lunchbox would fall
   back to the rules.
-- **Swift:** neither project ships a Swift API. Tessel would load the `.mlpackage` with Core ML
+- **Swift:** neither project ships a Swift API. Lunchbox would load the `.mlpackage` with Core ML
   and tokenize with a Swift tokenizer (Hugging Face's swift-transformers reads `tokenizer.json`,
   Apache-2.0).
 
@@ -103,7 +103,7 @@ Run 2026-10-16 on the M4 Mac mini (macOS 27.2):
 | Julia 1, CPU, longer prompt | 52% | 54% | |
 | Laya + safety floor, acting only when ≥ 90% sure | 79% | 87% | |
 | Julia 1 + safety floor, ≥ 90% sure | 76% | 85% | |
-| **Tessel's own small classifier** (held out by app) | **85%** | **93%** | **87% / 96% shipped** |
+| **Lunchbox's own small classifier** (held out by app) | **85%** | **93%** | **87% / 96% shipped** |
 
 **Speed and size,** measured in the Python runtimes:
 
@@ -111,28 +111,28 @@ Run 2026-10-16 on the M4 Mac mini (macOS 27.2):
 |---|---|---|---|---|
 | Laya-multilingual Core ML, Neural Engine | **5.5 ms** median, 5.6 ms p95 | 19 s (Core ML compiles on first load) | 1.57 GB | 648 MiB |
 | Julia 1, PyTorch CPU | 13.7 ms (short prompt), 18.8 ms (longer) | 2.4 s | 1.05 GB | 584 MiB |
-| Tessel's own classifier, in Swift | 0.04 ms | none (45 KB of weights) | about 5 MB, for Apple's word vectors | none |
+| Lunchbox's own classifier, in Swift | 0.04 ms | none (45 KB of weights) | about 5 MB, for Apple's word vectors | none |
 
 Python overstates memory. Natively, Laya's 375 MiB embedding table could be memory-mapped, so
 only the rows a title uses would be resident. That's not measured.
 
 **As helpers rather than deciders:** each model's five probabilities were added as extra inputs
-to Tessel's small head, again held out by app.
+to Lunchbox's small head, again held out by app.
 
 | Head reads | Behavior | Tile-or-not |
 |---|---|---|
-| Tessel's features | 85% | 92% |
-| Tessel's features + Laya | 85% | 92% |
-| Tessel's features + Julia 1 | 85–86% | 92% |
-| Window structure + Laya, instead of Tessel's title features | 85% | 92% |
+| Lunchbox's features | 85% | 92% |
+| Lunchbox's features + Laya | 85% | 92% |
+| Lunchbox's features + Julia 1 | 85–86% | 92% |
+| Window structure + Laya, instead of Lunchbox's title features | 85% | 92% |
 | A model's answer alone, recalibrated on the labels | 43–54% | 63–68% |
 
 **What this says:**
 1. Out of the box, these System One models don't understand windows. They were trained on
    tickets, intents and emotions, and a window's subrole, buttons and size mean nothing to them.
    Laya's own notes say the same: out-of-domain cases are fixed only with labels and refitting.
-2. With Tessel's labels, they add nothing the small classifier doesn't already know. Laya's
-   answer can replace Tessel's hand-made title features at equal accuracy, the one place it
+2. With Lunchbox's labels, they add nothing the small classifier doesn't already know. Laya's
+   answer can replace Lunchbox's hand-made title features at equal accuracy, the one place it
    does real work (reading titles), but no better.
 3. They cost 100–400× the time per decision, about a gigabyte of memory in these runtimes,
    0.6 GB of download, and macOS 15 for the Neural Engine path.
@@ -189,7 +189,7 @@ made of text and start with something you type. That way, 15–20 ms is fast eno
   - the title's words ("lunch thursday");
   - part of them ("lunch email");
   - a description only ("the message about where to eat").
-- **Plain-English commands.** 12 of Tessel's actions, four phrasings each ("put xcode next to
+- **Plain-English commands.** 12 of Lunchbox's actions, four phrasings each ("put xcode next to
   terminal"), plus which app and which Workspace a command names.
 
 The baseline is plain word matching. The probe also tried the sentence and contextual embeddings
@@ -225,13 +225,13 @@ before any run (`Training/system-one/texttasks.py`, `embedprobe.swift`).
 - **Commands:** the app and the Workspace are easy, and simple matching gets them. The action
   is the hard part, and at 38–58% right, a typed command would move the wrong windows about
   half the time.
-- **Verdict:** zero-shot, neither model earns its size in Tessel in these jobs either. A
+- **Verdict:** zero-shot, neither model earns its size in Lunchbox in these jobs either. A
   commands feature would need fine-tuning on a few thousand synthetic phrasings (no user data),
   tested on phrasings written by someone else, with 95% of actions right as the bar.
 
 ## How much space one adds to the app
 
-Tessel.app is **6.7 MB** today. The weights hardly compress (lzfse saves 5–8% on them, but takes
+Lunchbox.app is **6.7 MB** today. The weights hardly compress (lzfse saves 5–8% on them, but takes
 the 32 MiB tokenizer down to 5 MiB), so the download grows almost as much as the installed app.
 
 Where the size goes:
@@ -269,5 +269,5 @@ Where the size goes:
 - **Ship it only if** it beats the small classifier on held-out apps, and fits a menu-bar app's
   memory and download budget.
 
-Until then, Tessel's classifier keeps the System One shape (a typed choice with calibrated
+Until then, Lunchbox's classifier keeps the System One shape (a typed choice with calibrated
 probabilities, a confidence gate and the rules as a floor) at 0.04 ms and 45 KB.

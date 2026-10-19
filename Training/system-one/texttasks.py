@@ -1,8 +1,8 @@
-"""Can an open System One model do Tessel's text jobs? A synthetic probe, written before any run.
+"""Can an open System One model do Lunchbox's text jobs? A synthetic probe, written before any run.
 
 1. Find a window by describing it: a desktop of 15 windows with realistic titles, and three
    queries per window (one with the title's words, one partial, one that only describes it).
-2. Plain-English commands: 12 of Tessel's actions, four phrasings each, plus which app and which
+2. Plain-English commands: 12 of Lunchbox's actions, four phrasings each, plus which app and which
    Workspace a command names.
 
 Baseline: word matching (query words that start a word in the window's app or title), roughly

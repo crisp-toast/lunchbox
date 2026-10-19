@@ -7,7 +7,7 @@
     "kty": "OKP"
   },
   "publicKey": "in2Zr+hRDI2Ij51LDXdO0gH7joQ8FzSkypconmxWCSc=",
-  "license": "tessel1.eyJwIjoidGVzc2VsIiwiZSI6ImJ1eWVyQGV4YW1wbGUuY29tIiwibyI6ImNzX3Rlc3RfYTFCMmMzIiwidCI6MTc5MjAwMDAwMH0.0qYx5WIOFT-ut7Oyb5MjBzK7PPlrNxafyApS0agOnLGYogKJdu0PyF8Hxrn7ELD20T_Q2w6529qJGxU8oTE7AQ",
+  "license": "lunchbox1.eyJwIjoibHVuY2hib3giLCJlIjoiYnV5ZXJAZXhhbXBsZS5jb20iLCJvIjoiY3NfdGVzdF9hMUIyYzMiLCJ0IjoxNzkyMDAwMDAwfQ.dhZTnav90YEhLUodJHs3DH6sFsrp1rqt-bpaIWKDti_2e4-jDLOiruT2mKE6rpa0iyOpC81FsaJ0ylM0SOQwBQ",
   "email": "buyer@example.com",
   "order": "cs_test_a1B2c3",
   "issued": 1792000000

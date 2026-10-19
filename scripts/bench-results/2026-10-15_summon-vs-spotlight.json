@@ -12,7 +12,7 @@
   "macOS" : "Version 27.2 (Build 26B5101f)",
   "panel_owners" : {
     "spotlight" : "Siri",
-    "summon" : "Tessel"
+    "summon" : "Lunchbox"
   },
   "query" : "terminal",
   "speedup" : 1.1694270028812805,

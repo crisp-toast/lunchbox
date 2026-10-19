@@ -1,4 +1,4 @@
-// The same text jobs as texttasks.py, with what macOS already ships (0 MB added to Tessel):
+// The same text jobs as texttasks.py, with what macOS already ships (0 MB added to Lunchbox):
 // NLEmbedding's sentence vectors and NLContextualEmbedding's token vectors, averaged.
 // Commands are matched to the nearest of three example phrasings per action, written before
 // any run and different from the test phrasings.

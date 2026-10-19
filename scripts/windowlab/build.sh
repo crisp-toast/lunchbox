@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds build/WindowLab.app, the test app that opens every kind of window Tessel handles.
+# Builds build/WindowLab.app, the test app that opens every kind of window Lunchbox handles.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 APP=build/WindowLab.app

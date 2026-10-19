@@ -64,7 +64,7 @@ func key(_ code: CGKeyCode, _ flags: CGEventFlags = []) {
     }
 }
 
-/// ⇧ then Space, as Tessel reads it: ⇧ goes down, and Space is the first key pressed while it's held.
+/// ⇧ then Space, as Lunchbox reads it: ⇧ goes down, and Space is the first key pressed while it's held.
 func shiftThenSpace() {
     let shiftDown = CGEvent(keyboardEventSource: source, virtualKey: 56, keyDown: true)!
     shiftDown.type = .flagsChanged
@@ -130,7 +130,7 @@ func floating() -> [CGWindowID: String] {
               let r = CGRect(dictionaryRepresentation: b), r.width > 200, r.height > 40 else { continue }
         let layer = w[kCGWindowLayer as String] as? Int ?? 0
         let owner = w[kCGWindowOwnerName as String] as? String ?? "?"
-        if layer != 0 || owner == "Tessel" { out[id] = owner }
+        if layer != 0 || owner == "Lunchbox" { out[id] = owner }
     }
     return out
 }

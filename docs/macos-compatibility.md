@@ -1,6 +1,6 @@
 # Older macOS
 
-Tessel promises macOS 14 or later. Until 2026-10-16 it had only run on the Mac mini's macOS 27 beta.
+Lunchbox promises macOS 14 or later. Until 2026-10-16 it had only run on the Mac mini's macOS 27 beta.
 This is what happened when it ran on macOS 14, 15 and 26 in virtual machines.
 
 **Verdict: keep "macOS 14 or later".** Sonoma, Sequoia and Tahoe pass every feature tested.
@@ -15,9 +15,9 @@ version it was found on.
 - The release build: `scripts/release.sh 1.0 --dry-run` (arm64, hardened runtime, Apple
   Development signature, `minos 14.0`), copied into `/Applications`.
 - Accessibility and Screen Recording were granted in each VM's own System Settings. macOS asks
-  for the admin password for both. Driven over the VM's VNC screen and Tessel's `com.tyleryouens.tessel.command` notifications.
+  for the admin password for both. Driven over the VM's VNC screen and Lunchbox's `com.sentientdonut.lunchbox.command` notifications.
 - The VMs' VNC keyboard can't send Page Up or Page Down, so the Workspace keys were pressed with
-  Tessel's `press:<keycode>:cmd[:shift]` command instead. That goes through the same event tap a
+  Lunchbox's `press:<keycode>:cmd[:shift]` command instead. That goes through the same event tap a
   real keyboard does.
 - Test apps: TextEdit (documents, the Open panel, native tabs), Finder, and on Tahoe Terminal.
 
@@ -49,21 +49,21 @@ version it was found on.
 | Sparkle "Check for Updates…" window | ✓ | ✓ | ✓ |
 | Summon and the Cheat Sheet | ✓ | ✓ | ✓ |
 
-Sparkle's check itself can't finish anywhere yet: `tessel.sentientdonut.com` isn't live
+Sparkle's check itself can't finish anywhere yet: `lunchboxwm.com` isn't live
 (launch checklist item 11).
 
 ## Bug 1: macOS window tiling left a window over its neighbour (fixed)
 
 On macOS 15 and later, **Window › Fill** (and dragging a window to the top edge of the screen)
-made the window cover the whole screen, on top of the window beside it, and Tessel never put it back.
+made the window cover the whole screen, on top of the window beside it, and Lunchbox never put it back.
 
-Why: Fill animates for about half a second. Tessel saw the window move "on its own" and moved it
+Why: Fill animates for about half a second. Lunchbox saw the window move "on its own" and moved it
 back 0.2 s later, mid-animation, so the rest of the animation undid it. After that its "never
 wrestle more than once every two seconds" rule ignored the window. A drag to the edge was worse:
-the animation starts after the drop, while Tessel ignores moves from its own glide back.
+the animation starts after the drop, while Lunchbox ignores moves from its own glide back.
 
 Fix (`Tiler.windowChangedOnItsOwn`): wait until the window has held still for 0.25 s before
-putting it back. For 1.5 s after a drop, also look at moves that land while Tessel's own glide
+putting it back. For 1.5 s after a drop, also look at moves that land while Lunchbox's own glide
 settles. The check still acts only when the window really is off its tile.
 
 Verified in the Sequoia VM:
@@ -84,9 +84,9 @@ on Sequoia.
 
 Found on Tahoe; the code isn't version-specific, so 14, 15 and 27 had it too. With Terminal and
 two TextEdit windows tiled, ⌘O in TextEdit and then Cancel left Terminal in front, so typing went
-there. With Tessel paused, macOS hands focus back to the TextEdit window.
+there. With Lunchbox paused, macOS hands focus back to the TextEdit window.
 
-Why: when the focused window closes, Tessel focuses the tile nearest to where it was, so macOS
+Why: when the focused window closes, Lunchbox focuses the tile nearest to where it was, so macOS
 can't hand focus to a window of the same app parked in another Workspace. That's right for a
 tile. A dialog sits in the middle of the screen, though, so "nearest" was whichever tile happened
 to be closest to the middle.
@@ -94,7 +94,7 @@ to be closest to the middle.
 Fix (`Tiler`): when a floating window (a dialog, a panel, an app that floats) closes or is
 minimized while focused, focus goes back to the tile focused before it, if that tile is still in
 view. Otherwise focus goes to the nearest tile, as before. `focusChanged` now notes that tile at
-the moment a floating window takes focus. It used to miss a window that got focus before Tessel
+the moment a floating window takes focus. It used to miss a window that got focus before Lunchbox
 had tiled it, such as a brand-new document.
 
 Verified in the Tahoe VM: Cancel in the Open panel goes back to the TextEdit window that opened
@@ -110,18 +110,18 @@ still focuses its nearest neighbour. `swift test` passes (91).
   (about 110 pt). It's easy to miss, but it's there in screenshots. On 27 there's no clamp, so at
   most 1 pt in the corner shows.
 - **Tahoe's capture prompt:** the first time Focus captured Shelf previews after Screen Recording
-  was granted, macOS showed its own alert: "Tessel" is requesting to bypass the system private
+  was granted, macOS showed its own alert: "Lunchbox" is requesting to bypass the system private
   window picker and directly access your screen and audio (Allow / Open System Settings). The
   previews were already live behind it. macOS shows this to apps that capture windows without the
   system picker, and may ask again from time to time; the support pages could mention it.
-- **Tahoe's Screen Recording switch** restarts Tessel by itself (no "Quit & Reopen" prompt).
+- **Tahoe's Screen Recording switch** restarts Lunchbox by itself (no "Quit & Reopen" prompt).
   Harmless: it came straight back.
 - **Tahoe's drag to the top edge** only fills if the pointer rests at the edge for about a second
-  before letting go. A quick flick just moves the window, and Tessel puts it back. (`vm.sh drag`
+  before letting go. A quick flick just moves the window, and Lunchbox puts it back. (`vm.sh drag`
   rests for 150 ms, so the Tahoe run used a copy of its VNC client that rests for 1.2 s.)
 - **First launch** on a fresh Mac takes a few seconds longer before the menu bar icon and welcome
   window appear (the system checks the new app). Expected.
-- **Native tabs:** Tessel notices a ⌃Tab switch about a second later. Nothing moves meanwhile.
+- **Native tabs:** Lunchbox notices a ⌃Tab switch about a second later. Nothing moves meanwhile.
 - **Full screen:** while a window is in full screen, the windows left behind re-tile (a lone one
   centers), and everything returns exactly when it leaves. That's the same on every version; the
   README's "the rest of the Workspace stays put" is a little generous.
@@ -131,7 +131,7 @@ still focuses its nearest neighbour. `swift test` passes (91).
   new window joins it, as ⌘-Tab does. The same on every version.
 - **Screen Sharing.app** floats by design (`Tiler.floatingApps`), so a VM or remote Mac opened in
   it doesn't tile. Tyler noticed this; it's a product decision.
-- Tessel's own windows render in the macOS 14 style even on 26 and 27, because SwiftPM writes
+- Lunchbox's own windows render in the macOS 14 style even on 26 and 27, because SwiftPM writes
   `sdk 14.0` into the binary. The system menus are drawn in the new style.
 
 ## Still owed

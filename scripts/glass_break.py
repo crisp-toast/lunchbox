@@ -1,4 +1,4 @@
-# Tessel hero: a pile of colored glass "windows" shattered upward by an invisible
+# Lunchbox hero: a pile of colored glass "windows" shattered upward by an invisible
 # force, at full speed, then easing into extreme slow motion, ending sharp.
 #
 #   Blender -b --python glass_break.py -- OUT_DIR FRAMES RES_PERCENT SAMPLES [ENGINE] [SAVE.blend]

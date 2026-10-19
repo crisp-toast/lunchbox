@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="64 64 896 896" role="img" aria-label="Tessel">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="64 64 896 896" role="img" aria-label="Lunchbox">
   <defs>
     <!-- graphite at the top falling to near-black, lit from above -->
     <linearGradient id="t-body" x1="0.32" y1="0" x2="0.68" y2="1">
@@ -33,7 +33,7 @@
   <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#t-body)"/>
   <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#t-glow)"/>
   <rect x="67" y="67" width="890" height="890" rx="209" fill="none" stroke="url(#t-rim)" stroke-width="6"/>
-  <!-- a tall tile and two stacked: the layout Tessel makes -->
+  <!-- a tall tile and two stacked: the layout Lunchbox makes -->
   <rect x="236" y="236" width="252" height="552" rx="44" fill="url(#t-tile)"/>
   <rect x="536" y="236" width="252" height="252" rx="44" fill="url(#t-tile)"/>
   <rect x="536" y="536" width="252" height="252" rx="44" fill="url(#t-smoke)"/>

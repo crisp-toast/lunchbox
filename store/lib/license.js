@@ -1,12 +1,12 @@
-// Tessel license keys: `tessel1.<payload>.<signature>`, Ed25519 over compact JSON.
-// The app checks them offline with the matching public key (Sources/TesselCore/License.swift).
+// Lunchbox license keys: `lunchbox1.<payload>.<signature>`, Ed25519 over compact JSON.
+// The app checks them offline with the matching public key (Sources/LunchboxCore/License.swift).
 // Runs in Cloudflare Workers and in Node 20+ (both have WebCrypto Ed25519).
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-export const PREFIX = "tessel1";
-export const PRODUCT = "tessel";
+export const PREFIX = "lunchbox1";
+export const PRODUCT = "lunchbox";
 
 function toBase64URL(bytes) {
   let s = "";
@@ -37,7 +37,7 @@ export async function issueLicense({ email, order, issued }, privateJwk) {
 /** How a refunded or charged-back order appears on the public revoked list: a one-way hash,
  *  so the list says nothing about who bought what. The app computes the same for its own key. */
 export async function revocationHash(order) {
-  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(`tessel-revoked:${order}`));
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(`lunchbox-revoked:${order}`));
   return [...new Uint8Array(digest)].slice(0, 8).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 

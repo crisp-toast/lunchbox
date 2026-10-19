@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoothness benchmark, for a test VM (never a Mac someone is using). While Tessel rearranges
+"""Smoothness benchmark, for a test VM (never a Mac someone is using). While Lunchbox rearranges
 windows, `motion` (motion.swift, copied into the guest's home) records every window's frame every
 2 ms; this reports per case how many separate motions each window makes, how many stops on the way
 it holds (and how many whole layouts), how long until everything settles, how far edges that should
@@ -21,7 +21,7 @@ SPACE = int(os.environ.get("LAB_SPACE", "3"))
 OTHER = int(os.environ.get("OTHER_SPACE", "2"))
 SCREEN_W, SCREEN_H = 1920, 1080
 PRE = ('post() { osascript -l JavaScript -e "ObjC.import(\\"Foundation\\"); \\$.NSDistributedNotificationCenter.defaultCenter.'
-       'postNotificationNameObjectUserInfoDeliverImmediately(\\"com.tyleryouens.tessel.command\\", \\"$1\\", \\$(), true)" >/dev/null; }; '
+       'postNotificationNameObjectUserInfoDeliverImmediately(\\"com.sentientdonut.lunchbox.command\\", \\"$1\\", \\$(), true)" >/dev/null; }; '
        'wl() { ~/windowlab "$1"; }; ')
 HOLD = 40      # ms a frame must be held to count as a stop
 GAP = 60       # ms without change that separates two motions
@@ -215,26 +215,26 @@ TE = ("pkill -x TextEdit; sleep 1; defaults write com.apple.TextEdit NSQuitAlway
       "post space-{S}; sleep 0.5")
 case("restore_textedit_5", TE, ["300:sh:open -a TextEdit"], secs=5.0, owners="TextEdit",
      cleanup="sleep 0.2; pkill -x TextEdit; defaults write com.apple.TextEdit NSQuitAlwaysKeepsWindows -bool false")
-case("close_3to2", f"{BASE}; {normals(3)}; sleep 0.6", ["300:tessel:close"], secs=2.5)
-case("close_4to3", f"{BASE}; {normals(4)}; sleep 0.6", ["300:tessel:close"], secs=2.5)
-case("move_left", f"{BASE}; {normals(3)}; sleep 0.6", ["300:tessel:move-left"], secs=2.5)
-case("swap_up", f"{BASE}; {normals(2)}; sleep 0.4; post move-left; sleep 1.0", ["300:tessel:move-up"], secs=2.5)
-case("grow", f"{BASE}; {normals(2)}; sleep 0.6", ["300:tessel:grow"], secs=2.5)
-case("shrink", f"{BASE}; {normals(2)}; sleep 0.6", ["300:tessel:shrink"], secs=2.5)
-case("grow_3", f"{BASE}; {normals(3)}; sleep 0.6", ["300:tessel:grow"], secs=2.5)
-case("tidy", f"{BASE}; {normals(3)}; post grow; sleep 0.6; post grow; sleep 0.8", ["300:tessel:normalize"], secs=2.5)
-case("focus_on", f"{BASE}; {normals(4)}; sleep 0.6", ["300:tessel:spotlight"], secs=2.5)
-case("focus_off", f"{BASE}; {normals(4)}; post spotlight; sleep 1.2", ["300:tessel:spotlight"], secs=2.5)
-case("space_away_6", f"{BASE}; {normals(6, 0.6)}; sleep 0.8", ["300:tessel:space-{O}"], secs=2.0,
+case("close_3to2", f"{BASE}; {normals(3)}; sleep 0.6", ["300:lunchbox:close"], secs=2.5)
+case("close_4to3", f"{BASE}; {normals(4)}; sleep 0.6", ["300:lunchbox:close"], secs=2.5)
+case("move_left", f"{BASE}; {normals(3)}; sleep 0.6", ["300:lunchbox:move-left"], secs=2.5)
+case("swap_up", f"{BASE}; {normals(2)}; sleep 0.4; post move-left; sleep 1.0", ["300:lunchbox:move-up"], secs=2.5)
+case("grow", f"{BASE}; {normals(2)}; sleep 0.6", ["300:lunchbox:grow"], secs=2.5)
+case("shrink", f"{BASE}; {normals(2)}; sleep 0.6", ["300:lunchbox:shrink"], secs=2.5)
+case("grow_3", f"{BASE}; {normals(3)}; sleep 0.6", ["300:lunchbox:grow"], secs=2.5)
+case("tidy", f"{BASE}; {normals(3)}; post grow; sleep 0.6; post grow; sleep 0.8", ["300:lunchbox:normalize"], secs=2.5)
+case("focus_on", f"{BASE}; {normals(4)}; sleep 0.6", ["300:lunchbox:spotlight"], secs=2.5)
+case("focus_off", f"{BASE}; {normals(4)}; post spotlight; sleep 1.2", ["300:lunchbox:spotlight"], secs=2.5)
+case("space_away_6", f"{BASE}; {normals(6, 0.6)}; sleep 0.8", ["300:lunchbox:space-{O}"], secs=2.0,
      cleanup="post space-{S}")
-case("space_back_6", f"{BASE}; {normals(6, 0.6)}; sleep 0.8; post space-{{O}}; sleep 1.2", ["300:tessel:space-{S}"], secs=2.0)
+case("space_back_6", f"{BASE}; {normals(6, 0.6)}; sleep 0.8; post space-{{O}}; sleep 1.2", ["300:lunchbox:space-{S}"], secs=2.0)
 case("fitted_aspect", f"{BASE}; {normals(1)}; sleep 0.6", ["300:wl:aspect:390:844"], secs=3.0)
 case("fitted_fixed", f"{BASE}; {normals(1)}; sleep 0.6", ["300:wl:fixed:320:500"], secs=3.0)
 case("fitted_min", f"{BASE}; {normals(1)}; sleep 0.6", ["300:wl:min:1100:400"], secs=3.0)
-case("slow_grow", f"{BASE}; {normals(2)}; wl slow:60; sleep 0.6", ["300:tessel:grow"], secs=2.5, cleanup="wl slow:0")
+case("slow_grow", f"{BASE}; {normals(2)}; wl slow:60; sleep 0.6", ["300:lunchbox:grow"], secs=2.5, cleanup="wl slow:0")
 case("slow_arrive_3", f"{BASE}; {normals(2)}; wl slow:60; sleep 0.6", ["300:wl:normal"], secs=2.5, cleanup="wl slow:0")
-case("heavy_grow", f"{BASE}; {normals(2)}; wl heavy:25; sleep 0.6", ["300:tessel:grow"], secs=2.5, cleanup="wl heavy:0")
-case("heavy_focus_on", f"{BASE}; {normals(3)}; wl heavy:25; sleep 0.6", ["300:tessel:spotlight"], secs=2.5, cleanup="wl heavy:0")
+case("heavy_grow", f"{BASE}; {normals(2)}; wl heavy:25; sleep 0.6", ["300:lunchbox:grow"], secs=2.5, cleanup="wl heavy:0")
+case("heavy_focus_on", f"{BASE}; {normals(3)}; wl heavy:25; sleep 0.6", ["300:lunchbox:spotlight"], secs=2.5, cleanup="wl heavy:0")
 
 
 def fmt_case(name, a):

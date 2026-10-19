@@ -1,4 +1,4 @@
-"""Zero-shot benchmark of open System One decision models on Tessel's 84 labeled windows.
+"""Zero-shot benchmark of open System One decision models on Lunchbox's 84 labeled windows.
 
 Usage: python -I bench.py laya|julia <windows.jsonl> [--prompt A|B] [--out results.json]
 
@@ -16,12 +16,12 @@ CLASSES = ["document", "panel", "transient", "media", "dialog"]
 FLOATING_APPS = {
     "com.apple.systempreferences", "com.apple.iphonesimulator", "com.1password.1password",
     "com.apple.calculator", "com.apple.QuickTimePlayerX", "com.apple.ScreenSharing",
-    "com.apple.screencaptureui", "com.tyleryouens.tessel",
+    "com.apple.screencaptureui", "com.sentientdonut.lunchbox",
 }
 
 
 def is_dialog(t):
-    """Tessel's Dialogs.isDialog."""
+    """Lunchbox's Dialogs.isDialog."""
     if t.get("subrole") in ("AXDialog", "AXSystemDialog"):
         return True
     if t.get("identifier") in ("open-panel", "save-panel"):
@@ -57,7 +57,7 @@ BUTTONS = [(1, "close"), (2, "minimize"), (4, "zoom"), (8, "full screen")]
 
 
 def state_text(t, style):
-    """One short line describing the window, as Tessel would hand it to the model."""
+    """One short line describing the window, as Lunchbox would hand it to the model."""
     app = t.get("appName") or t["app"].split(".")[-1]
     title = (t.get("title") or "").strip()
     subrole = (t.get("subrole") or "none").replace("AX", "")

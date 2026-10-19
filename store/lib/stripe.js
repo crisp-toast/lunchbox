@@ -35,9 +35,9 @@ export async function sessionIdForPayment(env, paymentIntent) {
   return list.data?.[0]?.id || null;
 }
 
-/** Whether a session bought Tessel and is paid for: not still processing, not refunded or
+/** Whether a session bought Lunchbox and is paid for: not still processing, not refunded or
  *  disputed, not someone else's product. */
-export function isPaidTessel(session, env) {
+export function isPaidLunchbox(session, env) {
   if (!session || session.status !== "complete") return false;
   if (!["paid", "no_payment_required"].includes(session.payment_status)) return false;
   const charge = session.payment_intent?.latest_charge;

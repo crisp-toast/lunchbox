@@ -1,16 +1,16 @@
-# Tessel
+# Lunchbox Window Manager
 
-A small, fast tiling window manager for macOS that lives in the menu bar.
+Lunchbox for short: a small, fast tiling window manager for macOS that lives in the menu bar.
 
 - One window on a screen sits centered at a comfortable 16:10 size. Two or three tile side by side;
-  the fourth makes a 2×2 grid, unless you've shown Tessel a shape you like better (see Learning).
+  the fourth makes a 2×2 grid, unless you've shown Lunchbox a shape you like better (see Learning).
 - Everything is driven by the **left** ⌘ key, so right ⌘ + arrows still move the text cursor.
 - Windows slide into place, in one move each. Apps that can't keep up, or stall now and then, just
-  snap, so Tessel never adds lag; and an app's windows move together, never one after another. An
+  snap, so Lunchbox never adds lag; and an app's windows move together, never one after another. An
   app opening several windows at once (restoring them at launch) has them laid out together, instead
   of the layout reflowing once per window.
 - A new window goes straight into its tile, within a frame or two of appearing, instead of
-  showing up where its app put it and gliding over. Tessel moves it the moment the app makes it,
+  showing up where its app put it and gliding over. Lunchbox moves it the moment the app makes it,
   often before it's even on screen.
 - Three Workspaces on ⌘1, ⌘2 and ⌘3, switched instantly. Add more (up to nine) from the menu.
   Whenever you change Workspace, however you got there, "Workspace 2" shows at the top of the
@@ -23,7 +23,7 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 - Windows that can't fill a tile still tile: Simulator (it keeps its device's shape), Calculator,
   System Settings, apps with a minimum size. Each sits at the size it takes, centered in its slot,
   and its column is sized to fit it, so a phone in Simulator gets a narrow column and the window
-  beside it gets the rest. Tessel learns what each window takes from how it answers being asked for
+  beside it gets the rest. Lunchbox learns what each window takes from how it answers being asked for
   a size (no lists to keep), the moment it first places it, so it goes straight to the size and
   column it fits; it remembers that across relaunches, and relearns it when the window changes
   its own size, like switching to another device. Tidy (⌘⇧0) starts that over for the windows in
@@ -81,15 +81,15 @@ is left alone, so with three Workspaces ⌘⇧4 and ⌘⇧5 are the Mac's screen
 | **Hide** | ⌘⇧H: send the window to the last Workspace |
 | **Cheat Sheet** | ⌘⇧Space: every shortcut, searchable |
 | **Halo** | The blue outline around the focused window |
-| **Workspaces 1–3** | Tessel's own instant Workspaces, on ⌘1, ⌘2 and ⌘3 (up to nine if you add them) |
+| **Workspaces 1–3** | Lunchbox's own instant Workspaces, on ⌘1, ⌘2 and ⌘3 (up to nine if you add them) |
 
 ## Your own shortcuts
 
 Every command can be rebound: menu bar › Settings › **Keyboard Shortcuts…** (or **Customize…** in the
-Cheat Sheet). Click a shortcut and press new keys. Tessel refuses a combination another command already
+Cheat Sheet). Click a shortcut and press new keys. Lunchbox refuses a combination another command already
 uses, or one that would get in the way of typing; **Show defaults** lists the original keys next to yours,
 and each changed shortcut has its own reset, plus **Restore All Defaults**. Changes are saved as
-overrides on top of the defaults (`Sources/TesselCore/Keymap.swift`).
+overrides on top of the defaults (`Sources/LunchboxCore/Keymap.swift`).
 
 The Cheat Sheet's search forgives: synonyms ("maximize", "minimize", "virtual desktop"), symbols
 (⌘ ⇧ ← ↩), abbreviations (cmd, alt), filler words ("how do I make it bigger") and typos. When nothing
@@ -123,9 +123,9 @@ Apps you open often rise to the top.
   found wherever that version of Xcode keeps them, and so are apps in another drive's
   Applications folder.
   macOS hides the files in Desktop, Documents and Downloads from apps it hasn't let into those
-  folders, Spotlight's answers included, and only asks once an app looks inside one. Tessel never
+  folders, Spotlight's answers included, and only asks once an app looks inside one. Lunchbox never
   looks on its own, so nothing pops up while you type: until you've answered, file searches end
-  with **Find files on your Desktop and in Documents too**. Choose it and Tessel reads those
+  with **Find files on your Desktop and in Documents too**. Choose it and Lunchbox reads those
   folders (and iCloud Drive's Desktop and Documents) once, macOS asks whether to allow each, and
   Summon opens again on the same search. Its second line, **Don't show this again** (⇧↩), hides
   the row instead. Either way it never comes back, and with Full Disk Access it never shows. To
@@ -140,7 +140,7 @@ Apps you open often rise to the top.
   while a big app is still starting up), the app quits, or its window opens while you're in another
   Workspace, the placeholder fades and the gap closes. A placeholder belongs to its Workspace like a window does.
   You can't click or focus it.
-- ↑ ↓ to choose, Return to open, ⇧↩ for a new window, Esc or ⇧ Space to close. When nothing matches, it offers to search the web with your Mac's search engine in your default browser (or opens a typed address). The page opens as a new tab in the browser's window in this Workspace, or in a new window here when it has none, never a pop-up like Little Arc. This works with Arc, Safari, Chrome, Edge, Brave and Vivaldi; the first time, macOS asks whether Tessel may control the browser. Other browsers, or a browser you said no to, get the link the usual way, and Tessel still tiles whatever window it lands in.
+- ↑ ↓ to choose, Return to open, ⇧↩ for a new window, Esc or ⇧ Space to close. When nothing matches, it offers to search the web with your Mac's search engine in your default browser (or opens a typed address). The page opens as a new tab in the browser's window in this Workspace, or in a new window here when it has none, never a pop-up like Little Arc. This works with Arc, Safari, Chrome, Edge, Brave and Vivaldi; the first time, macOS asks whether Lunchbox may control the browser. Other browsers, or a browser you said no to, get the link the usual way, and Lunchbox still tiles whatever window it lands in.
 
 With the mouse: drag a tiled window onto another to swap them, onto the other screen to move it
 there, or drag its edge to resize. A centered window (alone, or in Focus) stretches on both sides as you drag an edge or corner, as if ⌥
@@ -162,9 +162,9 @@ while a window something moves onto another display (an agent testing on a dummy
 
 ## How it works
 
-- `Sources/TesselCore` is the layout engine: columns of stacked windows per display, plus the
+- `Sources/LunchboxCore` is the layout engine: columns of stacked windows per display, plus the
   directional-focus search. No AppKit, fully unit-tested (`swift test`).
-- `Sources/Tessel` is the app:
+- `Sources/Lunchbox` is the app:
   - `HotkeyTap` is a CGEventTap on its own high-priority thread. It tells left from right ⌘ by the
     device-dependent modifier bit.
   - `Tiler` tracks apps and windows through the Accessibility API and owns the per-display,
@@ -175,11 +175,11 @@ while a window something moves onto another display (an agent testing on a dummy
   - `Overlays` draws the focus ring and the space badge with Core Animation in click-through panels.
   - `Placeholders` draws a placeholder tile: a click-through frosted panel just above the desktop, under
     every app's windows, so the arriving window glides in over it. In a layout a placeholder is just a
-    window ID from a reserved range (`Placeholder` in TesselCore), so it gets exactly the new window's
+    window ID from a reserved range (`Placeholder` in LunchboxCore), so it gets exactly the new window's
     slot, and `Layout.fill` swaps the real window in. Placeholders are never saved.
 - Windows in other spaces are parked just off the bottom-right corner of the right-most screen.
-  Quitting Tessel (menu, `kill`, or reinstall) brings them back first.
-- Tessel saves each Workspace's layout as it changes: which windows share a stack, the column
+  Quitting Lunchbox (menu, `kill`, or reinstall) brings them back first.
+- Lunchbox saves each Workspace's layout as it changes: which windows share a stack, the column
   order, and the sizes you gave them. Relaunching (or pausing and resuming tiling) puts every
   window that's still open back in the same Workspace, display, stack and column, at the same
   size. Windows opened in the meantime join as new windows do.
@@ -190,26 +190,26 @@ while a window something moves onto another display (an agent testing on a dummy
 ./scripts/build.sh --install
 ```
 
-This builds a release binary, wraps it in `build/Tessel.app`, signs it with the Apple Development
+This builds a release binary, wraps it in `build/Lunchbox.app`, signs it with the Apple Development
 identity (so macOS keeps the Accessibility permission across rebuilds), copies it to
 `/Applications`, and relaunches it. The first launch asks for Accessibility access in
 System Settings → Privacy & Security.
 
 ## Scripting and debugging
 
-Tessel listens for distributed notifications named `com.tyleryouens.tessel.command`:
+Lunchbox listens for distributed notifications named `com.sentientdonut.lunchbox.command`:
 
 ```bash
-osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately("com.tyleryouens.tessel.command", "pause", $(), true)'
+osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately("com.sentientdonut.lunchbox.command", "pause", $(), true)'
 ```
 
-Any process on the Mac can post one, so which commands Tessel takes depends on the build, and that's
+Any process on the Mac can post one, so which commands Lunchbox takes depends on the build, and that's
 fixed when it's compiled (no setting or environment variable changes it):
 
 - **Every build**, including the download customers get (`scripts/release.sh`): `pause`, `resume`,
   `retile` and `balance`. Anything else is ignored, and the log says `ignored command <name>`.
-- **Development builds only** (`scripts/build.sh`, which passes `-DTESSEL_DEV`, and `swift build`, a
-  debug build): everything else. The test VMs (`vm.sh install-tessel`), WindowLab and Tyler's Mac run
+- **Development builds only** (`scripts/build.sh`, which passes `-DLUNCHBOX_DEV`, and `swift build`, a
+  debug build): everything else. The test VMs (`vm.sh install-lunchbox`), WindowLab and Tyler's Mac run
   these. `release.sh` uses its own build folder (`.build/dist`) and refuses a binary that was compiled
   with them. Settings › Copy Diagnostics says which kind of build is running. A build.sh build is
   version 1 to Sparkle, so once a release ships it offers to update to it: on a Mac where agents need
@@ -220,14 +220,14 @@ taking focus), `welcomeclose`, `find:<text>` (opens Summon with that text), `hel
 `launcher`, `launcher-open|new|up|down`, `shortcuts`, `focus-left|right|up|down`, `move-…`, `grow`,
 `shrink`, `close` (the focused window) or `close-<windowID>`, `hide`, `spotlight`, `space-1…9`,
 `send-1…9`, `workspaces-3…9`, `displays-all`, `displays-main`, `press:<keycode>[:cmd][:shift][:opt]`
-(presses the keys through the whole system, with Tessel's Accessibility permission, for end-to-end
+(presses the keys through the whole system, with Lunchbox's Accessibility permission, for end-to-end
 tests and demo recordings), `expect:<bundle id>` (holds a placeholder for a window of that app, without
 opening anything, to try placeholders), `leave-app:<bundle id>` and `manage-app:<bundle id>` (stop and
 resume tiling one app's windows, for agents testing it on a dummy-plug display), `license:<key>`,
 `license:window`, `license:remove`, `license:snapshot:<png>[:ended]`, `practice:<command>` (drives
 onboarding's practice screen), `timeback-add:<action>:<count>[:<days ago>]`, `copy-diagnostics`, the
 learning commands (see below), and `dump`, which writes the current state (Summon's results with
-file paths among it) to `~/Library/Application Support/Tessel/state.json`.
+file paths among it) to `~/Library/Application Support/Lunchbox/state.json`.
 
 `pause` and `resume` do what the menu's **Tiling** item does. Pausing brings back windows parked in
 other spaces, stops tiling, and lets every shortcut through to apps. Both are safe to send twice.
@@ -235,21 +235,21 @@ Agents that drive the screen (computer use, screen recordings, anything that nee
 exact size) should pause first and resume when they're done:
 
 ```bash
-osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately("com.tyleryouens.tessel.command", "pause", $(), true)'
+osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately("com.sentientdonut.lunchbox.command", "pause", $(), true)'
 ```
 
 ```bash
-osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately("com.tyleryouens.tessel.command", "resume", $(), true)'
+osascript -l JavaScript -e 'ObjC.import("Foundation"); $.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately("com.sentientdonut.lunchbox.command", "resume", $(), true)'
 ```
 
-**Copy Diagnostics** (Settings) puts a summary for support on the clipboard: the Tessel and macOS
+**Copy Diagnostics** (Settings) puts a summary for support on the clipboard: the Lunchbox and macOS
 versions, the build kind, the displays, the Workspaces and each one's windows (as app bundle IDs, what
-kind of window Tessel took each for, and the size limits it learned), the windows not in a tile, the
-trial or license state, and the last day's errors from Tessel's log. It never includes window titles, file
+kind of window Lunchbox took each for, and the size limits it learned), the windows not in a tile, the
+trial or license state, and the last day's errors from Lunchbox's log. It never includes window titles, file
 paths, the license key or the email address: log lines go through `SupportSummary.scrub` first.
 
 **Testing window handling:** `scripts/windowlab/build.sh` builds WindowLab, a small app that opens every
-kind of window Tessel has to handle on command: fixed-size, minimum or maximum size, keeps its shape,
+kind of window Lunchbox has to handle on command: fixed-size, minimum or maximum size, keeps its shape,
 an alert, an About box, a utility panel, two at once, one that animates itself like Little Arc, and one
 that switches "device"; it can also open a burst of windows (an app restoring them), answer slowly
 (Arc at times), or draw slowly (a browser). `scripts/windowlab/windowlab report:<path>` writes where
@@ -264,17 +264,17 @@ size limits.
 Logs (`/usr/bin/log`, since zsh has its own `log` builtin):
 
 ```bash
-/usr/bin/log stream --predicate 'subsystem == "com.tyleryouens.tessel"' --info
+/usr/bin/log stream --predicate 'subsystem == "com.sentientdonut.lunchbox"' --info
 ```
 
 ## Learning where your windows go (off by default for now)
 
-**Settings › Learn Where Windows Go** turns it on. Tessel then learns from what you do, entirely
+**Settings › Learn Where Windows Go** turns it on. Lunchbox then learns from what you do, entirely
 on this Mac ([docs/learning.md](docs/learning.md)):
 
 - **It knows what kind of window it's looking at.** A window classifier decides, as each window
   appears, whether it's a document (tiles), a tool panel, a here-and-gone window, a video or call,
-  or a dialog the rules missed, in well under a millisecond. **What Tessel Learned › How Tessel
+  or a dialog the rules missed, in well under a millisecond. **What Lunchbox Learned › How Lunchbox
   Sees Your Windows** shows its call for every open window ([docs/window-classifier.md](docs/window-classifier.md)).
 - **It floats what you'd float.** Float a window from the menu (**Float This Window**), or drag
   it out of its tile twice in a row, and the next window like it floats by itself. A full
@@ -289,9 +289,9 @@ on this Mac ([docs/learning.md](docs/learning.md)):
 
 It only decides where a new window lands (and, with a fourth window, the grid's shape), never
 takes focus, and never asks anything. Each time it acts, a quiet line at the bottom of the screen
-says what happened, and ⌘ with the number of the Workspace you were in undoes it. Undo the same thing twice and Tessel forgets it.
-**Settings › What Tessel Learned** lists every lesson in words: click one to forget it, or reset
-them all. It keeps everything in `~/Library/Application Support/Tessel/Learning`, out of
+says what happened, and ⌘ with the number of the Workspace you were in undoes it. Undo the same thing twice and Lunchbox forgets it.
+**Settings › What Lunchbox Learned** lists every lesson in words: click one to forget it, or reset
+them all. It keeps everything in `~/Library/Application Support/Lunchbox/Learning`, out of
 backups, and never sends any of it anywhere.
 
 Commands (development builds only): `learning-on`, `learning-off`, `classes` / `classify` (the window classifier's calls),
@@ -303,7 +303,7 @@ Workspace homes without waiting). `dump` adds a `learning` section.
 ## Website
 
 `site/` is the landing page: `index.html` (self-contained apart from Google Fonts) and the logo as
-`logo.svg`. It sells Tessel at $9.99 USD, one-time, with lifetime updates, and walks through every
+`logo.svg`. It sells Lunchbox at $9.99 USD, one-time, with lifetime updates, and walks through every
 feature with an animated mini Mac. Preview it with `python3 -m http.server 4173 --directory site`.
 
 The Buy buttons go nowhere yet: set `CHECKOUT_URL` at the top of the page's script once a checkout
@@ -311,7 +311,7 @@ The Buy buttons go nowhere yet: set `CHECKOUT_URL` at the top of the page's scri
 
 ## Staying out of your way
 
-- **Crashes:** Open at Login runs Tessel as a launchd agent. If it ever crashes, it's back within
+- **Crashes:** Open at Login runs Lunchbox as a launchd agent. If it ever crashes, it's back within
   seconds and puts every window where it was. Parked windows never stay stranded, and Quit still quits.
 - **Displays coming and going:** when a display is unplugged, its windows move to another display.
   When it comes back, they return to their spots on it. Changes wait a second to settle, so a display

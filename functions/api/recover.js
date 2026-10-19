@@ -1,6 +1,6 @@
-// POST /api/recover {email} : lost your license? We email every Tessel license bought with
+// POST /api/recover {email} : lost your license? We email every Lunchbox license bought with
 // that address, to that address only. The answer never says whether the email bought anything.
-import { sessionsForEmail, isPaidTessel } from "../../store/lib/stripe.js";
+import { sessionsForEmail, isPaidLunchbox } from "../../store/lib/stripe.js";
 import { licenseFor, sendLicenses } from "../../store/lib/fulfill.js";
 import { normalizeEmail } from "../../store/lib/license.js";
 
@@ -19,12 +19,12 @@ export async function onRequestPost({ request, env }) {
     return reply("bad-request", "bad");
   }
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || email.length > 254) return reply("bad-email", "bad");
-  const sessions = (await sessionsForEmail(env, email)).filter((s) => isPaidTessel(s, env));
+  const sessions = (await sessionsForEmail(env, email)).filter((s) => isPaidLunchbox(s, env));
   if (sessions.length) {
     const licenses = await Promise.all(sessions.map((s) => licenseFor(s, env)));
     // One recovery email per address per day, however often the form is sent.
     const day = new Date().toISOString().slice(0, 10);
-    await sendLicenses(env, { to: email, licenses, idempotencyKey: `tessel-recover-${email}-${day}`, recovery: true });
+    await sendLicenses(env, { to: email, licenses, idempotencyKey: `lunchbox-recover-${email}-${day}`, recovery: true });
   }
   return isForm ? reply("sent-if-found", "sent") : done();
 }

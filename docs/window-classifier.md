@@ -1,14 +1,14 @@
 # The window classifier
 
-Results as of 2026-10-17, measured against Tessel's rules as of main's cbfafb9 (built on branch
+Results as of 2026-10-17, measured against Lunchbox's rules as of main's cbfafb9 (built on branch
 `claude/bold-villani-c70383`, in main since 2026-10-18). This is the first part of
-Tessel's learning layer ([learning.md](learning.md)): a fast model that decides how each window
+Lunchbox's learning layer ([learning.md](learning.md)): a fast model that decides how each window
 should behave the moment it appears. It sits behind **Settings › Learn Where Windows Go**, which
 is off by default.
 
 ## What it decides
 
-| Class | What it is | What Tessel does |
+| Class | What it is | What Lunchbox does |
 |---|---|---|
 | **document** | a document or main window | tiles |
 | **panel** | inspector, palette, Fonts or Colors, Get Info, settings window, a small companion window like a Stickies note | floats where it is |
@@ -18,7 +18,7 @@ is off by default.
 
 ## How it decides
 
-- **Inputs:** everything Tessel can read about a window when it appears (`WindowTraits`):
+- **Inputs:** everything Lunchbox can read about a window when it appears (`WindowTraits`):
   - Accessibility role and subrole, identifier, and title-bar buttons;
   - resizable, modal, default and cancel buttons, toolbar, tabs, document and main;
   - the window server's level (normal 0, floating panels 3, overlays higher);
@@ -26,22 +26,22 @@ is off by default.
   - the app's App Store category;
   - how many windows the app has.
 
-  The **title** is read too, in memory only, and is never written anywhere Tessel keeps.
+  The **title** is read too, in memory only, and is never written anywhere Lunchbox keeps.
 - **Two views:** the structure, and what the title says. The title view is a UI vocabulary (tool,
   transient, media, dialog and document words), the title's shape (empty, the app's name, a file
   name), and Apple's on-device word vectors (`NLEmbedding`, about 0.02 ms a word). Those are
   projected down to 6 numbers.
 - **Model:** a softmax head over both views (`BehaviorModel`, weights in
-  `Sources/TesselCore/BehaviorModelWeights.swift`, 45 KB). It's shaped like a System One model:
+  `Sources/LunchboxCore/BehaviorModelWeights.swift`, 45 KB). It's shaped like a System One model:
   the window's state in, one probability per behavior out, nothing generated.
 - **Safety floor** (`BehaviorDecision.combine`):
-  - the rules decide every window Tessel never asks the classifier about:
+  - the rules decide every window Lunchbox never asks the classifier about:
     - dialogs;
     - windows that can be neither resized nor minimized, like About boxes (they float
       centered, like dialogs);
     - windows that aren't window-like, like a palette without every title-bar button or a
       helper window;
-    - the always-float overlays (the screenshot UI and Tessel itself, which Tessel never
+    - the always-float overlays (the screenshot UI and Lunchbox itself, which Lunchbox never
       watches);
   - the model only counts when it's at least 50% sure.
 
@@ -86,7 +86,7 @@ helped either.
   app, which is what a new user's apps are. Reproduce it with:
 
   ```bash
-  swift run -c release TesselTrain Training/windows.jsonl
+  swift run -c release LunchboxTrain Training/windows.jsonl
   ```
 
 | | Right behavior (5 classes) | Right tile-or-not | Right placement (tile / float / float centered) |
@@ -150,23 +150,23 @@ Recall per class, for the rules, the model alone, and the shipped decision:
   16,800 decisions in the trainer), and 0.09 ms in the app in the VM. The word vectors load once
   in about 30 ms and add about 5 MB.
 - **Reading the traits** over Accessibility: **1.0–1.6 ms a window** in the VM, once per new window,
-  on the app's own queue (never the main thread), inside the read Tessel already does.
+  on the app's own queue (never the main thread), inside the read Lunchbox already does.
 - **Total:** a new window is decided in about 2 ms off the main thread, inside the "few
   milliseconds" budget.
 
 ## How Tyler can see it on his own windows
 
 1. Install the branch (`./scripts/build.sh --install`) and turn on **Settings › Learn Where Windows Go**.
-2. Open **Settings › What Tessel Learned › How Tessel Sees Your Windows…**. Every open window is
-   listed with Tessel's call, how sure it is, what the old rules would have done, and what that
-   means ("tiles", "floats", "floats, centered"). Windows where Tessel goes against the old rules
+2. Open **Settings › What Lunchbox Learned › How Lunchbox Sees Your Windows…**. Every open window is
+   listed with Lunchbox's call, how sure it is, what the old rules would have done, and what that
+   means ("tiles", "floats", "floats, centered"). Windows where Lunchbox goes against the old rules
    come first, marked ◆. The footer shows the measured read and decision times per window.
    **Look Again** refreshes.
-3. When it's wrong, float or tile the window from the menu and Tessel learns from that. Telling
+3. When it's wrong, float or tile the window from the menu and Lunchbox learns from that. Telling
    us which windows it got wrong is how the labeled set grows.
 
 For agents: the `classes` command shows the panel, and `classify` writes the same report, without
-titles, to `~/Library/Application Support/Tessel/classes.json`.
+titles, to `~/Library/Application Support/Lunchbox/classes.json`.
 
 Live in the VM with the first weights (2026-10-16, tiling on, learning on): Finder's Get Info windows, both Stickies notes and
 Script Editor's Library floated the moment they opened, while Finder, TextEdit, Script Editor and

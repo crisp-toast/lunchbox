@@ -1,7 +1,7 @@
 // motion <seconds> <owners,comma,separated> [step ...]
 // Records every frame of every window the owners have, every 2 ms, while it runs the steps
 // at their times, so a case's clock starts at the exact moment its trigger is posted.
-//   step: <ms>:tessel:<command>   posts a Tessel command
+//   step: <ms>:lunchbox:<command>   posts a Lunchbox command
 //         <ms>:wl:<command>       posts a WindowLab command
 //         <ms>:sh:<command line>  runs a shell command (not waited for)
 //         <ms>:mark               just notes the time
@@ -30,7 +30,7 @@ func post(_ name: String, _ object: String) {
 func run(_ step: Step) {
     let t = now()
     switch step.kind {
-    case "tessel": post("com.tyleryouens.tessel.command", step.body)
+    case "lunchbox": post("com.sentientdonut.lunchbox.command", step.body)
     case "wl": post("com.tyleryouens.windowlab", step.body)
     case "sh":
         let p = Process()
