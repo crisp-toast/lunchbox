@@ -41,6 +41,9 @@ public enum AutomaticAction: Equatable, Sendable {
     case sent(app: String, space: Int)
     /// A new window you opened went to the Workspace its app lives in, and you went with it.
     case followed(app: String, space: Int)
+    /// A restarted app's window went back to the Workspace it was in when the app quit; with
+    /// `followed`, you went with it.
+    case reopened(app: String, space: Int, followed: Bool)
 }
 
 /// The one line LunchboxWM shows when it did something on its own.
@@ -51,7 +54,9 @@ public enum QuietLine {
         let what: String
         let undo: String
         if actions.count > 1 {
-            let spaces = actions.allSatisfy { if case .sent = $0 { return true }; if case .followed = $0 { return true }; return false }
+            let spaces = actions.allSatisfy {
+                switch $0 { case .sent, .followed, .reopened: return true; default: return false }
+            }
             what = spaces ? "\(actions.count) windows went to their Workspaces" : "\(actions.count) windows went where they usually go"
             undo = spaces ? "keeps them here" : "undoes"
         } else {
@@ -63,6 +68,8 @@ public enum QuietLine {
             case .anchored(let app, let side): (what, undo) = ("\(app) has the \(side) to itself, like last time", "makes a grid")
             case .sent(let app, let space): (what, undo) = ("\(app) opened in Workspace \(space + 1)", "keeps it here")
             case .followed(let app, let space): (what, undo) = ("\(app) lives in Workspace \(space + 1)", "takes it back")
+            case .reopened(let app, let space, let followed):
+                (what, undo) = ("\(app) reopened in Workspace \(space + 1), where it was", followed ? "takes it back" : "keeps it here")
             }
         }
         guard let undoKey else { return what }

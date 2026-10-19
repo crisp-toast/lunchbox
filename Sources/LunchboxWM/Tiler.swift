@@ -376,6 +376,7 @@ final class Tiler {
         let focusedFrame = focusedID.flatMap { id in gone.contains(id) ? visibleFrames()[id] : nil }
         if !gone.isEmpty { quietFocus(for: 1) }
         gone.forEach { forget($0, appQuit: true) }
+        if let bundleID = app.bundleID { quitMemory.quit(bundleID, at: CACurrentMediaTime()) }
         if !gone.isEmpty {
             relayout(animated: true)
             persist()
@@ -854,7 +855,10 @@ final class Tiler {
         // Following you to another Workspace, the undo key also just takes you back: it only
         // brings the window along while the line is up.
         let window: Double
-        if case .followed = action { window = Etiquette.lineSeconds + 1 } else { window = Etiquette.undoSeconds }
+        switch action {
+        case .followed, .reopened(_, _, true): window = Etiquette.lineSeconds + 1
+        default: window = Etiquette.undoSeconds
+        }
         if var a = automatic, now - a.at < Etiquette.batchSeconds, a.from == from {
             a.actions.append(action)
             a.undos.append(undo)
@@ -1127,20 +1131,28 @@ final class Tiler {
     private func insert(_ window: ManagedWindow) {
         if returnFromFullScreen(window) { return }
         let saved = savedPlacement.removeValue(forKey: window.id)
-        if saved == nil, initialScanDone, takePlaceholder(for: window) { return }
+        // Its app restarted: back to the Workspace and spot it had when the app quit, wherever you are.
+        let back = saved == nil && initialScanDone && window.isNew ? restartSpot(for: window, take: true) : nil
+        if back != nil, let app = window.handle.app.bundleID {
+            // Not the tile Summon or the Dock held for it here: it's going back where it was.
+            let held = expected.filter { $0.bundleID == app }
+            if !held.isEmpty { giveUp(held, why: "it went back where it was before it quit") }
+        }
+        if saved == nil, back == nil, initialScanDone, takePlaceholder(for: window) { return }
         // The app brought back a window it already had (a minimized one, say) instead of making a
         // new one: that's the window you were waiting for, so the tile held for it goes.
         if initialScanDone {
             let answered = expected.filter { $0.existing.contains(window.id) && $0.bundleID == window.handle.app.bundleID }
             if !answered.isEmpty { giveUp(answered, why: "it brought back a window it already had") }
         }
-        let display = saved.flatMap { s in activeDisplays.first { $0.uuid == s.display } } ?? arrivalDisplay(for: window.frame)
+        let display = back.flatMap { b in activeDisplays.first { $0.uuid == b.display } }
+            ?? saved.flatMap { s in activeDisplays.first { $0.uuid == s.display } } ?? arrivalDisplay(for: window.frame)
         guard let display else { return }
         // A window that just opened: not one back from before a relaunch or a pause, nor one
         // that was around already (floating, minimized, in full screen) and is tiling again.
-        let fresh = saved == nil && initialScanDone && window.isNew
+        let fresh = saved == nil && back == nil && initialScanDone && window.isNew
         let app = window.handle.app.bundleID
-        var space = saved?.space ?? currentSpace
+        var space = back?.space ?? saved?.space ?? currentSpace
         // Learned: a new window you didn't open from LunchboxWM goes to the Workspace its app lives in.
         var home: Int?
         if fresh, let app {
@@ -1151,7 +1163,8 @@ final class Tiler {
         }
         var layout = spaces[space][display.uuid] ?? Layout()
         // Back from before a relaunch: the same stack and column it had, else a new spot.
-        let before = saved.flatMap { s in s.display == display.uuid ? savedLayouts["\(s.space)|\(s.display)"] : nil }
+        let before = back.map { QuitMemory.layout(of: $0, as: window.id) }
+            ?? saved.flatMap { s in s.display == display.uuid ? savedLayouts["\(s.space)|\(s.display)"] : nil }
         var usual: (action: AutomaticAction, undo: Automatic.Undo, key: String)?
         if !(before.map { layout.restore(window.id, from: $0) } ?? false) {
             var plain = layout
@@ -1173,7 +1186,10 @@ final class Tiler {
             standing["\(space)|\(display.uuid)"] = nil // it starts standing once you leave it be
             DispatchQueue.main.async { [weak self] in self?.noteArranged(space: space, display: display.uuid, byYou: false) }
         }
-        if let home, let app {
+        if back != nil, let app {
+            reopened(window, app: app, space: space, display: display)
+            TimeBackLedger.shared.count(.restored)
+        } else if let home, let app {
             placedInHome(window, app: app, home: home, display: display) // counted as sent, in Learning
         } else if usual != nil {
             TimeBackLedger.shared.count(.arranged)
@@ -1382,6 +1398,16 @@ final class Tiler {
     /// Where a window on its way will tile, worked out without changing anything.
     private func plannedFrame(for info: WindowInfo, app: AppHandle) -> CGRect? {
         let probe = ManagedWindow(handle: WindowHandle(id: info.id, element: info.element, app: app), frame: info.frame)
+        // Its app restarted: it's going back where it was (`insert`).
+        if let back = restartSpot(for: probe, take: false) {
+            guard back.space == currentSpace, let d = activeDisplays.first(where: { $0.uuid == back.display }) else {
+                // To another Workspace: out of sight right away, unless you're about to go there with it.
+                return openedByYou(probe) ? nil : CGRect(origin: Display.hidingSpot(in: displays), size: info.frame.size)
+            }
+            var layout = spaces[currentSpace][d.uuid] ?? Layout()
+            guard layout.restore(info.id, from: QuitMemory.layout(of: back, as: info.id)) else { return nil }
+            return layout.frames(in: d.visible, gap: Self.gap, limits: limits)[info.id]
+        }
         if let e = expected.first(where: { $0.matches(probe) }), let (s, uuid) = place(of: e.id), s == currentSpace,
            let d = activeDisplays.first(where: { $0.uuid == uuid }) {
             return spaces[s][uuid]?.frames(in: d.visible, gap: Self.gap, limits: limits)[e.id] // the tile held for it
@@ -1440,6 +1466,13 @@ final class Tiler {
 
     /// - appQuit: it closed because its app quit, which says nothing about the window.
     private func forget(_ id: CGWindowID, appQuit: Bool = false) {
+        // Where it was, in case its app is quitting (`QuitMemory`): a restart brings the next window back there.
+        if enabled, let w = windows[id], let app = w.handle.app.bundleID, !Placeholder.isPlaceholder(id),
+           let (space, uuid) = place(of: id), let layout = spaces[space][uuid]?.withoutPlaceholders() {
+            quitMemory.closed(app, spot: .init(window: id, space: space, display: uuid, frame: w.frame, layout: layout,
+                                               usedLast: focusedID == id || lastFocused[space] == id),
+                              at: CACurrentMediaTime())
+        }
         if let w = windows[id] {
             Learning.shared.closed(id, lifetime: CACurrentMediaTime() - w.seenAt, counts: w.openedWhileRunning && !appQuit)
         }
@@ -1467,6 +1500,7 @@ final class Tiler {
         droppedAt[id] = nil
         limits[id] = nil
         prePlaced[id] = nil
+        headedBack[id] = nil
     }
 
     private func removeFromLayouts(_ id: CGWindowID) {
@@ -1726,6 +1760,65 @@ final class Tiler {
     private func refreshFocus() {
         guard let front = NSWorkspace.shared.frontmostApplication else { return }
         appActivated(front)
+    }
+
+    /// Where apps' tiled windows were when they quit: a restart puts them back.
+    private var quitMemory = QuitMemory()
+
+    /// Which remembered spot each window placed early (`prePlace`) was headed for.
+    private var headedBack: [CGWindowID: WindowID] = [:]
+
+    /// The spot a new window of a restarted app goes back to, if its Workspace and display are
+    /// still there. `take`: it's being placed now, so the app's next window gets another spot.
+    private func restartSpot(for window: ManagedWindow, take: Bool) -> QuitMemory.Spot? {
+        guard let app = window.handle.app.bundleID else { return nil }
+        let now = CACurrentMediaTime()
+        let spot = take
+            ? quitMemory.take(for: app, frame: window.frame, now: now, preferring: headedBack.removeValue(forKey: window.id))
+            : quitMemory.spot(for: app, frame: window.frame, now: now)
+        guard let spot, spot.space < spaceCount, activeDisplays.contains(where: { $0.uuid == spot.display }) else { return nil }
+        if !take { headedBack[window.id] = spot.window }
+        return spot
+    }
+
+    /// A restarted app's window went back to the Workspace it was in. If you just opened the app,
+    /// you go with it, the way the Dock takes you to an app's window. If it came back by itself
+    /// (an update, a crash), you stay where you are, and so does the keyboard.
+    private func reopened(_ window: ManagedWindow, app: String, space: Int, display: Display) {
+        let from = currentSpace
+        guard space != from else { return }
+        let name = Self.appName(app)
+        if openedByYou(window) {
+            didOnItsOwn(.reopened(app: name, space: space, followed: true), undo: .place(window.id, from: from),
+                        key: "reopen|\(app)", from: from, on: display)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.place(of: window.id)?.space == space else { return }
+                self.lastFocused[space] = window.id
+                self.switchSpace(to: space, focusing: window.id)
+                self.activate(window.id)
+                self.showRing(on: window.id)
+            }
+        } else {
+            placedForYou[window.id] = CACurrentMediaTime() + 3
+            didOnItsOwn(.reopened(app: name, space: space, followed: false), undo: .place(window.id, from: from),
+                        key: "reopen|\(app)", from: from, on: display)
+            // Its app may have taken the keyboard on its way: give it back.
+            for delay in [0.1, 0.5] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    guard let self, NSWorkspace.shared.frontmostApplication?.processIdentifier == window.pid
+                        || self.focusedID == window.id else { return }
+                    if self.focusedID == window.id { self.focusedID = self.lastFocused[self.currentSpace] }
+                    self.reclaimFocus()
+                }
+            }
+        }
+    }
+
+    /// An app's name as Finder shows it ("Claude"), from its bundle ID.
+    static func appName(_ bundleID: String) -> String {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return bundleID }
+        let name = FileManager.default.displayName(atPath: url.path)
+        return name.hasSuffix(".app") ? String(name.dropLast(4)) : name
     }
 
     /// Windows that took focus without a tile, and when they were last looked at again.
