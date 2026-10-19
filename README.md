@@ -13,6 +13,8 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
   showing up where its app put it and gliding over. Tessel moves it the moment the app makes it,
   often before it's even on screen.
 - Three Workspaces on ⌘1, ⌘2 and ⌘3, switched instantly. Add more (up to nine) from the menu.
+  Whenever you change Workspace, however you got there, "Workspace 2" shows at the top of the
+  screen for a moment, with a dot for each Workspace.
 - Dialogs (Open, Save, alerts, password prompts) float, centered on their screen, instead of
   splitting the tiled windows apart, and stay in view when you switch Workspaces. So do small
   windows that can't be resized or minimized, like About boxes and progress windows. A "dialog"

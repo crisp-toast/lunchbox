@@ -115,11 +115,15 @@ final class FocusRing {
 }
 
 /// The badge that shows which Workspace you're on, among all of them.
+/// Which Workspace you're in, for a moment after you switch: "Workspace 2" (or what just happened,
+/// like "Moved to Workspace 3") in a frosted pill at the top of the screen, with a dot for each
+/// Workspace. Click-through, never focused.
 final class SpaceBadge {
     private var panel: NSPanel?
     private var dots: [NumberDot] = []
     private var builtFor = 0
-    private var caption: NSTextField?
+    private var title: NSTextField?
+    private var row: NSStackView?
     private var hide: DispatchWorkItem?
 
     func show(space: Int, count: Int, caption text: String? = nil, on display: Display?) {
@@ -131,23 +135,28 @@ final class SpaceBadge {
         }
         let panel = self.panel ?? makePanel(count: count)
         for (i, dot) in dots.enumerated() { dot.isActive = i == space }
-        caption?.stringValue = text ?? ""
-        caption?.isHidden = text == nil
-
-        let size = NSSize(width: max(168, CGFloat(count) * 42 + 42), height: text == nil ? 64 : 88)
+        title?.stringValue = text ?? "Workspace \(space + 1)"
+        row?.layoutSubtreeIfNeeded()
+        let fit = row?.fittingSize ?? NSSize(width: 160, height: 24)
+        let size = NSSize(width: ceil(fit.width) + 40, height: 44)
         let screen = display.flatMap { d in
             NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == d.id }
         } ?? NSScreen.main ?? NSScreen.screens.first
-        if let s = screen?.visibleFrame {
-            panel.setFrame(NSRect(x: s.midX - size.width / 2, y: s.minY + s.height * 0.12, width: size.width, height: size.height), display: true)
-        }
 
         hide?.cancel()
-        panel.alphaValue = reduceMotion ? 1 : panel.alphaValue
-        panel.orderFrontRegardless()
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = reduceMotion ? 0 : 0.12
-            panel.animator().alphaValue = 1
+        if let s = screen?.visibleFrame {
+            // Just under the menu bar; it drops in a little the first time, then stays put.
+            let target = NSRect(x: (s.midX - size.width / 2).rounded(), y: (s.maxY - size.height - 10).rounded(),
+                                width: size.width, height: size.height)
+            let appearing = panel.alphaValue < 0.05 && !reduceMotion
+            panel.setFrame(appearing ? target.offsetBy(dx: 0, dy: 8) : target, display: true)
+            panel.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = reduceMotion ? 0 : 0.16
+                ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.215, 0.61, 0.355, 1)
+                panel.animator().alphaValue = 1
+                if appearing { panel.animator().setFrame(target, display: true) }
+            }
         }
         let work = DispatchWorkItem {
             NSAnimationContext.runAnimationGroup({ ctx in
@@ -158,47 +167,50 @@ final class SpaceBadge {
             })
         }
         hide = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9, execute: work)
     }
 
     private func makePanel(count: Int) -> NSPanel {
         builtFor = count
-        let panel = overlayPanel(frame: NSRect(x: 0, y: 0, width: 168, height: 64))
+        let panel = overlayPanel(frame: NSRect(x: 0, y: 0, width: 220, height: 44))
         panel.alphaValue = 0
         let blur = NSVisualEffectView()
         blur.material = .hudWindow
         blur.blendingMode = .behindWindow
         blur.state = .active
+        blur.appearance = NSAppearance(named: .darkAqua) // dark glass, so white text reads on any wallpaper
         blur.wantsLayer = true
-        blur.layer?.cornerRadius = 18
+        blur.layer?.cornerRadius = 22
         blur.layer?.cornerCurve = .continuous
         blur.layer?.masksToBounds = true
 
-        let row = NSStackView()
-        row.orientation = .horizontal
-        row.spacing = 12
+        let title = NSTextField(labelWithString: "")
+        title.font = .systemFont(ofSize: 14, weight: .semibold)
+        title.textColor = .white
+        self.title = title
+
+        let dotRow = NSStackView()
+        dotRow.orientation = .horizontal
+        dotRow.spacing = 6
         for i in 0..<count {
             let dot = NumberDot(number: i + 1)
             dot.translatesAutoresizingMaskIntoConstraints = false
-            dot.widthAnchor.constraint(equalToConstant: 30).isActive = true
-            dot.heightAnchor.constraint(equalToConstant: 30).isActive = true
+            dot.widthAnchor.constraint(equalToConstant: 20).isActive = true
+            dot.heightAnchor.constraint(equalToConstant: 20).isActive = true
             dots.append(dot)
-            row.addArrangedSubview(dot)
+            dotRow.addArrangedSubview(dot)
         }
-        let caption = NSTextField(labelWithString: "")
-        caption.font = .systemFont(ofSize: 12, weight: .medium)
-        caption.textColor = NSColor.white.withAlphaComponent(0.75)
-        caption.alignment = .center
-        self.caption = caption
 
-        let column = NSStackView(views: [row, caption])
-        column.orientation = .vertical
-        column.spacing = 8
-        column.translatesAutoresizingMaskIntoConstraints = false
-        blur.addSubview(column)
+        let row = NSStackView(views: [title, dotRow])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 14
+        row.translatesAutoresizingMaskIntoConstraints = false
+        self.row = row
+        blur.addSubview(row)
         NSLayoutConstraint.activate([
-            column.centerXAnchor.constraint(equalTo: blur.centerXAnchor),
-            column.centerYAnchor.constraint(equalTo: blur.centerYAnchor),
+            row.centerXAnchor.constraint(equalTo: blur.centerXAnchor),
+            row.centerYAnchor.constraint(equalTo: blur.centerYAnchor),
         ])
         panel.contentView = blur
         self.panel = panel
@@ -223,7 +235,7 @@ final class NumberDot: NSView {
     override func draw(_ dirtyRect: NSRect) {
         (isActive ? NSColor.controlAccentColor : NSColor.white.withAlphaComponent(0.08)).setFill()
         NSBezierPath(ovalIn: bounds).fill()
-        let font = NSFont.systemFont(ofSize: 15, weight: .semibold)
+        let font = NSFont.systemFont(ofSize: (bounds.height * 0.5).rounded(), weight: .semibold)
         let text = NSAttributedString(string: number, attributes: [
             .font: font,
             .foregroundColor: isActive ? NSColor.white : NSColor.white.withAlphaComponent(0.55),
@@ -296,6 +308,7 @@ final class QuietLineView {
         blur.material = .hudWindow
         blur.blendingMode = .behindWindow
         blur.state = .active
+        blur.appearance = NSAppearance(named: .darkAqua) // dark glass, so white text reads on any wallpaper
         blur.wantsLayer = true
         blur.layer?.cornerRadius = 17
         blur.layer?.cornerCurve = .continuous
