@@ -20,9 +20,6 @@
     <linearGradient id="well" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#1437a8"/><stop offset="1" stop-color="#1b46c8"/>
     </linearGradient>
-    <linearGradient id="handle" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#3f78ff"/><stop offset="1" stop-color="#1d4fe0"/>
-    </linearGradient>
     <linearGradient id="coral" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#ff9a76"/><stop offset="1" stop-color="#f2552f"/>
     </linearGradient>
@@ -40,12 +37,11 @@
   <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#bg)"/>
   <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#glow)"/>
   <rect x="67" y="67" width="890" height="890" rx="209" fill="none" stroke="url(#rim)" stroke-width="6"/>
+  <!-- no handle: the box sits centered on the tile -->
+  <g transform="translate(0 -76)">
   <!-- a soft shadow on the cream -->
   <rect x="156" y="318" width="712" height="584" rx="110" fill="#b8742a" fill-opacity="0.10"/>
   <rect x="152" y="304" width="720" height="586" rx="106" fill="#b8742a" fill-opacity="0.12"/>
-  <!-- the handle -->
-  <path d="M402 300 V238 Q402 178 462 178 H562 Q622 178 622 238 V300" fill="none" stroke="url(#handle)" stroke-width="54" stroke-linecap="round"/>
-  <path d="M402 268 V238 Q402 178 462 178 H562 Q622 178 622 238 V268" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="10" stroke-linecap="round" transform="translate(-12 0)"/>
   <!-- the box -->
   <rect x="148" y="286" width="728" height="590" rx="106" fill="url(#box)"/>
   <rect x="148" y="286" width="728" height="590" rx="106" fill="url(#sheen)"/>
@@ -58,5 +54,6 @@
   <!-- the clasp -->
   <rect x="460" y="852" width="104" height="44" rx="16" fill="#e9efff"/>
   <rect x="460" y="852" width="104" height="44" rx="16" fill="none" stroke="#1d4fe0" stroke-opacity="0.5" stroke-width="4"/>
+  </g>
   </g>
 </svg>
