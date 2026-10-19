@@ -2,7 +2,9 @@ import AppKit
 import os
 import TesselCore
 
-let log = Logger(subsystem: "com.tyleryouens.tessel", category: "tiler")
+/// Tessel's log subsystem: Console and `log stream` filter by it, and Copy Diagnostics reads its errors.
+let logSubsystem = "com.tyleryouens.tessel"
+let log = Logger(subsystem: logSubsystem, category: "tiler")
 
 final class ManagedWindow {
     let handle: WindowHandle

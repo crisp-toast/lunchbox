@@ -196,15 +196,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// The distributed notification scripts post commands to (README, Scripting).
+    static let commandChannel = Notification.Name("com.tyleryouens.tessel.command")
+
     /// Lets scripts drive Tessel without the keyboard, e.g.
-    /// `osascript -l JavaScript -e '…postNotificationName("com.tyleryouens.tessel.command", "pause")…'`.
+    /// `osascript -l JavaScript -e '…postNotificationName("<commandChannel>", "pause")…'`.
     /// Any process on the Mac can post these, so the builds customers get take only what an agent
     /// needs there: pause, resume, retile and balance. Everything else (pressing keys with Tessel's
     /// Accessibility permission, dump, license:, find:, leave-app:…) exists only in development
     /// builds (see `Build`), and isn't in a release binary at all.
     private func listenForCommands() {
         DistributedNotificationCenter.default().addObserver(
-            forName: Notification.Name("com.tyleryouens.tessel.command"), object: nil, queue: .main
+            forName: Self.commandChannel, object: nil, queue: .main
         ) { [weak self] note in
             guard let self, let command = note.object as? String else { return }
             self.run(command)

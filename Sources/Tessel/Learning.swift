@@ -2,7 +2,7 @@ import AppKit
 import os
 import TesselCore
 
-private let learningLog = Logger(subsystem: "com.tyleryouens.tessel", category: "learning")
+private let learningLog = Logger(subsystem: logSubsystem, category: "learning")
 
 /// Tessel learns where your windows go (docs/learning.md): which windows you float, how you
 /// arrange each set of apps, and which Workspace each app lives in. One switch, Settings ›

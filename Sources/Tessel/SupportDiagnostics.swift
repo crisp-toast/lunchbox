@@ -79,7 +79,7 @@ enum SupportDiagnostics {
         do {
             let store = try OSLogStore(scope: .currentProcessIdentifier)
             let since = store.position(date: Date().addingTimeInterval(-86_400))
-            let entries = try store.getEntries(at: since, matching: NSPredicate(format: "subsystem == %@", "com.tyleryouens.tessel"))
+            let entries = try store.getEntries(at: since, matching: NSPredicate(format: "subsystem == %@", logSubsystem))
             let stamp = DateFormatter()
             stamp.locale = Locale(identifier: "en_US_POSIX")
             stamp.dateFormat = "MM-dd HH:mm:ss"

@@ -2,7 +2,7 @@ import Foundation
 import os
 import TesselCore
 
-private let timeBackLog = Logger(subsystem: "com.tyleryouens.tessel", category: "timeback")
+private let timeBackLog = Logger(subsystem: logSubsystem, category: "timeback")
 
 /// The time Tessel gives back (`TimeBack`, docs/worth-paying-for.md), counted where each thing
 /// happens: Tiler for windows it places and puts back, Learning for homes, corrections and
