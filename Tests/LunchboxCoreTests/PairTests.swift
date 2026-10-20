@@ -52,6 +52,45 @@ import Testing
         }
     }
 
+    @Test func theOtherWindowIsTheDraggedOnesMirrorImage() throws {
+        // Even after the split was moved, the pair resizes as two identical windows.
+        var l = layout([[1], [2]])
+        l.columns[0].weight = 2
+        let before = try #require(frames(l)[2])
+        var dragged = before
+        dragged.size.width -= 150 // the right window's far edge moved in
+        let r = try #require(l.pairResize(2, dragged: dragged, target: before, in: screen, gap: gap))
+        #expect(r.otherFrame.size == dragged.size)
+        #expect(abs((r.otherFrame.minX + dragged.maxX) / 2 - usable.midX) <= 1) // mirrored across the middle
+        let adopted101 = l.adoptPair(2, dragged: dragged, target: before, in: screen, gap: gap)
+        #expect(adopted101)
+        let f = frames(l)
+        #expect(try #require(f[1]).size == (try #require(f[2])).size) // identical once you let go
+    }
+
+    @Test func aDraggedTopKeepsThePairCenteredUpAndDown() throws {
+        // Without ⌥ only the top moves: the pair is still the dragged window's height, centered.
+        let l = layout([[1], [2]])
+        let before = try #require(frames(l)[1])
+        var dragged = before
+        dragged.origin.y += 200
+        dragged.size.height -= 200
+        let r = try #require(l.pairResize(1, dragged: dragged, target: before, in: screen, gap: gap))
+        #expect(abs(r.area.midY - usable.midY) <= 1)
+        #expect(r.area.height == dragged.height)
+    }
+
+    @Test func neverSmallerThanTheirMinimums() throws {
+        let limits: [WindowID: SizeLimits] = [1: SizeLimits(minWidth: 900), 2: SizeLimits(minHeight: 700)]
+        let l = layout([[1], [2]])
+        let before = try #require(frames(l)[1])
+        var dragged = before
+        dragged.origin.x += 1000
+        dragged.size.width -= 1000
+        let r = try #require(l.pairResize(1, dragged: dragged, target: before, in: screen, gap: gap, limits: limits))
+        #expect(r.area.width >= 2 * 900 + gap)
+    }
+
     @Test func theEdgeBetweenThemIsTheSplit() throws {
         let l = layout([[1], [2]])
         let before = try #require(frames(l)[1])

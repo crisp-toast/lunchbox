@@ -2037,8 +2037,8 @@ final class Tiler {
         }
         // A far edge of one of two windows: the pair takes that size, centered and touching.
         if let d = displays.first(where: { $0.uuid == uuid }), var layout = spaces[space][uuid], resizesAsPair(layout),
-           let r = layout.pairResize(id, dragged: frame, target: target, in: d.visible, gap: Self.gap),
-           layout.adoptPair(id, dragged: frame, target: target, in: d.visible, gap: Self.gap) {
+           let r = layout.pairResize(id, dragged: frame, target: target, in: d.visible, gap: Self.gap, limits: limits),
+           layout.adoptPair(id, dragged: frame, target: target, in: d.visible, gap: Self.gap, limits: limits) {
             spaces[space][uuid] = layout
             windows[r.other]?.frame = r.otherFrame
             for each in layout.windows { windows[each]?.target = nil } // they glide from where they are
@@ -3393,9 +3393,12 @@ final class Tiler {
         }
     }
 
-    /// Two windows, neither a placeholder nor one with a size of its own to keep.
+    /// Two windows, neither a placeholder nor one that stops at a size of its own (Simulator, a fixed
+    /// window). A minimum is fine: the pair just doesn't get smaller than it.
     private func resizesAsPair(_ layout: Layout) -> Bool {
-        layout.isPair && layout.windows.allSatisfy { !Placeholder.isPlaceholder($0) && limits[$0] == nil && windows[$0] != nil }
+        layout.isPair && layout.windows.allSatisfy {
+            !Placeholder.isPlaceholder($0) && windows[$0] != nil && limits[$0]?.maxWidth == nil && limits[$0]?.maxHeight == nil
+        }
     }
 
     /// While you drag a far edge of one of two windows, the other follows, so the pair stays
@@ -3412,7 +3415,7 @@ final class Tiler {
                 guard let self else { return }
                 self.mirroring = false
                 guard let frame, NSEvent.pressedMouseButtons & 1 != 0,
-                      let r = layout.pairResize(id, dragged: frame, target: target, in: d.visible, gap: Self.gap),
+                      let r = layout.pairResize(id, dragged: frame, target: target, in: d.visible, gap: Self.gap, limits: self.limits),
                       let other = self.windows[r.other], r.otherFrame.width >= 80, r.otherFrame.height >= 80 else { return }
                 self.settlingUntil[r.other] = CACurrentMediaTime() + 0.5
                 other.frame = r.otherFrame
