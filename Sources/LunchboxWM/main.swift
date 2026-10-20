@@ -64,7 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         licensing.onChange = { [weak self] in self?.licenseChanged() }
         // licenseChanged has already paused tiling by then; this says why.
         licensing.onRevoked = { [weak self] license in
-            self?.licenseWindow.show(error: "The license for \(license.email) was refunded, so it no longer unlocks LunchboxWM. If that's a mistake, write to support@sentientdonut.com.")
+            self?.licenseWindow.show(error: "The license for \(license.email) was refunded, so it no longer unlocks Lunchbox. If that's a mistake, write to support@sentientdonut.com.")
         }
         shortcuts.onChange = { KeymapStore.save($0) }
         help.onCustomize = { [weak self] in self?.shortcuts.show() }

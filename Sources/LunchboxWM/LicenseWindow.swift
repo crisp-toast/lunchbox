@@ -12,7 +12,7 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
     private let field = NSTextField()
     private let message = NSTextField(wrappingLabelWithString: "")
     private let activate = NSButton(title: "Activate", target: nil, action: nil)
-    private let buy = NSButton(title: "Buy LunchboxWM – $4.99…", target: nil, action: nil)
+    private let buy = NSButton(title: "Buy Lunchbox – $4.99…", target: nil, action: nil)
     private let lost = NSButton(title: "Lost your license?", target: nil, action: nil)
 
     init(licensing: Licensing) {
@@ -50,7 +50,7 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
             heading.stringValue = "Enter your license"
             setDetail("Paste the license key from your email, or click the activation link in it. Tiling starts as soon as it's in. No license yet? It's $4.99, once.")
         }
-        message.stringValue = error ?? activated.map { "Activated. Thanks for buying LunchboxWM, \($0.email)!" } ?? ""
+        message.stringValue = error ?? activated.map { "Activated. Thanks for buying Lunchbox, \($0.email)!" } ?? ""
         message.textColor = activated == nil ? .systemRed : .systemGreen
         message.isHidden = message.stringValue.isEmpty
         buy.isHidden = licensing.license != nil

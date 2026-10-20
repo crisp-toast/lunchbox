@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>LunchboxWM</title>
-<meta name="description" content="Break free from the pile of windows. LunchboxWM tiles every window as it opens: dialogs float, fixed-size apps keep their size, and there's no config file. $4.99 once.">
+<meta name="description" content="Break free from the pile of windows. Lunchbox tiles every window as it opens: dialogs float, fixed-size apps keep their size, and there's no config file. $4.99 once.">
 <link rel="icon" href="logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -527,7 +527,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
 
   <section class="showcase" aria-label="Lunchbox in action">
     <div class="display" id="display">
-      <video id="reel" muted loop playsinline preload="auto" poster="media/hero.jpg" aria-label="Screen recording: three windows open and tile, then move, resize, focus, hide and close with LunchboxWM's shortcuts">
+      <video id="reel" muted loop playsinline preload="auto" poster="media/hero.jpg" aria-label="Screen recording: three windows open and tile, then move, resize, focus, hide and close with Lunchbox's shortcuts">
         <source src="media/hero.webm" type="video/webm">
         <source src="media/hero.mp4" type="video/mp4">
       </video>
@@ -644,7 +644,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       </ul>
       <form class="buy-form" id="buy-form" method="post" action="api/checkout">
         <input type="hidden" name="attempt" id="attempt" value="">
-        <button class="btn dark" type="submit" id="buy-button"><span>Buy Lunchbox<span class="wm">WM</span> · $4.99</span></button>
+        <button class="btn dark" type="submit" id="buy-button"><span>Buy Lunchbox · $4.99</span></button>
       </form>
       <p class="buy-note" id="buy-note" aria-live="polite"></p>
       <p class="fine">Pay once, then download it and enter your license. No subscription. Refunds within 14 days, no questions.</p>
@@ -680,8 +680,8 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
 
   <section class="footnotes" id="footnotes" aria-label="Footnotes">
     <ol>
-      <li id="fn-lifetime">Every future version of Lunchbox<span class="wm">WM</span> we release is included at no extra charge. See the <a href="terms.html">Terms of Sale</a>.</li>
-      <li id="fn-silicon">Requires a Mac with Apple silicon (M1 or later) and macOS 14 Sonoma or later. Lunchbox<span class="wm">WM</span> doesn't run on Intel-based Macs.</li>
+      <li id="fn-lifetime">Every future version of Lunchbox we release is included at no extra charge. See the <a href="terms.html">Terms of Sale</a>.</li>
+      <li id="fn-silicon">Requires a Mac with Apple silicon (M1 or later) and macOS 14 Sonoma or later. Lunchbox doesn't run on Intel-based Macs.</li>
       <li id="fn-price">Price in US dollars. Sales tax or VAT is added at checkout where it applies.</li>
     </ol>
   </section>
@@ -715,7 +715,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     buyLabel.textContent = "Opening secure checkout…";
   });
   // Back from Stripe with the browser's Back button: the button works again.
-  addEventListener("pageshow", () => { buyButton.disabled = false; buyLabel.innerHTML = 'Buy Lunchbox<span class="wm">WM</span> · $4.99'; });
+  addEventListener("pageshow", () => { buyButton.disabled = false; buyLabel.innerHTML = 'Buy Lunchbox · $4.99'; });
   if (new URLSearchParams(location.search).get("checkout") === "unavailable") {
     buyNote.textContent = "Checkout didn't open, and you weren't charged. Please try again in a minute.";
   }

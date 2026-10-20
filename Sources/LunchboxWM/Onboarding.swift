@@ -137,7 +137,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
         case .welcome: next.title = "Get Started"; next.isEnabled = true
         case .access: next.title = "Continue"; next.isEnabled = AXIsProcessTrusted()
         case .practice: next.title = practiced.count == practiceRows.count ? "Continue" : "Skip for Now"; next.isEnabled = true
-        case .finish: next.title = "Start Using LunchboxWM"; next.isEnabled = true
+        case .finish: next.title = "Start Using Lunchbox"; next.isEnabled = true
         }
     }
 
@@ -170,7 +170,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
         icon.heightAnchor.constraint(equalToConstant: 128).isActive = true
         return page(top: icon,
                     title: "Welcome to LunchboxWM",
-                    body: "Every window, right where it belongs. In about a minute LunchboxWM will be tiling your windows, and you'll know the few keys that matter.")
+                    body: "Every window, right where it belongs. In about a minute Lunchbox will be tiling your windows, and you'll know the few keys that matter.")
     }
 
     // MARK: Accessibility
@@ -192,7 +192,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
         refresh()
         trustTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in refresh() }
         return page(top: symbol("hand.raised.fingers.spread.fill"),
-                    title: "Let LunchboxWM move your windows",
+                    title: "Let Lunchbox move your windows",
                     body: "macOS asks you to allow LunchboxWM under Privacy & Security › Accessibility. That's how it arranges windows and hears its shortcuts. It never records what you type.",
                     content: row)
     }
@@ -294,7 +294,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
     // MARK: Finish
 
     private func finishView() -> NSView {
-        let login = toggleRow("Open LunchboxWM when you log in", on: LoginItem.isEnabled) { on in LoginItem.set(on) }
+        let login = toggleRow("Open Lunchbox when you log in", on: LoginItem.isEnabled) { on in LoginItem.set(on) }
         let displays = toggleRow("Tile on every display", on: tiler.useAllDisplays) { [weak self] on in
             self?.tiler.setUseAllDisplays(on)
         }
@@ -314,7 +314,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
         list.spacing = 14
         return page(top: symbol("slider.horizontal.3"),
                     title: "Make it yours",
-                    body: "Change these any time from LunchboxWM's menu bar icon. Every shortcut can be changed to keys you like, and Left ⌘⇧Space shows them all whenever you forget one.",
+                    body: "Change these any time from Lunchbox's menu bar icon. Every shortcut can be changed to keys you like, and Left ⌘⇧Space shows them all whenever you forget one.",
                     content: list)
     }
 
@@ -322,7 +322,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
 
     @objc private func allowPreviews() {
         DispatchQueue.global(qos: .utility).async { _ = CGRequestScreenCaptureAccess() }
-        previewStatus.stringValue = "Turn on LunchboxWM in System Settings, then reopen LunchboxWM"
+        previewStatus.stringValue = "Turn on LunchboxWM in System Settings, then reopen Lunchbox"
     }
 
     // MARK: Building blocks

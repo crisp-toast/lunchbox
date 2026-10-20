@@ -30,7 +30,7 @@ enum MenuBarGlyph {
             return true
         }
         image.isTemplate = true
-        image.accessibilityDescription = paused ? "LunchboxWM (paused)" : "LunchboxWM"
+        image.accessibilityDescription = paused ? "Lunchbox (paused)" : "Lunchbox"
         return image
     }
 }

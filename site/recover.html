@@ -14,9 +14,9 @@
 <header class="top"><a class="brand" href="./"><img src="logo.svg" alt=""><span>Lunchbox<span class="wm">WM</span></span></a></header>
 <main>
   <h1>Lost your license?</h1>
-  <p class="lede">Enter the email you bought Lunchbox<span class="wm">WM</span> with. We'll send every license for that address to that address.</p>
+  <p class="lede">Enter the email you bought Lunchbox with. We'll send every license for that address to that address.</p>
   <form class="card" id="form" method="post" action="api/recover">
-    <input type="email" name="email" id="address" required autocomplete="email" placeholder="you@example.com" aria-label="Email you bought LunchboxWM with">
+    <input type="email" name="email" id="address" required autocomplete="email" placeholder="you@example.com" aria-label="Email you bought Lunchbox with">
     <div class="btns"><button class="btn dark" type="submit" id="send">Email My License</button></div>
     <p class="note" id="result" role="status"></p>
   </form>
@@ -26,7 +26,7 @@
 <script>
 const form = document.getElementById("form"), send = document.getElementById("send"), result = document.getElementById("result");
 // Back from a no-JavaScript form post.
-if (location.search === "?sent") result.textContent = "Done. If that address bought LunchboxWM, its license is on its way.";
+if (location.search === "?sent") result.textContent = "Done. If that address bought Lunchbox, its license is on its way.";
 if (location.search === "?bad") result.textContent = "That doesn't look like an email address. Check it and try again.";
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -34,7 +34,7 @@ form.addEventListener("submit", async (e) => {
   try {
     const r = await fetch("api/recover", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: document.getElementById("address").value }) });
     result.textContent = r.ok
-      ? "Done. If that address bought LunchboxWM, its license is on its way. Check your spam folder if it isn't there in a few minutes."
+      ? "Done. If that address bought Lunchbox, its license is on its way. Check your spam folder if it isn't there in a few minutes."
       : "That doesn't look like an email address. Check it and try again.";
   } catch {
     result.textContent = "We couldn't reach the server. Try again in a moment.";

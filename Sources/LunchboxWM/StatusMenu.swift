@@ -37,7 +37,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         if !trusted {
-            menu.addItem(disabled: "LunchboxWM needs Accessibility access to move windows.")
+            menu.addItem(disabled: "Lunchbox needs Accessibility access to move windows.")
             menu.addItem(action("Allow Accessibility Access…") { [weak self] in self?.onGrantAccess?() })
             menu.addItem(.separator())
         } else {
@@ -97,7 +97,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         }
         if let licensing, licensing.license == nil {
             menu.addItem(disabled: "Not licensed: tiling is off")
-            menu.addItem(action("Buy LunchboxWM – $4.99…") { [weak self] in self?.onBuy?() })
+            menu.addItem(action("Buy Lunchbox – $4.99…") { [weak self] in self?.onBuy?() })
             menu.addItem(action("Enter License…") { [weak self] in self?.onEnterLicense?() })
             menu.addItem(.separator())
         }
@@ -113,7 +113,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         displays.toolTip = "Turn off to tile only on the main display, for example when the other display is a dummy plug."
         options.addItem(displays)
         let login = action("Launch at Login", checked: LoginItem.isEnabled) { LoginItem.set(!LoginItem.isEnabled) }
-        login.toolTip = "Also brings LunchboxWM back by itself if it ever quits unexpectedly."
+        login.toolTip = "Also brings Lunchbox back by itself if it ever quits unexpectedly."
         options.addItem(login)
         options.addItem(action("Keyboard Shortcuts…") { [weak self] in self?.onShowShortcuts?() })
         options.addItem(action("Welcome & Setup…") { [weak self] in self?.onShowWelcome?() })
@@ -128,7 +128,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         settings.submenu = options
         menu.addItem(settings)
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit LunchboxWM", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit Lunchbox", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
     /// The working behind this week's number, for a tooltip.
