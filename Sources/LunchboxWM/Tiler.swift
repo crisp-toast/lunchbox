@@ -186,6 +186,9 @@ final class Tiler {
         }
         let json = defaults.string(forKey: "layouts").map { Data($0.utf8) }
         savedLayouts = json.flatMap { try? JSONDecoder().decode([String: Layout].self, from: $0) } ?? [:]
+        // Hidden when LunchboxWM stopped without putting them back (a crash): still hidden.
+        stashed = Dictionary(((defaults.array(forKey: "hiddenWindows") as? [Int]) ?? []).map { (CGWindowID($0), 0) },
+                             uniquingKeysWith: { a, _ in a })
         // What windows still open from before take, so they're fitted from the start. Window numbers
         // start over when the Mac restarts, so after a restart none of it applies; and each entry is
         // only believed for a window of the same app at the same size (`consider`).
@@ -316,6 +319,9 @@ final class Tiler {
     /// Runs synchronously so it finishes before LunchboxWM quits.
     func revealHiddenWindows() {
         shelf.hide(animated: false)
+        // Windows put out of sight with Hide come back too, so none is ever lost off screen.
+        stashed = [:]
+        UserDefaults.standard.removeObject(forKey: "hiddenWindows")
         for s in spaces.indices { for uuid in spaces[s].keys { spaces[s][uuid]?.spotlight = nil } }
         for (_, layouts) in spaces.enumerated() {
             for (uuid, layout) in layouts {
@@ -507,6 +513,7 @@ final class Tiler {
             // numbers get reused by new windows: forget their spots.
             let alive = allWindowIDs()
             if !alive.isEmpty { self.savedPlacement = self.savedPlacement.filter { alive.contains($0.key) } }
+            if !alive.isEmpty { self.stashed = self.stashed.filter { alive.contains($0.key) } }
             self.savedLimits = [:]
             self.relayout(animated: false)
             self.persist()
@@ -616,6 +623,11 @@ final class Tiler {
                 centerOnceShown(info, app: app)
             }
         }
+        // Hidden with Hide before LunchboxWM last stopped without bringing it back: still parked.
+        if isNew, stashed[info.id] != nil {
+            window.hidden = true
+            window.target = CGRect(origin: Display.hidingSpot(in: displays), size: info.frame.size)
+        }
         if !window.hidden { window.frame = info.frame }
         if isNew, let saved = savedLimits.removeValue(forKey: String(info.id)), saved.app == app.bundleID,
            abs(saved.width - info.frame.width) <= 2, abs(saved.height - info.frame.height) <= 2 {
@@ -642,6 +654,7 @@ final class Tiler {
             && !leftAloneApps.contains(app.bundleID ?? "")
             && !appHidden
             && !userFloating.contains(info.id)
+            && stashed[info.id] == nil
         let wantsTile = tiles
             // While a display shows a full screen app, its desktop's windows are out of
             // sight, not gone: they keep their tiles.
@@ -1300,6 +1313,7 @@ final class Tiler {
         limits[id] = nil
         prePlaced[id] = nil
         headedBack[id] = nil
+        stashed[id] = nil
     }
 
     private func removeFromLayouts(_ id: CGWindowID) {
@@ -1680,6 +1694,17 @@ final class Tiler {
     private func focusChanged(to id: CGWindowID, app: AppHandle) {
         guard enabled else { return }
         checkForGhosts()
+        if let hiddenAt = stashed[id] {
+            // You went to it yourself since hiding it (⌘-Tab, its app in the Dock): it comes back
+            // here. macOS handing focus to it by itself (its app was in front) isn't that.
+            let input = Self.secondsSinceInput(), now = CACurrentMediaTime()
+            if input < 1.5, now - input > hiddenAt + 0.05, now > quietFocusUntil {
+                unhide(id)
+            } else {
+                reclaimFocus()
+            }
+            return
+        }
         guard let (space, _) = place(of: id) else {
             // A dialog or other floating window: remember the tile it took focus from (which
             // may have been tiled only after it got focus), so focus goes back there after.
@@ -2232,6 +2257,7 @@ final class Tiler {
             UserDefaults.standard.set(String(decoding: json, as: UTF8.self), forKey: "layouts")
         }
         UserDefaults.standard.set(currentSpace, forKey: "currentSpace")
+        UserDefaults.standard.set(stashed.keys.map(Int.init), forKey: "hiddenWindows")
         UserDefaults.standard.set(adopted.filter { windows[$0] != nil || savedPlacement[$0] != nil }.map(Int.init), forKey: "adopted")
         var entries: [String: SavedLimits.Entry] = [:]
         for (id, l) in limits {
@@ -2498,27 +2524,53 @@ final class Tiler {
         badge.show(space: index, count: spaceCount, on: display)
     }
 
-    /// Hide (⌘⇧H): the focused window goes out of view, minimized to the Dock and still open. The
-    /// windows here close the gap at once. Clicking it in the Dock, or Summoning it, brings it back,
-    /// tiled wherever you are then.
+    /// Windows put out of sight with Hide (⌘⇧H), in no Workspace, and when: parked just off the
+    /// screen like a window in another Workspace, still open. Summon, the Dock or ⌘-Tab brings one
+    /// back into the Workspace you're in.
+    private var stashed: [CGWindowID: CFTimeInterval] = [:]
+
+    /// Hide (⌘⇧H): the focused window goes out of sight, parked off the screen the way windows in
+    /// other Workspaces wait, still open. The windows here close the gap at once.
     private func hideFocused() {
         guard enabled, let id = focusedID, let w = windows[id], !w.hidden, !w.minimized else { return }
         let frame = visibleFrames()[id] ?? w.target ?? w.frame
-        let element = w.handle.element, app = w.handle.app
+        let display = displays.first { $0.frame.contains(frame.center) }
         quietFocus()
-        if place(of: id) != nil {
-            removeFromLayouts(id)
-            w.target = nil
-            relayout(animated: true)
-            persist()
-        }
-        w.minimized = true
-        app.queue.async { [weak self] in
-            let done = AXUIElementSetAttributeValue(element, kAXMinimizedAttribute as CFString, kCFBooleanTrue) == .success
-            // A window that can't be minimized goes back to its tile.
-            if !done { DispatchQueue.main.async { self?.scheduleScan(app) } }
-        }
+        removeFromLayouts(id)
+        stashed[id] = CACurrentMediaTime()
+        park(w)
+        relayout(animated: true)
+        persist()
         focusNearest(to: frame, excluding: id)
+        let name = w.handle.app.bundleID.map(Self.appName) ?? "The window"
+        quietLine.show("\(name) is hidden · Summon (⇧ Space) brings it back", on: display)
+        log.notice("hid window \(id)")
+    }
+
+    /// Parks a window just off the screen, where windows in other Workspaces wait.
+    private func park(_ w: ManagedWindow) {
+        let parked = CGRect(origin: Display.hidingSpot(in: displays), size: (w.target ?? w.frame).size)
+        w.target = parked
+        w.hidden = true
+        settlingUntil[w.id] = CACurrentMediaTime() + 0.4
+        animator.run([(w.handle, parked, parked, .positionOnly)])
+    }
+
+    /// A hidden window comes back: into the Workspace you're in, beside the window you're in.
+    private func unhide(_ id: CGWindowID) {
+        guard stashed.removeValue(forKey: id) != nil, windows[id] != nil else { return }
+        // Still parked: the layout reveals it the way a Workspace switch does.
+        guard let display = focusedDisplay ?? activeDisplays.first(where: \.isMain) ?? activeDisplays.first else { return }
+        var layout = spaces[currentSpace][display.uuid] ?? Layout()
+        let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
+        layout.insert(id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width), limits: limits, room: room(on: display))
+        spaces[currentSpace][display.uuid] = layout
+        quietFocus()
+        relayout(animated: true)
+        persist()
+        activate(id)
+        showRing(on: id)
+        log.notice("unhid window \(id) into space \(self.currentSpace + 1)")
     }
 
     /// Moves the focused window to another space. With `follow`, you go along
@@ -2644,7 +2696,7 @@ final class Tiler {
     }
 
     private func isReachable(_ w: ManagedWindow, onScreen: Set<CGWindowID>) -> Bool {
-        if place(of: w.id) != nil { return true }
+        if place(of: w.id) != nil || stashed[w.id] != nil { return true }
         return w.standard && (w.minimized || onScreen.contains(w.id))
             && w.frame.width >= 100 && w.frame.height >= 80
     }
@@ -2665,6 +2717,8 @@ final class Tiler {
         /// The display it's on, by name, when LunchboxWM tiles more than one; else nil.
         let display: String?
         let minimized: Bool
+        /// Put out of sight with Hide.
+        let hidden: Bool
     }
 
     /// Every window Summon can go to (the same ones its app rows count as open), the most
@@ -2687,7 +2741,8 @@ final class Tiler {
                 let display = several ? (spot.flatMap { s in displays.first { $0.uuid == s.display } }
                     ?? displays.first { $0.frame.contains(w.frame.center) })?.name : nil
                 return OpenWindow(id: w.id, pid: w.pid, appID: w.handle.app.bundleID, appName: app.name, appURL: app.url,
-                                  title: w.title ?? "", space: spot?.space, display: display, minimized: w.minimized)
+                                  title: w.title ?? "", space: spot?.space, display: display, minimized: w.minimized,
+                                  hidden: stashed[w.id] != nil)
             }
     }
 
@@ -2722,6 +2777,7 @@ final class Tiler {
     /// Focuses one window wherever it is: in another Workspace, on another display, or
     /// minimized in the Dock. Returns false when it's gone.
     func goToWindow(_ id: CGWindowID) -> Bool {
+        if stashed[id] != nil { unhide(id); return true }
         guard let w = windows[id], isReachable(w, onScreen: recentOnScreenWindowIDs()) else { return false }
         bringForward(w)
         return true

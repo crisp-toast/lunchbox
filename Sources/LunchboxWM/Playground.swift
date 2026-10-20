@@ -220,7 +220,7 @@ final class Playground: NSView {
                 focused = layout.windows.last
             }
         case .hide:
-            // Minimized to the Dock: out of view, still open.
+            // Out of sight, still open.
             if let id = focused {
                 layout.remove(id)
                 windows[id]?.opacity = 0

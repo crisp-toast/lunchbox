@@ -459,7 +459,7 @@ final class Launcher: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             let subtitle = reachable ? "Go to its window" : (running == nil ? "Open" : "Open · running with no windows")
             return (app.name, subtitle, app.url.path)
         case .window(let w):
-            let place = w.minimized ? "Minimized" : w.space.map { "Workspace \($0 + 1)" } ?? "Floating"
+            let place = w.minimized ? "Minimized" : w.hidden ? "Hidden" : w.space.map { "Workspace \($0 + 1)" } ?? "Floating"
             let subtitle = ([w.appName, place] + (w.display.map { [$0] } ?? [])).joined(separator: " · ")
             return (w.title.isEmpty ? w.appName : w.title, subtitle, w.appURL?.path ?? "")
         case .web(let text):

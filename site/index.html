@@ -663,7 +663,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       <details><summary>Will it take over my keyboard?</summary><p>Only a handful of combinations, all with the left ⌘ key, plus ⇧ then Space for Summon (tapped one after the other, so typing a capital and a space never opens it). Right ⌘ keeps doing what it always did: ⌘← still jumps to the start of a line, and ⌘1 still picks a browser tab.</p></details>
       <details><summary>Can I change the shortcuts?</summary><p>Yes, every one. Open Keyboard Shortcuts from the menu bar, click a command and press the keys you want. Lunchbox turns down combinations that would get in the way of typing or that another command already uses, and Restore All Defaults puts everything back.</p></details>
       <details><summary>How do I set it up?</summary><p>Lunchbox walks you through it the first time it opens: allow Accessibility, then try every shortcut on a practice screen that can't touch your real windows. It takes about a minute, and Welcome &amp; Setup in the menu bar runs it again.</p></details>
-      <details><summary>How do Workspaces work?</summary><p>Left ⌘ and a number goes to that Workspace instantly: ⌘1, ⌘2, ⌘3. Add ⇧ (⌘⇧2) and the focused window comes with you. You start with three and can add up to nine from the menu bar. Hide (⌘⇧H) tucks a window into the Dock, still open; click it there or Summon it to bring it back. Right ⌘ and a number still reach the app in front, and with three Workspaces ⌘⇧4 and ⌘⇧5 are still the Mac's screenshot keys.</p></details>
+      <details><summary>How do Workspaces work?</summary><p>Left ⌘ and a number goes to that Workspace instantly: ⌘1, ⌘2, ⌘3. Add ⇧ (⌘⇧2) and the focused window comes with you. You start with three and can add up to nine from the menu bar. Hide (⌘⇧H) tucks a window out of sight, still open; Summon brings it back to wherever you are. Right ⌘ and a number still reach the app in front, and with three Workspaces ⌘⇧4 and ⌘⇧5 are still the Mac's screenshot keys.</p></details>
       <details><summary>Does it work with more than one display?</summary><p>Yes. Each display has its own layout and focus crosses between them at the edges. If a second display is a dummy plug or you only want your main screen tiled, turn off Use All Displays in Settings.</p></details>
       <details><summary>Something isn't working. How do I get help?</summary><p>Write to <a href="mailto:support@sentientdonut.com">support@sentientdonut.com</a>. It helps to choose Settings › Copy Diagnostics in Lunchbox's menu first and paste what it copies into your email: your Lunchbox and macOS versions, your displays, and which apps' windows are in each Workspace. It never includes window titles, file names or your license key.</p></details>
       <details><summary>What does "lifetime updates" mean?</summary><p>You buy Lunchbox once and every future version is included. No upgrade fees, no subscription, no catch.</p></details>
@@ -758,7 +758,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     { t: 13.25, keys: ["⇧", "⌘", "0"], cap: "Tidy evens everything out." },
     { t: 14.65, keys: ["⇧", "⌘", "F"], cap: "Focus. The others wait on the Shelf." },
     { t: 16.9, keys: ["⇧", "⌘", "F"], cap: "Press it again and they come back." },
-    { t: 18.3, keys: ["⇧", "⌘", "H"], cap: "Hide tucks a window into the Dock." },
+    { t: 18.3, keys: ["⇧", "⌘", "H"], cap: "Hide tucks a window out of sight." },
     { t: 20.2, keys: ["⇧", "⌘", "⌫"], cap: "Close it, and the rest re-tile." },
   ];
   const PRESSES = [6.81, 7.71, 8.79, 10.07, 11.45, 12.23, 13.31, 14.7, 16.98, 18.36, 20.24, 21.53];
@@ -909,7 +909,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     if (H) {
       const all = [
         ["WINDOWS", [["Left ⌘", "←→"], "Focus the next window", "select switch"], [["⇧ Left ⌘", "←→"], "Move the window", "arrange swap"], [["⇧ Left ⌘", "F"], "Focus", "maximize fullscreen center"], [["⇧ Left ⌘", "0"], "Tidy", "reset even balance"]],
-        ["WORKSPACES", [["Left ⌘", "1"], "Go to Workspace 1", "desktop space switch"], [["⇧ Left ⌘", "2"], "Move the window to Workspace 2", "send desktop space"], [["⇧ Left ⌘", "H"], "Hide the window in the Dock", "stash tuck minimize away"]],
+        ["WORKSPACES", [["Left ⌘", "1"], "Go to Workspace 1", "desktop space switch"], [["⇧ Left ⌘", "2"], "Move the window to Workspace 2", "send desktop space"], [["⇧ Left ⌘", "H"], "Hide the window, still open", "stash tuck minimize away"]],
         ["SUMMON", [["⇧ then", "Space"], "Summon an app, window or website", "launcher open search spotlight"]],
       ];
       const q = (H.q || "").toLowerCase();
@@ -978,7 +978,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       { win: { A: away(R.gTL), B: away(R.gBL), C: away(R.gTR), D: away(R.gBR), E: R.single }, focus: "E", space: 2, keys: ["Left ⌘", "2"], cap: "Left ⌘ 2 switches instantly. No slide, no wait." },
       { win: four, focus: "C", space: 1, keys: ["Left ⌘", "1"], cap: "Left ⌘ 1 and you're back." },
       { win: { A: away(R.gTL), B: away(R.gBL), D: away(R.gBR), E: R.halfL, C: R.halfR }, focus: "C", space: 2, keys: ["⇧", "Left ⌘", "2"], cap: "Add ⇧ and the window comes with you." },
-      { win: { A: away(R.gTL), B: away(R.gBL), D: away(R.gBR), E: R.single }, focus: "E", space: 2, keys: ["⇧", "Left ⌘", "H"], cap: "Hide (⇧⌘H) tucks a window into the Dock, still open." },
+      { win: { A: away(R.gTL), B: away(R.gBL), D: away(R.gBR), E: R.single }, focus: "E", space: 2, keys: ["⇧", "Left ⌘", "H"], cap: "Hide (⇧⌘H) tucks a window out of sight, still open. Summon brings it back." },
     ]},
     { title: "Summon tricks", hint: "⇧ then Space", steps: [
       { win: four, focus: "B", keys: ["B", "R", "O"], launcher: { q: "bro", rows: browserRows, sel: 0 }, cap: "An app that's already open offers two choices, and its windows by name." },
