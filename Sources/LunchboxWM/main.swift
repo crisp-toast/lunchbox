@@ -39,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             self.menu.refresh()
             self.tap.centeredWindows = self.tiler.centeredWindows
+            self.tap.pairWindows = self.tiler.pairWindows
         }
         // The quiet line names the undo key: ⌘ and the number of the Workspace you were in.
         tiler.undoKeyName = { [weak self] space in

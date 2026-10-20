@@ -50,6 +50,8 @@ public struct Layout: Equatable, Sendable {
     /// While set, this window sits alone in the center and the rest wait as
     /// small windows down the left edge (⌘⇧F). Any change to the layout ends it.
     public var spotlight: WindowID?
+    /// Two windows sized as a centered pair smaller than the screen (`Pair`), or nil to fill it.
+    public var pair: Pair?
     /// While a placeholder that made the 2×2 grid waits for its window: the columns from
     /// before, so if the app gives up, everything goes back. Not saved, like the placeholder.
     var beforeGrid: GridUndo?
@@ -556,8 +558,9 @@ public struct Layout: Equatable, Sendable {
             return changed
         }
         var changed = false
+        let area = pairArea(usable)
         if columns.count > 1 {
-            let avail = Double(usable.width - gap * CGFloat(columns.count - 1))
+            let avail = Double(area.width - gap * CGFloat(columns.count - 1))
             var widths = columns.map(\.weight)
             let current = widths[c] / widths.reduce(0, +)
             if Self.adjust(&widths, index: c, delta: Double(size.width) / avail - current) {
@@ -566,7 +569,7 @@ public struct Layout: Equatable, Sendable {
             }
         }
         if columns[c].windows.count > 1 {
-            let avail = Double(usable.height - gap * CGFloat(columns[c].windows.count - 1))
+            let avail = Double(area.height - gap * CGFloat(columns[c].windows.count - 1))
             let weights = columns[c].weights
             let current = weights[r] / weights.reduce(0, +)
             changed = Self.adjust(&columns[c].weights, index: r, delta: Double(size.height) / avail - current) || changed
@@ -582,6 +585,7 @@ public struct Layout: Equatable, Sendable {
             columns[i].weights = Array(repeating: 1, count: columns[i].windows.count)
         }
         resetSingle()
+        pair = nil
     }
 
     private mutating func resetSingle() {
@@ -641,18 +645,20 @@ public struct Layout: Equatable, Sendable {
             let caps = col.windows.map { limits[$0]?.maxWidth }
             return caps.contains(where: { $0 == nil }) ? .infinity : caps.compactMap { $0 }.max() ?? .infinity
         }
-        let availWidth = usable.width - gap * CGFloat(columns.count - 1)
+        // Two windows sized as a pair share a centered area; anything else has the whole screen.
+        let area = pairArea(usable)
+        let availWidth = area.width - gap * CGFloat(columns.count - 1)
         let widths = Self.distribute(availWidth, weights: columns.map(\.weight), mins: mins.map { min($0, availWidth) }, maxs: maxs)
         // Columns that all stopped short of the screen sit together in the middle.
-        var x = usable.minX + max(0, (availWidth - widths.reduce(0, +)) / 2).rounded()
+        var x = area.minX + max(0, (availWidth - widths.reduce(0, +)) / 2).rounded()
         for (c, column) in columns.enumerated() {
             let width = widths[c]
-            let availHeight = usable.height - gap * CGFloat(column.windows.count - 1)
+            let availHeight = area.height - gap * CGFloat(column.windows.count - 1)
             let heights = Self.distribute(
                 availHeight, weights: column.weights,
                 mins: column.windows.map { min(limits[$0]?.minHeight ?? 0, availHeight) },
                 maxs: column.windows.map { limits[$0]?.maxHeight ?? .infinity })
-            var y = usable.minY + max(0, (availHeight - heights.reduce(0, +)) / 2).rounded()
+            var y = area.minY + max(0, (availHeight - heights.reduce(0, +)) / 2).rounded()
             for (r, id) in column.windows.enumerated() {
                 let slot = CGRect(x: x, y: y, width: width, height: heights[r])
                 result[id] = Self.fit(id, in: slot, limits: limits, within: usable)
@@ -760,5 +766,5 @@ extension Column: Codable {
 
 extension Layout: Codable {
     // Focus (`spotlight`) isn't saved: it's a moment's view, not part of the arrangement.
-    private enum CodingKeys: String, CodingKey { case columns, singleScale, singleHeight, singleOwner }
+    private enum CodingKeys: String, CodingKey { case columns, singleScale, singleHeight, singleOwner, pair }
 }

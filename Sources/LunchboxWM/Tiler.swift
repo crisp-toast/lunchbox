@@ -1921,6 +1921,7 @@ final class Tiler {
         guard now > settlingUntil[id] ?? 0 || justDropped, let w = windows[id], !w.hidden, w.target != nil else { return }
         if NSEvent.pressedMouseButtons & 1 != 0 {
             draggedByUser.insert(id)
+            mirrorPair(id)
             return
         }
         // The app moved itself (some do when opening), or macOS did: Window › Fill and the
@@ -2030,6 +2031,17 @@ final class Tiler {
                 spaces[space][uuid]?.adopt(id, size: frame.size, in: d.visible, gap: Self.gap)
             }
             w.target = nil
+            relayout(animated: true)
+            persist()
+            return
+        }
+        // A far edge of one of two windows: the pair takes that size, centered and touching.
+        if let d = displays.first(where: { $0.uuid == uuid }), var layout = spaces[space][uuid], resizesAsPair(layout),
+           let r = layout.pairResize(id, dragged: frame, target: target, in: d.visible, gap: Self.gap),
+           layout.adoptPair(id, dragged: frame, target: target, in: d.visible, gap: Self.gap) {
+            spaces[space][uuid] = layout
+            windows[r.other]?.frame = r.otherFrame
+            for each in layout.windows { windows[each]?.target = nil } // they glide from where they are
             relayout(animated: true)
             persist()
             return
@@ -3366,6 +3378,51 @@ final class Tiler {
             return (id, w.target ?? w.frame)
         }
     }
+
+    /// Two windows in the Workspace being viewed, side by side or stacked, that resize as a centered
+    /// pair: dragging an edge across the pair (a top or bottom; a side when stacked) stretches both
+    /// ways (`HotkeyTap`), and a far side is mirrored onto the other window (`mirrorPair`).
+    var pairWindows: [(id: CGWindowID, frame: CGRect, sideBySide: Bool)] {
+        guard enabled else { return [] }
+        return activeDisplays.flatMap { d -> [(id: CGWindowID, frame: CGRect, sideBySide: Bool)] in
+            guard let layout = spaces[currentSpace][d.uuid], resizesAsPair(layout) else { return [] }
+            return layout.windows.compactMap { id in
+                guard let w = windows[id], !w.hidden else { return nil }
+                return (id, w.target ?? w.frame, layout.pairSideBySide)
+            }
+        }
+    }
+
+    /// Two windows, neither a placeholder nor one with a size of its own to keep.
+    private func resizesAsPair(_ layout: Layout) -> Bool {
+        layout.isPair && layout.windows.allSatisfy { !Placeholder.isPlaceholder($0) && limits[$0] == nil && windows[$0] != nil }
+    }
+
+    /// While you drag a far edge of one of two windows, the other follows, so the pair stays
+    /// centered and touching (`Layout.pairResize`). Its own move notifications are ignored meanwhile.
+    private func mirrorPair(_ id: CGWindowID) {
+        guard !mirroring, let w = windows[id], let target = w.target, let (space, uuid) = place(of: id), space == currentSpace,
+              let layout = spaces[space][uuid], resizesAsPair(layout), let d = activeDisplays.first(where: { $0.uuid == uuid })
+        else { return }
+        mirroring = true
+        let element = w.handle.element
+        w.handle.app.queue.async { [weak self] in
+            let frame = element.frame
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.mirroring = false
+                guard let frame, NSEvent.pressedMouseButtons & 1 != 0,
+                      let r = layout.pairResize(id, dragged: frame, target: target, in: d.visible, gap: Self.gap),
+                      let other = self.windows[r.other], r.otherFrame.width >= 80, r.otherFrame.height >= 80 else { return }
+                self.settlingUntil[r.other] = CACurrentMediaTime() + 0.5
+                other.frame = r.otherFrame
+                self.animator.run([(other.handle, r.otherFrame, r.otherFrame, .snap)])
+            }
+        }
+    }
+
+    /// A pair mirror is on its way (one at a time; the next drag event sends another).
+    private var mirroring = false
 
     /// Whether a display in the Workspace being viewed is in Focus.
     var focusModeIsOn: Bool { activeDisplays.contains { spaces[currentSpace][$0.uuid]?.spotlight != nil } }

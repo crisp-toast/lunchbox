@@ -17,6 +17,7 @@ final class HotkeyTap {
         var keymap = Keymap()
         var learner: ((Int64, CGEventFlags) -> Void)?
         var centered: [(id: CGWindowID, frame: CGRect)] = []
+        var pairs: [(id: CGWindowID, frame: CGRect, sideBySide: Bool)] = []
         /// Resize mode lasts until this moment (each resize key extends it).
         var resizeUntil: CFTimeInterval = 0
     }
@@ -71,6 +72,29 @@ final class HotkeyTap {
     var centeredWindows: [(id: CGWindowID, frame: CGRect)] {
         get { state.withLock { $0.centered } }
         set { state.withLock { $0.centered = newValue } }
+    }
+
+    /// Two windows that resize as a centered pair: a drag on an edge across the pair (a top or
+    /// bottom side by side; a side when stacked) stretches both ways, like a centered window.
+    var pairWindows: [(id: CGWindowID, frame: CGRect, sideBySide: Bool)] {
+        get { state.withLock { $0.pairs } }
+        set { state.withLock { $0.pairs = newValue } }
+    }
+
+    /// The pair window whose edge across the pair is at `p`, and whether `p` is just outside it.
+    /// Corners don't count: they also move a side, which the pair mirrors instead.
+    private func pairEdge(at p: CGPoint, in pairs: [(id: CGWindowID, frame: CGRect, sideBySide: Bool)]) -> (id: CGWindowID, outside: Bool)? {
+        let r = Self.edgeReach
+        for pair in pairs {
+            let f = pair.frame
+            let bands: [CGRect] = pair.sideBySide
+                ? [CGRect(x: f.minX + r, y: f.minY - r, width: f.width - 2 * r, height: 2 * r),
+                   CGRect(x: f.minX + r, y: f.maxY - r, width: f.width - 2 * r, height: 2 * r)]
+                : [CGRect(x: f.minX - r, y: f.minY + r, width: 2 * r, height: f.height - 2 * r),
+                   CGRect(x: f.maxX - r, y: f.minY + r, width: 2 * r, height: f.height - 2 * r)]
+            if bands.contains(where: { $0.contains(p) }) { return (pair.id, !f.contains(p)) }
+        }
+        return nil
     }
 
     /// While set, the next key press (with its modifiers) goes to `learner`
@@ -145,7 +169,7 @@ final class HotkeyTap {
             // moves without activating).
             stretching = false
             maybeStretching = nil
-            let (on, centered) = state.withLock { ($0.enabled, $0.centered) }
+            let (on, centered, pairs) = state.withLock { ($0.enabled, $0.centered, $0.pairs) }
             guard on, event.flags.isDisjoint(with: [.maskShift, .maskCommand, .maskControl, .maskAlternate]) else { return pass }
             let p = event.location
             if centered.contains(where: { $0.frame.insetBy(dx: -Self.edgeReach, dy: -Self.edgeReach).contains(p) && !$0.frame.contains(p) }) {
@@ -157,6 +181,14 @@ final class HotkeyTap {
                 // Inside: it may be the edge, or something in the window near it (a scroll bar, text).
                 // Only a press that starts resizing the window gets ⌥, as soon as it does.
                 maybeStretching = (w.id, size, p)
+            } else if let hit = pairEdge(at: p, in: pairs) {
+                // One of two windows, across the pair: the same, so it stays centered on the screen.
+                if hit.outside {
+                    stretching = true
+                    event.flags.insert(.maskAlternate)
+                } else if let size = windowBounds(hit.id)?.size {
+                    maybeStretching = (hit.id, size, p)
+                }
             }
             return pass
         case .leftMouseDragged:
