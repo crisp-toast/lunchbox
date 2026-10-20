@@ -91,6 +91,51 @@ import Testing
         #expect(r.area.width >= 2 * 900 + gap)
     }
 
+    @Test func aFarCornerResizesBothWaysAroundTheMiddle() throws {
+        // The left window's top-left corner, dragged in and down: the corner follows the pointer,
+        // the opposite corners follow too, and the pair stays centered and identical.
+        let l = layout([[1], [2]])
+        let point = CGPoint(x: usable.minX + 200, y: usable.minY + 100)
+        let next = try #require(l.pairCornerDragged(1, corner: .init(left: true, top: true), to: point, in: screen, gap: gap))
+        let f = next.frames(in: screen, gap: gap)
+        let left = try #require(f[1]), right = try #require(f[2])
+        #expect(abs(left.minX - point.x) <= 1 && abs(left.minY - point.y) <= 1)
+        #expect(abs(right.maxX - (usable.maxX - 200)) <= 1 && abs(left.maxY - (usable.maxY - 100)) <= 1)
+        #expect(left.size == right.size && right.minX - left.maxX == gap)
+    }
+
+    @Test func aBottomCornerUpAlsoMovesTheTop() throws {
+        let l = layout([[1], [2]])
+        let point = CGPoint(x: usable.maxX, y: usable.maxY - 150)
+        let next = try #require(l.pairCornerDragged(2, corner: .init(left: false, top: false), to: point, in: screen, gap: gap))
+        let f = next.frames(in: screen, gap: gap)
+        for id: WindowID in [1, 2] {
+            let w = try #require(f[id])
+            #expect(abs(w.minY - (usable.minY + 150)) <= 1 && abs(w.maxY - point.y) <= 1)
+        }
+    }
+
+    @Test func aCornerByTheOtherWindowMovesTheSplit() throws {
+        let l = layout([[1], [2]])
+        let point = CGPoint(x: 1000, y: usable.minY + 50)
+        let next = try #require(l.pairCornerDragged(1, corner: .init(left: false, top: true), to: point, in: screen, gap: gap))
+        let f = next.frames(in: screen, gap: gap)
+        let left = try #require(f[1]), right = try #require(f[2])
+        #expect(abs(left.maxX - point.x) <= 2) // the split follows the pointer
+        #expect(abs(left.minX - usable.minX) <= 1 && abs(right.maxX - usable.maxX) <= 1) // the pair keeps its width
+        #expect(abs(left.minY - point.y) <= 1 && abs(left.maxY - (usable.maxY - 50)) <= 1) // and centers its height
+    }
+
+    @Test func cornersStopAtTheMinimums() throws {
+        let l = layout([[1], [2]])
+        let limits: [WindowID: SizeLimits] = [1: SizeLimits(minWidth: 1000, minHeight: 900)]
+        let next = try #require(l.pairCornerDragged(1, corner: .init(left: true, top: true),
+                                                    to: CGPoint(x: usable.midX - 50, y: usable.midY - 50),
+                                                    in: screen, gap: gap, limits: limits))
+        let f = next.frames(in: screen, gap: gap)
+        #expect(try #require(f[1]).width >= 1000 - 1 && (try #require(f[1])).height >= 900 - 1)
+    }
+
     @Test func theEdgeBetweenThemIsTheSplit() throws {
         let l = layout([[1], [2]])
         let before = try #require(frames(l)[1])

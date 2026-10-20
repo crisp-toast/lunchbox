@@ -35,6 +35,18 @@ final class HotkeyTap {
     private var chord = ShiftTapChord()
     /// A drag on a centered window's edge is under way; tap thread only.
     private var stretching = false
+    /// A drag on a corner of one of two windows that resize as a pair is under way, handed to
+    /// `onPairCorner` instead of the app; tap thread only.
+    private var cornerDragging = false
+
+    /// A corner drag on a pair window: LunchboxWM resizes both windows itself, since macOS's own
+    /// resize keeps the far corner where it is. Called on the main thread.
+    enum PairCornerEvent {
+        case began(CGWindowID, Layout.Corner)
+        case moved(CGPoint)
+        case ended(CGPoint)
+    }
+    var onPairCorner: ((PairCornerEvent) -> Void)?
     /// A press just inside a centered window's edge: it's a resize only if the window starts
     /// changing size as the drag goes. The window, its size at the press, and where the press
     /// was; tap thread only.
@@ -79,6 +91,19 @@ final class HotkeyTap {
     var pairWindows: [(id: CGWindowID, frame: CGRect, sideBySide: Bool)] {
         get { state.withLock { $0.pairs } }
         set { state.withLock { $0.pairs = newValue } }
+    }
+
+    /// The pair window with a corner at `p` (within `edgeReach` of it, in or out), and which corner.
+    private func pairCorner(at p: CGPoint, in pairs: [(id: CGWindowID, frame: CGRect, sideBySide: Bool)]) -> (id: CGWindowID, corner: Layout.Corner)? {
+        let r = Self.edgeReach
+        for pair in pairs {
+            let f = pair.frame
+            for (x, y) in [(f.minX, f.minY), (f.maxX, f.minY), (f.minX, f.maxY), (f.maxX, f.maxY)]
+            where CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r).contains(p) {
+                return (pair.id, Layout.Corner(left: x == f.minX, top: y == f.minY))
+            }
+        }
+        return nil
     }
 
     /// The pair window whose edge across the pair is at `p`, and whether `p` is just outside it.
@@ -169,6 +194,7 @@ final class HotkeyTap {
             // moves without activating).
             stretching = false
             maybeStretching = nil
+            cornerDragging = false
             let (on, centered, pairs) = state.withLock { ($0.enabled, $0.centered, $0.pairs) }
             guard on, event.flags.isDisjoint(with: [.maskShift, .maskCommand, .maskControl, .maskAlternate]) else { return pass }
             let p = event.location
@@ -181,6 +207,11 @@ final class HotkeyTap {
                 // Inside: it may be the edge, or something in the window near it (a scroll bar, text).
                 // Only a press that starts resizing the window gets ⌥, as soon as it does.
                 maybeStretching = (w.id, size, p)
+            } else if let hit = pairCorner(at: p, in: pairs), let onPairCorner {
+                // A corner of one of two windows: LunchboxWM resizes the pair itself, all centered.
+                cornerDragging = true
+                DispatchQueue.main.async { onPairCorner(.began(hit.id, hit.corner)) }
+                return nil
             } else if let hit = pairEdge(at: p, in: pairs) {
                 // One of two windows, across the pair: the same, so it stays centered on the screen.
                 if hit.outside {
@@ -192,6 +223,11 @@ final class HotkeyTap {
             }
             return pass
         case .leftMouseDragged:
+            if cornerDragging, let onPairCorner {
+                let p = event.location
+                DispatchQueue.main.async { onPairCorner(.moved(p)) }
+                return nil
+            }
             if let maybe = maybeStretching {
                 if let now = windowBounds(maybe.id)?.size, abs(now.width - maybe.size.width) > 1 || abs(now.height - maybe.size.height) > 1 {
                     stretching = true
@@ -203,6 +239,12 @@ final class HotkeyTap {
             if stretching { event.flags.insert(.maskAlternate) }
             return pass
         case .leftMouseUp:
+            if cornerDragging, let onPairCorner {
+                cornerDragging = false
+                let p = event.location
+                DispatchQueue.main.async { onPairCorner(.ended(p)) }
+                return nil
+            }
             if stretching { event.flags.insert(.maskAlternate) }
             stretching = false
             maybeStretching = nil

@@ -3427,6 +3427,62 @@ final class Tiler {
     /// A pair mirror is on its way (one at a time; the next drag event sends another).
     private var mirroring = false
 
+    /// A corner drag on one of two windows that resize as a pair, handed over by `HotkeyTap`: the
+    /// window, its corner, and the layout as the drag began.
+    private var cornerDrag: (id: CGWindowID, corner: Layout.Corner, space: Int, display: Display, start: Layout)?
+
+    /// The pair follows a corner drag live: the corner under the pointer, the opposite corners
+    /// moving with it, everything centered (`Layout.pairCornerDragged`); letting go keeps it.
+    func pairCorner(_ event: HotkeyTap.PairCornerEvent) {
+        switch event {
+        case .began(let id, let corner):
+            guard enabled, let (space, uuid) = place(of: id), space == currentSpace, let layout = spaces[space][uuid],
+                  resizesAsPair(layout), let d = activeDisplays.first(where: { $0.uuid == uuid }) else { cornerDrag = nil; return }
+            cornerDrag = (id, corner, space, d, layout)
+            activate(id)
+        case .moved(let point):
+            guard let drag = cornerDrag, let next = cornerLayout(drag, at: point) else { return }
+            for (id, frame) in next.frames(in: drag.display.visible, gap: Self.gap, limits: limits) { moveLive(id, to: frame) }
+        case .ended(let point):
+            guard let drag = cornerDrag else { return }
+            cornerDrag = nil
+            guard let next = cornerLayout(drag, at: point), spaces[drag.space][drag.display.uuid]?.windows.sorted() == next.windows.sorted()
+            else { relayout(animated: true); return }
+            spaces[drag.space][drag.display.uuid] = next
+            // They glide (barely) from where the drag left them.
+            for id in next.windows { windows[id]?.target = nil }
+            relayout(animated: true)
+            persist()
+        }
+    }
+
+    private func cornerLayout(_ drag: (id: CGWindowID, corner: Layout.Corner, space: Int, display: Display, start: Layout),
+                              at point: CGPoint) -> Layout? {
+        drag.start.pairCornerDragged(drag.id, corner: drag.corner, to: point, in: drag.display.visible, gap: Self.gap, limits: limits)
+    }
+
+    /// The newest frame each window should take during a corner drag, and which windows have a
+    /// move on its way: only the latest pointer position is ever sent, so a slow app doesn't fall behind.
+    private var liveTargets: [CGWindowID: CGRect] = [:]
+    private var liveMoving: Set<CGWindowID> = []
+
+    private func moveLive(_ id: CGWindowID, to frame: CGRect) {
+        guard let w = windows[id] else { return }
+        settlingUntil[id] = CACurrentMediaTime() + 0.5 // its move notifications are LunchboxWM's own
+        w.frame = frame
+        guard !liveMoving.contains(id) else { liveTargets[id] = frame; return }
+        liveMoving.insert(id)
+        let element = w.handle.element
+        WindowHandle.queue(for: id).async { [weak self] in
+            _ = element.place(in: frame)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.liveMoving.remove(id)
+                if let next = self.liveTargets.removeValue(forKey: id) { self.moveLive(id, to: next) }
+            }
+        }
+    }
+
     /// Whether a display in the Workspace being viewed is in Focus.
     var focusModeIsOn: Bool { activeDisplays.contains { spaces[currentSpace][$0.uuid]?.spotlight != nil } }
 

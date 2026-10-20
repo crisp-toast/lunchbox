@@ -102,6 +102,75 @@ extension Layout {
         return true
     }
 
+    /// A corner of a window, by its sides.
+    public struct Corner: Equatable, Sendable {
+        public var left: Bool
+        public var top: Bool
+        public init(left: Bool, top: Bool) { self.left = left; self.top = top }
+    }
+
+    /// A corner of one of the pair's windows dragged to `point`: the layout with the pair resized so
+    /// that corner follows the pointer and everything stays centered both ways. A corner on the
+    /// pair's far side resizes the pair along it (the two windows identical); a corner by the
+    /// other window moves the split. Up and down (left and right when stacked) resizes the pair
+    /// across, around the middle. Never smaller than either window's minimum. Nil if it isn't a pair.
+    public func pairCornerDragged(_ id: WindowID, corner: Corner, to point: CGPoint, in rect: CGRect, gap: CGFloat,
+                                  limits: [WindowID: SizeLimits] = [:]) -> Layout? {
+        guard isPair, let (c, r) = position(of: id) else { return nil }
+        let usable = Self.usable(rect, gap: gap)
+        let area = pairArea(usable)
+        let sideBySide = pairSideBySide
+        let first = sideBySide ? c == 0 : r == 0
+        let minWidth = max(80, windows.compactMap { limits[$0]?.minWidth }.max() ?? 0)
+        let minHeight = max(80, windows.compactMap { limits[$0]?.minHeight }.max() ?? 0)
+        // Along the pair, the corner is on its far side (a left window's left side) or by the other window.
+        let farSide = sideBySide ? corner.left == first : corner.top == first
+        func span(_ center: CGFloat, _ edge: CGFloat, least: CGFloat, most: CGFloat) -> CGFloat {
+            min(most, max(least, 2 * abs(center - edge)))
+        }
+        var width = area.width, height = area.height
+        var share: Double?
+        if sideBySide {
+            height = span(usable.midY, point.y, least: minHeight, most: usable.height)
+            if farSide {
+                width = span(usable.midX, point.x, least: 2 * minWidth + gap, most: usable.width)
+            } else {
+                let x = min(area.maxX - minWidth, max(area.minX + minWidth, point.x))
+                share = Double((first ? x - area.minX : area.maxX - x) / max(1, area.width - gap))
+            }
+        } else {
+            width = span(usable.midX, point.x, least: minWidth, most: usable.width)
+            if farSide {
+                height = span(usable.midY, point.y, least: 2 * minHeight + gap, most: usable.height)
+            } else {
+                let y = min(area.maxY - minHeight, max(area.minY + minHeight, point.y))
+                share = Double((first ? y - area.minY : area.maxY - y) / max(1, area.height - gap))
+            }
+        }
+        var next = self
+        let w = min(1, max(Self.pairSmallest, Double(width / max(1, usable.width))))
+        let h = min(1, max(Self.pairSmallest, Double(height / max(1, usable.height))))
+        next.pair = Pair(width: w, height: h, windows: Set(windows))
+        if let share {
+            // The split, as the dragged window's share of the pair.
+            let mine = min(1 - Self.minFraction, max(Self.minFraction, share))
+            if sideBySide {
+                next.columns[c].weight = mine
+                next.columns[1 - c].weight = 1 - mine
+            } else {
+                next.columns[0].weights[r] = mine
+                next.columns[0].weights[1 - r] = 1 - mine
+            }
+        } else {
+            // The far side: two identical windows.
+            for i in next.columns.indices {
+                next.columns[i].weight = 1
+                next.columns[i].weights = Array(repeating: 1, count: next.columns[i].windows.count)
+            }
+        }
+        return next
+    }
+
     /// The screen less its margins, as `frames` measures it.
     static func usable(_ rect: CGRect, gap: CGFloat) -> CGRect {
         CGRect(x: (rect.minX + gap).rounded(), y: (rect.minY + gap).rounded(),
