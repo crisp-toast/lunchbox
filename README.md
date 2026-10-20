@@ -146,7 +146,10 @@ The menu bar shows the current space. Its menu can pause tiling, put the focused
 normalize, re-tile everything, and open **Keyboard Shortcuts…** (the same searchable list as Left ⌘⇧Space). **Settings** holds Launch at Login, Set Up Space Keys, and
 **Use All Displays** (on by default). Turn that off to tile only on the main display, for example
 when the second display is a dummy plug: windows that open on other displays move to the main one,
-while a window something moves onto another display (an agent testing on a dummy plug) is left there.
+while a window you drag onto another display (or send there with a shortcut or Window › Move to) is
+left there, untiled. An app moving its own window there (Simulator going back to where it was last)
+gets it back in its tile, so nothing ends up on a screen you can't see; agents testing an app on a
+dummy plug use `leave-app:` first (the mac-mini skill's `spoof.sh claim`).
 
 ## How it works
 
@@ -285,7 +288,10 @@ The Buy buttons go nowhere yet: set `CHECKOUT_URL` at the top of the page's scri
   blinking off as the Mac wakes doesn't shuffle anything.
 - **macOS 27:** a parked window that macOS pulls back into view is parked again.
 - **Native tabs** share one tile. **Dialogs** float, centered. **Windows that can't fill a tile** tile at their own size. **Full screen** windows keep their spot.
-  **Show Desktop** works as usual.
+- **Mission Control, App Exposé and Show Desktop** take windows out of sight without moving
+  anything: every tile stays where it was, and nothing reflows while they're up. **A hidden app**
+  (⌘H, Hide Others) gives up its tiles while it's hidden, and its windows come back to the same
+  spots, each in its own Workspace, when it's shown again (Show All too).
 - **Updates:** Sparkle checks once a day and asks before installing (see docs/store.md).
 
 ## Selling it

@@ -15,6 +15,10 @@ final class ManagedWindow {
     /// Parked off screen because it belongs to another space.
     var hidden = false
     var minimized = false
+    /// In a Space of its own from the green button.
+    var fullScreen = false
+    /// When it last came back from the Dock (minimized, or put away with Hide).
+    var restoredAt: CFTimeInterval = 0
     /// A normal document window (not a panel, sheet or helper window).
     var standard = false
     /// How many tabs its native tab bar shows (0 without one).
@@ -136,11 +140,19 @@ final class Tiler {
     private let animator = Animator()
     private let ring = FocusRing()
     private let badge = SpaceBadge()
+    /// Mission Control, App Exposé and Show Desktop: windows out of sight keep their tiles.
+    private let overview = DockOverview()
+    private var cover = CoverWatch()
+    /// Where tiled windows that went out of view without closing were, so they come back there.
+    private var away = AwayMemory()
     var onChange: (() -> Void)?
 
     init() {
         Tiler.shared = self
         animator.onSettled = { [weak self] id, actual, _ in self?.settled(id, at: actual) }
+        // Back from Mission Control: the windows never left their tiles. Look again anyway, for
+        // anything closed or opened meanwhile.
+        overview.onEnd = { [weak self] in self?.scanAll(after: [0.05, 0.4, 1.0]) }
         shelf.onPick = { [weak self] id in
             guard let self else { return }
             self.activate(id)
@@ -201,7 +213,12 @@ final class Tiler {
             notificationTokens.append(center.addObserver(forName: name, object: nil, queue: .main, using: body))
         }
         on(NSWorkspace.didLaunchApplicationNotification) { [weak self] n in
-            if let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication { self?.track(app) }
+            guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+            self?.track(app)
+            // The Dock restarted: listen to the new one once it's up.
+            if app.bundleIdentifier == "com.apple.dock" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if self?.enabled == true { self?.overview.attach() } }
+            }
         }
         // An app is listed here as soon as it starts, well before it says it has finished
         // launching (by then its first windows are often up): watch it from the start.
@@ -221,8 +238,10 @@ final class Tiler {
         on(NSWorkspace.didActivateApplicationNotification) { [weak self] n in
             if let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication { self?.appActivated(app) }
         }
-        on(NSWorkspace.didHideApplicationNotification) { [weak self] n in self?.rescan(n) }
-        on(NSWorkspace.didUnhideApplicationNotification) { [weak self] n in self?.rescan(n) }
+        on(NSWorkspace.didHideApplicationNotification) { [weak self] n in self?.rescan(n, after: [0.03, 0.3]) }
+        // An app shown again (its Dock icon, ⌘-Tab, Show All after Hide Others) can take a moment to
+        // put its windows back on screen, longer with several apps at once: look until they're up.
+        on(NSWorkspace.didUnhideApplicationNotification) { [weak self] n in self?.rescan(n, after: [0.03, 0.2, 0.6, 1.5]) }
         on(NSWorkspace.activeSpaceDidChangeNotification) { [weak self] _ in self?.scanAll(after: [0.03, 0.8, 1.6]) }
         on(NSApplication.didChangeScreenParametersNotification, .default) { [weak self] _ in self?.displaysMayHaveChanged() }
         // Showing or hiding the Dock changes the usable area of the screen.
@@ -252,6 +271,7 @@ final class Tiler {
         ghostTimer = timer
 
         for app in NSWorkspace.shared.runningApplications { track(app, scan: false) }
+        overview.attach()
         mergeInactiveDisplays()
         initialScan()
         log.notice("started with \(self.displays.count) displays, space \(self.currentSpace + 1)")
@@ -283,6 +303,9 @@ final class Tiler {
         ghostTimer = nil
         mouseMonitors = []
         for pid in Array(apps.keys) { detach(apps[pid]!) }
+        overview.detach()
+        away.forgetAll() // resuming puts windows back from what persist() saved
+        cover = CoverWatch()
         apps = [:]
         windows = [:]
         spaces = Array(repeating: [:], count: spaceCount)
@@ -306,6 +329,16 @@ final class Tiler {
                     w.hidden = false
                 }
             }
+        }
+        // Parked, then its app was hidden (so it's in no layout): into the middle of its display,
+        // so it isn't stranded in the corner when the app is shown again.
+        for w in windows.values where w.hidden {
+            guard let d = away[w.id].flatMap({ s in displays.first { $0.uuid == s.display } })
+                ?? displays.first(where: \.isMain) ?? displays.first else { continue }
+            let size = w.frame.size
+            w.handle.element.setPosition(CGPoint(x: max(d.visible.minX, d.visible.midX - size.width / 2),
+                                                 y: max(d.visible.minY, d.visible.midY - size.height / 2)))
+            w.hidden = false
         }
     }
 
@@ -377,10 +410,10 @@ final class Tiler {
         if let focusedFrame { focusNearest(to: focusedFrame) }
     }
 
-    private func rescan(_ n: Notification) {
+    private func rescan(_ n: Notification, after delays: [Double]) {
         guard let running = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
               let app = apps[running.processIdentifier] else { return }
-        scheduleScan(app)
+        scheduleScan(app, after: delays)
     }
 
     func scanAll(after delays: [Double] = [0.03]) {
@@ -494,13 +527,14 @@ final class Tiler {
         for id in seen { unlistedSince[id] = nil }
         for w in windows.values where w.pid == app.pid && !seen.contains(w.id) {
             if isOutOfView(w.id, shown: shown) { continue } // behind a full screen app: it keeps its tile
+            if overview.isActive { continue } // under Mission Control: still there
             // Going in or out of full screen, a window isn't on any Space for a moment.
             // A closed window says so and is forgotten right then; a tiled one that only
-            // went missing gets a moment to show up again (one in full screen, longer).
-            if place(of: w.id) != nil || fullScreenSpots[w.id] != nil {
+            // went missing gets a moment to show up again (one away, longer).
+            if place(of: w.id) != nil || away[w.id] != nil {
                 let since = unlistedSince[w.id] ?? now
                 unlistedSince[w.id] = since
-                let wait = fullScreenSpots[w.id] != nil ? 6.0 : 1.5
+                let wait = away[w.id] != nil ? 6.0 : 1.5
                 if now - since < wait {
                     scheduleScan(app, after: [wait + 0.1 - (now - since)])
                     continue
@@ -537,11 +571,11 @@ final class Tiler {
             activate(arrived)
             showRing(on: arrived)
         }
-        // A window you were using left without saying so (Chess after ⌘W): keep
-        // the keyboard on a window you can see. Not one that went full screen: that
-        // would take you straight back out of it.
+        // A window you were using left without saying so (Chess after ⌘W), or its app was
+        // hidden: keep the keyboard on a window you can see. Not one that went full screen
+        // (that would take you straight back out of it) or only went out of sight.
         let after = visibleFrames()
-        if arrived == nil, let (_, frame) = visibleBefore.first(where: { after[$0.key] == nil && fullScreenSpots[$0.key] == nil }),
+        if arrived == nil, let (_, frame) = visibleBefore.first(where: { after[$0.key] == nil && (away[$0.key].map { $0.why == .appHidden } ?? true) }),
            visibleBefore.keys.contains(where: { $0 == focusedBefore }) || NSWorkspace.shared.frontmostApplication?.processIdentifier == app.pid {
             focusNearest(to: frame)
         }
@@ -585,6 +619,9 @@ final class Tiler {
             limits[info.id] = saved.limits
         }
         window.minimized = info.minimized
+        window.fullScreen = info.fullScreen
+        // Gone out of sight a moment ago, and now in full screen: the green button after all.
+        if info.fullScreen, away[info.id] != nil { away.wentFullScreen(info.id) }
         window.standard = info.standard
         window.tabs = info.tabs
         window.resizable = info.resizable
@@ -596,16 +633,24 @@ final class Tiler {
         let appHidden = NSRunningApplication(processIdentifier: app.pid)?.isHidden ?? false
         let ruleTiles = (info.tileable || (adopted.contains(info.id) && info.windowLike))
             && !Self.floatingApps.contains(app.bundleID ?? "")
-        let wantsTile = ruleTiles
+        // Everything but being in view.
+        let tiles = ruleTiles
             && !offDisplay.contains(info.id)
             && !leftAloneApps.contains(app.bundleID ?? "")
             && !appHidden
             && !userFloating.contains(info.id)
+        let wantsTile = tiles
             // While a display shows a full screen app, its desktop's windows are out of
             // sight, not gone: they keep their tiles.
             && (onScreen.contains(info.id) || window.hidden
                 || (spot != nil && isOutOfView(info.id, shown: shown)))
         let placed = spot != nil
+        // Mission Control, App Exposé or Show Desktop: the window is covered, not gone. It keeps
+        // its tile, and the windows around it stay where they are.
+        if tiles, !wantsTile, placed, initialScanDone, !window.hidden, screenCovered(onScreen: onScreen, shown: shown) {
+            offScreenSince[info.id] = nil
+            return false
+        }
         if wantsTile && !placed {
             // A tab of a native tab group came forward (switched to, or just opened): each tab is
             // a window of its own and only the front one shows. It takes over the tile of the
@@ -653,12 +698,14 @@ final class Tiler {
         if wantsTile { offScreenSince[info.id] = nil }
         if !wantsTile && placed {
             offScreenSince[info.id] = nil
-            // The green button: the window leaves for a Space of its own (first vanishing
-            // for a moment on the way). Remember exactly where it was, and whether it was
-            // in Focus, so it comes back to the same spot.
-            if let spot, info.fullScreen || (!onScreen.contains(info.id) && !window.hidden && !info.minimized && !appHidden),
-               fullScreenSpots[info.id] == nil, let layout = spaces[spot.space][spot.display] {
-                fullScreenSpots[info.id] = (spot.space, spot.display, layout, layout.spotlight == info.id)
+            // Out of view without closing: the green button (the window leaves for a Space of its
+            // own, first vanishing for a moment on the way), its app hidden (windows parked in
+            // other Workspaces too), or out of sight with nothing said. Remember exactly where it
+            // was, and whether it was in Focus, so it comes back to the same spot.
+            let why: AwayMemory.Why? = info.fullScreen ? .fullScreen : appHidden ? .appHidden
+                : !onScreen.contains(info.id) && !window.hidden && !info.minimized ? .outOfView : nil
+            if let spot, let why, let layout = spaces[spot.space][spot.display] {
+                away.left(info.id, space: spot.space, display: spot.display, layout: layout, why: why, at: CACurrentMediaTime())
             }
             removeFromLayouts(info.id)
             window.target = nil
@@ -894,7 +941,7 @@ final class Tiler {
     private var countsRestores = false
 
     private func insert(_ window: ManagedWindow) {
-        if returnFromFullScreen(window) { return }
+        if returnToSpot(window) { return }
         let saved = savedPlacement.removeValue(forKey: window.id)
         // Its app restarted: back to the Workspace and spot it had when the app quit, wherever you are.
         let back = saved == nil && initialScanDone && window.isNew ? restartSpot(for: window, take: true) : nil
@@ -1088,7 +1135,7 @@ final class Tiler {
     /// where its app put it; the rest of the layout makes room once it's on screen.
     private func prePlace(_ info: WindowInfo, app: AppHandle, park: Bool = false) {
         guard initialScanDone, windows[info.id] == nil, info.tileable, info.tabs < 2,
-              savedPlacement[info.id] == nil, fullScreenSpots[info.id] == nil,
+              savedPlacement[info.id] == nil, away[info.id] == nil,
               !leftAloneApps.contains(app.bundleID ?? ""), !Self.floatingApps.contains(app.bundleID ?? ""),
               NSRunningApplication(processIdentifier: app.pid)?.isHidden != true,
               !isOnUnmanagedDisplay(info.frame),
@@ -1175,27 +1222,40 @@ final class Tiler {
         return planned.frames(in: display.visible, gap: Self.gap, limits: limits)[info.id]
     }
 
-    /// Where each window in full screen was tiled: its Workspace, display, the layout
-    /// then, and whether it was in Focus.
-    private var fullScreenSpots: [CGWindowID: (space: Int, display: String, layout: Layout, focus: Bool)] = [:]
-
-    /// Puts a window that left full screen back where it was, in Focus again if it
-    /// was. One that left from another Workspace than the one in view joins this one.
-    private func returnFromFullScreen(_ window: ManagedWindow) -> Bool {
-        guard let spot = fullScreenSpots.removeValue(forKey: window.id), spot.space == currentSpace,
+    /// Puts a window that was out of view back where it was (`away`): back from full screen, its
+    /// app shown again, or back in sight. Same Workspace, same stack and shares, in Focus again
+    /// if it was. One that leaves full screen while another Workspace is in view joins that one.
+    private func returnToSpot(_ window: ManagedWindow) -> Bool {
+        guard let spot = away.take(window.id),
+              let space = AwayMemory.destination(of: spot, currentSpace: currentSpace), spaces.indices.contains(space),
               let display = activeDisplays.first(where: { $0.uuid == spot.display }) else { return false }
-        var layout = spaces[spot.space][spot.display] ?? Layout()
+        var layout = spaces[space][spot.display] ?? Layout()
         if !layout.restore(window.id, from: spot.layout) {
             layout.insert(window.id, near: layout.windows.last, maxColumns: Layout.maxColumns(forWidth: display.visible.width))
         }
-        if spot.focus, layout.windowCount > 1 {
+        if spot.focus, space == currentSpace, layout.windowCount > 1 {
             layout.spotlight = window.id
             Snapshotter.capture(layout.shelved) { [weak self] images in
                 for (wid, image) in images { self?.shelf.setSnapshot(image, for: wid) }
             }
         }
-        spaces[spot.space][spot.display] = layout
-        log.notice("window \(window.id) back from full screen in space \(spot.space + 1)")
+        spaces[space][spot.display] = layout
+        let from = switch spot.why {
+        case .fullScreen: "full screen"
+        case .appHidden: "its app being hidden"
+        case .outOfView: "out of sight"
+        }
+        log.notice("window \(window.id) back from \(from, privacy: .public) in space \(space + 1)")
+        // Its app came back in front with it (a Dock click or ⌘-Tab to a hidden app whose window is
+        // in another Workspace): go there with it, so the keyboard isn't on a window out of sight.
+        if space != currentSpace {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.focusedID == window.id, self.place(of: window.id)?.space == space else { return }
+                self.go(to: window.id, in: space)
+                self.activate(window.id)
+                self.showRing(on: window.id)
+            }
+        }
         return true
     }
 
@@ -1215,7 +1275,7 @@ final class Tiler {
         }
         requested.remove(id)
         placedForYou[id] = nil
-        fullScreenSpots[id] = nil
+        away.forget(id)
         unlistedSince[id] = nil
         offScreenSince[id] = nil
         removeFromLayouts(id)
@@ -1304,6 +1364,11 @@ final class Tiler {
                 }
             }
             scheduleScan(app)
+        case kAXWindowDeminiaturizedNotification:
+            // Back from the Dock (clicked there, or Summoned after Hide): it's on screen only once
+            // the Dock's animation is over, which takes a moment. Look until it is.
+            if let id = app.windowIDs[element] { windows[id]?.restoredAt = CACurrentMediaTime() }
+            scheduleScan(app, after: [0.03, 0.3, 0.7, 1.5])
         case kAXWindowMovedNotification, kAXWindowResizedNotification:
             if let id = app.windowIDs[element] { windowChangedOnItsOwn(id) }
         default:
@@ -1362,8 +1427,8 @@ final class Tiler {
     private var summonedArrival: (bundleID: String, existing: Set<CGWindowID>, until: CFTimeInterval)?
     /// Windows tiled because they answered a Summon open, though their app doesn't call them standard.
     private var adopted: Set<CGWindowID> = []
-    /// Windows something moved onto a display LunchboxWM doesn't manage (Use All Displays
-    /// off): agents test there, on a display Tyler can't see. Left alone while there.
+    /// Windows you moved onto a display LunchboxWM doesn't manage (Use All Displays off): left
+    /// alone while there. (An app moving its own window there gets it back in its tile.)
     private var offDisplay: Set<CGWindowID> = []
     /// Apps an agent is testing on the spoof display: LunchboxWM doesn't tile their windows
     /// at all, so opening one never shuffles Tyler's layout. Set with leave-app:<bundle id>.
@@ -1401,7 +1466,16 @@ final class Tiler {
         return displays.contains { !$0.isMain && $0.frame.contains(center) }
     }
 
-    /// Stops tiling a window something moved onto an unmanaged display, and closes its gap.
+    /// Whether you moved this tiled window onto a display LunchboxWM doesn't tile (dragged it, or
+    /// with a key or a menu just then), rather than its app moving it there by itself.
+    private func movedThereByYou(_ id: CGWindowID) -> Bool {
+        guard let w = windows[id] else { return false }
+        let dragged = draggedByUser.contains(id) || CACurrentMediaTime() - (droppedAt[id] ?? 0) < 1.5
+        let inFront = NSWorkspace.shared.frontmostApplication?.processIdentifier == w.pid
+        return OffDisplayMove.decide(dragged: dragged, inputAgo: Self.secondsSinceInput(), appInFront: inFront) == .leaveThere
+    }
+
+    /// Stops tiling a window you moved onto an unmanaged display, and closes its gap.
     private func leaveAlone(_ id: CGWindowID) {
         guard let w = windows[id], place(of: id) != nil else { return }
         offDisplay.insert(id)
@@ -1409,7 +1483,7 @@ final class Tiler {
         w.target = nil
         relayout(animated: true)
         persist()
-        log.notice("window \(id) moved to an unmanaged display; leaving it there")
+        log.notice("window \(id) was moved onto an unmanaged display by hand; leaving it there")
     }
 
     private func appActivated(_ running: NSRunningApplication) {
@@ -1434,6 +1508,29 @@ final class Tiler {
         }
     }
 
+    /// Mission Control, App Exposé (which hides every other app's windows) or Show Desktop is up:
+    /// windows in view are out of sight without going anywhere, and keep their tiles. The Dock
+    /// says so (`overview`); failing that, several tiles in view out of sight at once, their apps
+    /// not hidden, is the same (`CoverWatch`).
+    private func screenCovered(onScreen: Set<CGWindowID>, shown: Set<Int>? = nil) -> Bool {
+        if overview.isActive { return true }
+        var shown = shown
+        var gone = 0
+        for id in visibleFrames().keys where !onScreen.contains(id) {
+            guard let w = windows[id], !w.hidden, !w.minimized,
+                  NSRunningApplication(processIdentifier: w.pid)?.isHidden != true else { continue }
+            // Behind a full screen app: out of view for another reason.
+            if shown == nil { shown = shownSpaces() }
+            if let shown, isOutOfView(id, shown: shown) { continue }
+            gone += 1
+        }
+        let covered = cover.covered(gone: gone, at: CACurrentMediaTime())
+        if covered, gone >= 2, !wasCovered { log.notice("\(gone) tiles in view went out of sight at once: they keep their tiles") }
+        wasCovered = covered
+        return covered
+    }
+    private var wasCovered = false
+
     /// Some apps keep a closed window around instead of destroying it (Chess
     /// does), so it never says it's gone and would hold its tile forever. Any
     /// tiled window here that's no longer on screen gets its app asked again,
@@ -1441,6 +1538,8 @@ final class Tiler {
     private func checkForGhosts() {
         guard enabled else { return }
         let onScreen = onScreenWindowIDs()
+        // Under Mission Control, App Exposé or Show Desktop, windows out of sight are still there.
+        if screenCovered(onScreen: onScreen) { return }
         let now = CACurrentMediaTime()
         var stale: [pid_t: AppHandle] = [:]
         var shown: Set<Int>?
@@ -1455,13 +1554,17 @@ final class Tiler {
         rescanUntiled(onScreen: onScreen)
     }
 
-    /// The other way round: a window that arrived in the last two minutes and is on screen, but
-    /// never got a tile, is looked at again (every 2 s at most). An app may make a window long
-    /// before it shows it, or only make it a normal window later, without telling anyone.
+    /// The other way round: a window on screen without a tile is looked at again (every 2 s at
+    /// most) if it arrived in the last two minutes (an app may make a window long before it
+    /// shows it, or only make it a normal window later, without telling anyone), came back from
+    /// the Dock in the last half minute, or had a tile until it went out of view (`away`): back in
+    /// sight with nothing said (Show Desktop or App Exposé over, its app shown again), it goes
+    /// back to its spot.
     private func rescanUntiled(onScreen: Set<CGWindowID>) {
         let now = CACurrentMediaTime()
         var apps: [pid_t: AppHandle] = [:]
-        for w in windows.values where now - w.seenAt < 120 && w.standard && !w.hidden && !w.minimized
+        for w in windows.values where (now - w.seenAt < 120 || now - w.restoredAt < 30 || away[w.id] != nil)
+            && (w.standard || adopted.contains(w.id)) && (!w.hidden || away[w.id] != nil) && !w.minimized && !w.fullScreen
             && onScreen.contains(w.id) && place(of: w.id) == nil && !offDisplay.contains(w.id)
             && !leftAloneApps.contains(w.handle.app.bundleID ?? "") && !Self.floatingApps.contains(w.handle.app.bundleID ?? "") {
             guard (rechecked[w.id].map { now - $0 >= 2 } ?? true), recheck(w.id) else { continue }
@@ -1737,11 +1840,14 @@ final class Tiler {
                     if moved, last.map({ actual.isClose(to: $0, tolerance: 1) }) == true,
                        CACurrentMediaTime() > self.settlingUntil[id] ?? 0,
                        !self.draggedByUser.contains(id), NSEvent.pressedMouseButtons & 1 == 0 {
+                        // Placed, then moved onto a display LunchboxWM doesn't tile: left there if you
+                        // moved it, else (its app did) put back like any other move.
+                        let offDisplay = self.isOnUnmanagedDisplay(actual) && !self.isOnUnmanagedDisplay(target)
+                        if offDisplay, self.movedThereByYou(id) { self.leaveAlone(id); return }
                         // Back where it was before the last correction: the app insists (a window with a
-                        // minimum size, say). No tug of war.
-                        if let corrected, actual.isClose(to: corrected, tolerance: 2) { return }
-                        // Placed, then moved to the display agents test on: leave it there.
-                        if self.isOnUnmanagedDisplay(actual), !self.isOnUnmanagedDisplay(target) { self.leaveAlone(id); return }
+                        // minimum size, say). No tug of war, except over a display you may not see.
+                        if !offDisplay, let corrected, actual.isClose(to: corrected, tolerance: 2) { return }
+                        if offDisplay { log.notice("window \(id) (\(w.handle.app.bundleID ?? "?", privacy: .public)) moved itself onto a display LunchboxWM doesn't tile; putting it back") }
                         w.frame = actual
                         w.target = nil
                         self.arriving.insert(id)
@@ -1757,10 +1863,12 @@ final class Tiler {
 
     /// A tiled window moved or resized without us asking.
     private func windowChangedOnItsOwn(_ id: CGWindowID) {
-        if fullScreenSpots[id] != nil, let w = windows[id] {
+        if away[id] != nil, let w = windows[id] {
             scheduleScan(w.handle.app, after: [0.15, 0.7])
             return
         }
+        // Show Desktop and Mission Control move windows aside for a while: nothing to put back.
+        if overview.isActive { return }
         if offDisplay.contains(id), let w = windows[id] {
             let element = w.handle.element
             w.handle.app.queue.async {
@@ -1792,9 +1900,7 @@ final class Tiler {
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.pendingReassert[id] = nil
-            let now = CACurrentMediaTime()
-            guard now - (self.lastReassert[id] ?? 0) > 2, let w = self.windows[id], !w.hidden else { return }
-            self.lastReassert[id] = now
+            guard let w = self.windows[id], !w.hidden else { return }
             let element = w.handle.element
             w.handle.app.queue.async {
                 let actual = element.frame
@@ -1804,7 +1910,27 @@ final class Tiler {
                     // Late notifications from our own moves land here too; only act on a real difference.
                     guard let actual, let w = self.windows[id], let target = w.target, !w.hidden,
                           !actual.isClose(to: target, tolerance: 2) else { return }
-                    if self.isOnUnmanagedDisplay(actual) { self.leaveAlone(id); return }
+                    // Onto a display LunchboxWM doesn't tile: left there if you moved it. If its app did
+                    // (Simulator going back to where an agent once left it), it comes back, even when it
+                    // insists: a window must never end up somewhere you may not see.
+                    let offDisplay = self.isOnUnmanagedDisplay(actual)
+                    if offDisplay, self.movedThereByYou(id) { self.leaveAlone(id); return }
+                    let now = CACurrentMediaTime()
+                    let wait = 2 - (now - (self.lastReassert[id] ?? 0))
+                    if wait > 0 {
+                        if offDisplay {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + wait) { self.windowChangedOnItsOwn(id) }
+                        }
+                        return
+                    }
+                    self.lastReassert[id] = now
+                    if offDisplay {
+                        log.notice("window \(id) (\(w.handle.app.bundleID ?? "?", privacy: .public)) moved itself onto a display LunchboxWM doesn't tile; putting it back")
+                        w.frame = actual
+                        w.target = nil
+                        self.relayout(animated: true)
+                        return
+                    }
                     // Centered where LunchboxWM put it at another size: it can't fill its tile. That's
                     // for `learnLimits`, not a reason to move it.
                     if abs(actual.midX - target.midX) <= 3, abs(actual.midY - target.midY) <= 3 {
@@ -1859,6 +1985,11 @@ final class Tiler {
     private func userDropped(_ id: CGWindowID, frame: CGRect?, at point: CGPoint) {
         guard let frame, let w = windows[id], let target = w.target, let (space, uuid) = place(of: id) else { return }
         w.frame = frame
+        // Dragged onto a display LunchboxWM doesn't tile: it stays there, untiled.
+        if isOnUnmanagedDisplay(frame) {
+            leaveAlone(id)
+            return
+        }
         // A centered window (alone, or in spotlight) keeps whatever shape the user
         // drags it to and glides back to the middle; a plain drag just re-centers it.
         if let layout = spaces[space][uuid], layout.windowCount == 1 || layout.spotlight == id {
