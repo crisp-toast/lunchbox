@@ -17,7 +17,7 @@ final class HotkeyTap {
         var keymap = Keymap()
         var learner: ((Int64, CGEventFlags) -> Void)?
         var centered: [(id: CGWindowID, frame: CGRect)] = []
-        var pairs: [(id: CGWindowID, frame: CGRect, sideBySide: Bool)] = []
+        var arranged: [ArrangedWindow] = []
         /// Resize mode lasts until this moment (each resize key extends it).
         var resizeUntil: CFTimeInterval = 0
     }
@@ -35,18 +35,27 @@ final class HotkeyTap {
     private var chord = ShiftTapChord()
     /// A drag on a centered window's edge is under way; tap thread only.
     private var stretching = false
-    /// A drag on a corner of one of two windows that resize as a pair is under way, handed to
-    /// `onPairCorner` instead of the app; tap thread only.
-    private var cornerDragging = false
+    /// A drag on an arrangement's outer edge or a corner is under way, handed to `onArrangementDrag`
+    /// instead of the app; tap thread only.
+    private var arrangementDragging = false
 
-    /// A corner drag on a pair window: LunchboxWM resizes both windows itself, since macOS's own
-    /// resize keeps the far corner where it is. Called on the main thread.
-    enum PairCornerEvent {
-        case began(CGWindowID, Layout.Corner)
+    /// A window of an arrangement of two or more, where it is, and which of its sides are on the
+    /// arrangement's outside.
+    struct ArrangedWindow {
+        let id: CGWindowID
+        let frame: CGRect
+        let outerLeft: Bool, outerRight: Bool, outerTop: Bool, outerBottom: Bool
+    }
+
+    /// A drag on an arrangement's outer edge or a corner: LunchboxWM resizes every window itself,
+    /// around the middle of the screen (macOS's own resize keeps the far side where it is). Called
+    /// on the main thread.
+    enum ArrangementDragEvent {
+        case began(CGWindowID, Layout.Handle)
         case moved(CGPoint)
         case ended(CGPoint)
     }
-    var onPairCorner: ((PairCornerEvent) -> Void)?
+    var onArrangementDrag: ((ArrangementDragEvent) -> Void)?
     /// A press just inside a centered window's edge: it's a resize only if the window starts
     /// changing size as the drag goes. The window, its size at the press, and where the press
     /// was; tap thread only.
@@ -86,38 +95,38 @@ final class HotkeyTap {
         set { state.withLock { $0.centered = newValue } }
     }
 
-    /// Two windows that resize as a centered pair: a drag on an edge across the pair (a top or
-    /// bottom side by side; a side when stacked) stretches both ways, like a centered window.
-    var pairWindows: [(id: CGWindowID, frame: CGRect, sideBySide: Bool)] {
-        get { state.withLock { $0.pairs } }
-        set { state.withLock { $0.pairs = newValue } }
+    /// The windows of the arrangements in view (two or more windows, not in Focus).
+    var arrangedWindows: [ArrangedWindow] {
+        get { state.withLock { $0.arranged } }
+        set { state.withLock { $0.arranged = newValue } }
     }
 
-    /// The pair window with a corner at `p` (within `edgeReach` of it, in or out), and which corner.
-    private func pairCorner(at p: CGPoint, in pairs: [(id: CGWindowID, frame: CGRect, sideBySide: Bool)]) -> (id: CGWindowID, corner: Layout.Corner)? {
-        let r = Self.edgeReach
-        for pair in pairs {
-            let f = pair.frame
-            for (x, y) in [(f.minX, f.minY), (f.maxX, f.minY), (f.minX, f.maxY), (f.maxX, f.maxY)]
-            where CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r).contains(p) {
-                return (pair.id, Layout.Corner(left: x == f.minX, top: y == f.minY))
+    /// The window and handle under `p`: any corner, or an edge on the arrangement's outside. From
+    /// just outside the edge to a few points in, about where macOS itself starts a resize, so a click
+    /// on a title bar or a scroll bar still goes to the window.
+    private func arrangementHandle(at p: CGPoint, in windows: [ArrangedWindow]) -> (id: CGWindowID, handle: Layout.Handle)? {
+        let out = Self.edgeReach, edgeIn: CGFloat = 3, cornerIn: CGFloat = 5
+        for w in windows {
+            let f = w.frame
+            for (x, y) in [(f.minX, f.minY), (f.maxX, f.minY), (f.minX, f.maxY), (f.maxX, f.maxY)] {
+                let left = x == f.minX, top = y == f.minY
+                let zone = CGRect(x: left ? x - out : x - cornerIn, y: top ? y - out : y - cornerIn,
+                                  width: out + cornerIn, height: out + cornerIn)
+                if zone.contains(p) { return (w.id, Layout.Handle(horizontal: left ? .low : .high, vertical: top ? .low : .high)) }
             }
-        }
-        return nil
-    }
-
-    /// The pair window whose edge across the pair is at `p`, and whether `p` is just outside it.
-    /// Corners don't count: they also move a side, which the pair mirrors instead.
-    private func pairEdge(at p: CGPoint, in pairs: [(id: CGWindowID, frame: CGRect, sideBySide: Bool)]) -> (id: CGWindowID, outside: Bool)? {
-        let r = Self.edgeReach
-        for pair in pairs {
-            let f = pair.frame
-            let bands: [CGRect] = pair.sideBySide
-                ? [CGRect(x: f.minX + r, y: f.minY - r, width: f.width - 2 * r, height: 2 * r),
-                   CGRect(x: f.minX + r, y: f.maxY - r, width: f.width - 2 * r, height: 2 * r)]
-                : [CGRect(x: f.minX - r, y: f.minY + r, width: 2 * r, height: f.height - 2 * r),
-                   CGRect(x: f.maxX - r, y: f.minY + r, width: 2 * r, height: f.height - 2 * r)]
-            if bands.contains(where: { $0.contains(p) }) { return (pair.id, !f.contains(p)) }
+            let along = f.insetBy(dx: cornerIn, dy: cornerIn)
+            if w.outerLeft, CGRect(x: f.minX - out, y: along.minY, width: out + edgeIn, height: along.height).contains(p) {
+                return (w.id, Layout.Handle(horizontal: .low, vertical: nil))
+            }
+            if w.outerRight, CGRect(x: f.maxX - edgeIn, y: along.minY, width: out + edgeIn, height: along.height).contains(p) {
+                return (w.id, Layout.Handle(horizontal: .high, vertical: nil))
+            }
+            if w.outerTop, CGRect(x: along.minX, y: f.minY - out, width: along.width, height: out + edgeIn).contains(p) {
+                return (w.id, Layout.Handle(horizontal: nil, vertical: .low))
+            }
+            if w.outerBottom, CGRect(x: along.minX, y: f.maxY - edgeIn, width: along.width, height: out + edgeIn).contains(p) {
+                return (w.id, Layout.Handle(horizontal: nil, vertical: .high))
+            }
         }
         return nil
     }
@@ -194,8 +203,8 @@ final class HotkeyTap {
             // moves without activating).
             stretching = false
             maybeStretching = nil
-            cornerDragging = false
-            let (on, centered, pairs) = state.withLock { ($0.enabled, $0.centered, $0.pairs) }
+            arrangementDragging = false
+            let (on, centered, arranged) = state.withLock { ($0.enabled, $0.centered, $0.arranged) }
             guard on, event.flags.isDisjoint(with: [.maskShift, .maskCommand, .maskControl, .maskAlternate]) else { return pass }
             let p = event.location
             if centered.contains(where: { $0.frame.insetBy(dx: -Self.edgeReach, dy: -Self.edgeReach).contains(p) && !$0.frame.contains(p) }) {
@@ -207,25 +216,17 @@ final class HotkeyTap {
                 // Inside: it may be the edge, or something in the window near it (a scroll bar, text).
                 // Only a press that starts resizing the window gets ⌥, as soon as it does.
                 maybeStretching = (w.id, size, p)
-            } else if let hit = pairCorner(at: p, in: pairs), let onPairCorner {
-                // A corner of one of two windows: LunchboxWM resizes the pair itself, all centered.
-                cornerDragging = true
-                DispatchQueue.main.async { onPairCorner(.began(hit.id, hit.corner)) }
+            } else if let hit = arrangementHandle(at: p, in: arranged), let onArrangementDrag {
+                // An arrangement's outer edge or a corner: LunchboxWM resizes it, all centered.
+                arrangementDragging = true
+                DispatchQueue.main.async { onArrangementDrag(.began(hit.id, hit.handle)) }
                 return nil
-            } else if let hit = pairEdge(at: p, in: pairs) {
-                // One of two windows, across the pair: the same, so it stays centered on the screen.
-                if hit.outside {
-                    stretching = true
-                    event.flags.insert(.maskAlternate)
-                } else if let size = windowBounds(hit.id)?.size {
-                    maybeStretching = (hit.id, size, p)
-                }
             }
             return pass
         case .leftMouseDragged:
-            if cornerDragging, let onPairCorner {
+            if arrangementDragging, let onArrangementDrag {
                 let p = event.location
-                DispatchQueue.main.async { onPairCorner(.moved(p)) }
+                DispatchQueue.main.async { onArrangementDrag(.moved(p)) }
                 return nil
             }
             if let maybe = maybeStretching {
@@ -239,10 +240,10 @@ final class HotkeyTap {
             if stretching { event.flags.insert(.maskAlternate) }
             return pass
         case .leftMouseUp:
-            if cornerDragging, let onPairCorner {
-                cornerDragging = false
+            if arrangementDragging, let onArrangementDrag {
+                arrangementDragging = false
                 let p = event.location
-                DispatchQueue.main.async { onPairCorner(.ended(p)) }
+                DispatchQueue.main.async { onArrangementDrag(.ended(p)) }
                 return nil
             }
             if stretching { event.flags.insert(.maskAlternate) }

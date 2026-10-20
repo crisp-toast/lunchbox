@@ -1921,7 +1921,6 @@ final class Tiler {
         guard now > settlingUntil[id] ?? 0 || justDropped, let w = windows[id], !w.hidden, w.target != nil else { return }
         if NSEvent.pressedMouseButtons & 1 != 0 {
             draggedByUser.insert(id)
-            mirrorPair(id)
             return
         }
         // The app moved itself (some do when opening), or macOS did: Window › Fill and the
@@ -2035,16 +2034,28 @@ final class Tiler {
             persist()
             return
         }
-        // A far edge of one of two windows: the pair takes that size, centered and touching.
-        if let d = displays.first(where: { $0.uuid == uuid }), var layout = spaces[space][uuid], resizesAsPair(layout),
-           let r = layout.pairResize(id, dragged: frame, target: target, in: d.visible, gap: Self.gap, limits: limits),
-           layout.adoptPair(id, dragged: frame, target: target, in: d.visible, gap: Self.gap, limits: limits) {
-            spaces[space][uuid] = layout
-            windows[r.other]?.frame = r.otherFrame
-            for each in layout.windows { windows[each]?.target = nil } // they glide from where they are
-            relayout(animated: true)
-            persist()
-            return
+        // An outer edge resized the usual way (begun just outside the zone LunchboxWM takes over):
+        // the arrangement takes that size around the middle, as if dragged there.
+        if let d = displays.first(where: { $0.uuid == uuid }), let layout = spaces[space][uuid], resizesAsArrangement(layout) {
+            func side(_ now: CGFloat, _ was: CGFloat, _ outer: Bool, _ s: Layout.Handle.Side) -> Layout.Handle.Side? {
+                abs(now - was) > 4 && outer ? s : nil
+            }
+            let h = side(frame.minX, target.minX, layout.isOuter(id, horizontal: .low), .low)
+                ?? side(frame.maxX, target.maxX, layout.isOuter(id, horizontal: .high), .high)
+            let v = side(frame.minY, target.minY, layout.isOuter(id, vertical: .low), .low)
+                ?? side(frame.maxY, target.maxY, layout.isOuter(id, vertical: .high), .high)
+            if h != nil || v != nil {
+                let point = CGPoint(x: h == .low ? frame.minX : h == .high ? frame.maxX : frame.midX,
+                                    y: v == .low ? frame.minY : v == .high ? frame.maxY : frame.midY)
+                if let next = layout.dragged(id, handle: Layout.Handle(horizontal: h, vertical: v), to: point,
+                                             in: d.visible, gap: Self.gap, limits: limits) {
+                    spaces[space][uuid] = next
+                    w.target = nil
+                    relayout(animated: true)
+                    persist()
+                    return
+                }
+            }
         }
         if abs(frame.width - target.width) > 4 || abs(frame.height - target.height) > 4 {
             if w.resizable { limits[id] = nil } // it took a size of the user's choosing
@@ -3379,74 +3390,53 @@ final class Tiler {
         }
     }
 
-    /// Two windows in the Workspace being viewed, side by side or stacked, that resize as a centered
-    /// pair: dragging an edge across the pair (a top or bottom; a side when stacked) stretches both
-    /// ways (`HotkeyTap`), and a far side is mirrored onto the other window (`mirrorPair`).
-    var pairWindows: [(id: CGWindowID, frame: CGRect, sideBySide: Bool)] {
+    /// The windows of the arrangements in view (two or more windows, not in Focus), and which of
+    /// their sides are on the outside: dragging one of those, or any corner, resizes the arrangement
+    /// (`HotkeyTap`, `arrangementDrag`).
+    var arrangedWindows: [HotkeyTap.ArrangedWindow] {
         guard enabled else { return [] }
-        return activeDisplays.flatMap { d -> [(id: CGWindowID, frame: CGRect, sideBySide: Bool)] in
-            guard let layout = spaces[currentSpace][d.uuid], resizesAsPair(layout) else { return [] }
+        return activeDisplays.flatMap { d -> [HotkeyTap.ArrangedWindow] in
+            guard let layout = spaces[currentSpace][d.uuid], resizesAsArrangement(layout) else { return [] }
             return layout.windows.compactMap { id in
                 guard let w = windows[id], !w.hidden else { return nil }
-                return (id, w.target ?? w.frame, layout.pairSideBySide)
+                return HotkeyTap.ArrangedWindow(id: id, frame: w.target ?? w.frame,
+                                                outerLeft: layout.isOuter(id, horizontal: .low), outerRight: layout.isOuter(id, horizontal: .high),
+                                                outerTop: layout.isOuter(id, vertical: .low), outerBottom: layout.isOuter(id, vertical: .high))
             }
         }
     }
 
-    /// Two windows, neither a placeholder nor one that stops at a size of its own (Simulator, a fixed
-    /// window). A minimum is fine: the pair just doesn't get smaller than it.
-    private func resizesAsPair(_ layout: Layout) -> Bool {
-        layout.isPair && layout.windows.allSatisfy {
+    /// Two or more windows, none a placeholder or one that stops at a size of its own (Simulator, a
+    /// fixed window). A minimum is fine: the arrangement just doesn't get smaller than it.
+    private func resizesAsArrangement(_ layout: Layout) -> Bool {
+        layout.isArrangement && layout.windows.allSatisfy {
             !Placeholder.isPlaceholder($0) && windows[$0] != nil && limits[$0]?.maxWidth == nil && limits[$0]?.maxHeight == nil
         }
     }
 
-    /// While you drag a far edge of one of two windows, the other follows, so the pair stays
-    /// centered and touching (`Layout.pairResize`). Its own move notifications are ignored meanwhile.
-    private func mirrorPair(_ id: CGWindowID) {
-        guard !mirroring, let w = windows[id], let target = w.target, let (space, uuid) = place(of: id), space == currentSpace,
-              let layout = spaces[space][uuid], resizesAsPair(layout), let d = activeDisplays.first(where: { $0.uuid == uuid })
-        else { return }
-        mirroring = true
-        let element = w.handle.element
-        w.handle.app.queue.async { [weak self] in
-            let frame = element.frame
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.mirroring = false
-                guard let frame, NSEvent.pressedMouseButtons & 1 != 0,
-                      let r = layout.pairResize(id, dragged: frame, target: target, in: d.visible, gap: Self.gap, limits: self.limits),
-                      let other = self.windows[r.other], r.otherFrame.width >= 80, r.otherFrame.height >= 80 else { return }
-                self.settlingUntil[r.other] = CACurrentMediaTime() + 0.5
-                other.frame = r.otherFrame
-                self.animator.run([(other.handle, r.otherFrame, r.otherFrame, .snap)])
-            }
-        }
-    }
+    /// A drag on an arrangement's outer edge or a corner, handed over by `HotkeyTap`: the window, the
+    /// handle, and the layout as the drag began.
+    private var arrangementDrag: (id: CGWindowID, handle: Layout.Handle, space: Int, display: Display, start: Layout)?
 
-    /// A pair mirror is on its way (one at a time; the next drag event sends another).
-    private var mirroring = false
-
-    /// A corner drag on one of two windows that resize as a pair, handed over by `HotkeyTap`: the
-    /// window, its corner, and the layout as the drag began.
-    private var cornerDrag: (id: CGWindowID, corner: Layout.Corner, space: Int, display: Display, start: Layout)?
-
-    /// The pair follows a corner drag live: the corner under the pointer, the opposite corners
-    /// moving with it, everything centered (`Layout.pairCornerDragged`); letting go keeps it.
-    func pairCorner(_ event: HotkeyTap.PairCornerEvent) {
+    /// The arrangement follows the drag live: the dragged edge or corner under the pointer, the
+    /// opposite ones moving with it, everything centered (`Layout.dragged`); letting go keeps it.
+    func arrangementDrag(_ event: HotkeyTap.ArrangementDragEvent) {
         switch event {
-        case .began(let id, let corner):
+        case .began(let id, let handle):
             guard enabled, let (space, uuid) = place(of: id), space == currentSpace, let layout = spaces[space][uuid],
-                  resizesAsPair(layout), let d = activeDisplays.first(where: { $0.uuid == uuid }) else { cornerDrag = nil; return }
-            cornerDrag = (id, corner, space, d, layout)
+                  resizesAsArrangement(layout), let d = activeDisplays.first(where: { $0.uuid == uuid }) else { arrangementDrag = nil; return }
+            arrangementDrag = (id, handle, space, d, layout)
             activate(id)
         case .moved(let point):
-            guard let drag = cornerDrag, let next = cornerLayout(drag, at: point) else { return }
+            guard let drag = arrangementDrag,
+                  let next = drag.start.dragged(drag.id, handle: drag.handle, to: point, in: drag.display.visible, gap: Self.gap, limits: limits)
+            else { return }
             for (id, frame) in next.frames(in: drag.display.visible, gap: Self.gap, limits: limits) { moveLive(id, to: frame) }
         case .ended(let point):
-            guard let drag = cornerDrag else { return }
-            cornerDrag = nil
-            guard let next = cornerLayout(drag, at: point), spaces[drag.space][drag.display.uuid]?.windows.sorted() == next.windows.sorted()
+            guard let drag = arrangementDrag else { return }
+            arrangementDrag = nil
+            guard let next = drag.start.dragged(drag.id, handle: drag.handle, to: point, in: drag.display.visible, gap: Self.gap, limits: limits),
+                  spaces[drag.space][drag.display.uuid]?.windows.sorted() == next.windows.sorted()
             else { relayout(animated: true); return }
             spaces[drag.space][drag.display.uuid] = next
             // They glide (barely) from where the drag left them.
@@ -3454,11 +3444,6 @@ final class Tiler {
             relayout(animated: true)
             persist()
         }
-    }
-
-    private func cornerLayout(_ drag: (id: CGWindowID, corner: Layout.Corner, space: Int, display: Display, start: Layout),
-                              at point: CGPoint) -> Layout? {
-        drag.start.pairCornerDragged(drag.id, corner: drag.corner, to: point, in: drag.display.visible, gap: Self.gap, limits: limits)
     }
 
     /// The newest frame each window should take during a corner drag, and which windows have a

@@ -133,11 +133,12 @@ Apps you open often rise to the top.
 With the mouse: drag a tiled window onto another to swap them, onto the other screen to move it
 there, or drag its edge to resize. A centered window (alone, or in Focus) stretches on both sides as you drag an edge or corner, as if ⌥
 were held, so it stays centered, and keeps the shape you give it; Tidy (⌘⇧0) returns it to the default size without leaving Focus.
-Two windows work the same way as a pair: drag a top, a bottom, a far side or a corner of either one
-and both resize together as you drag, identical in size, centered on the screen both ways and
-touching in the middle, never smaller than either window allows. A corner moves the opposite corners
-with it as it goes; one by the other window also moves the split, as the edge between them does.
-Tidy fills the screen with them again. ⌘-Tab to a window in another space switches to that space.
+Any arrangement of two or more windows works the same way. Drag an outer edge (the outside side,
+top or bottom of a window on the arrangement's edge) and the whole arrangement resizes around the
+middle of the screen as you drag, every window keeping its share and all of them touching. Drag an
+edge between two windows and the split between them moves. A corner does both at once: it follows
+the pointer while the opposite corners move to match. Nothing gets smaller than a window allows. The
+size is for those windows: open or close one, or Tidy, and the arrangement fills the screen again. ⌘-Tab to a window in another space switches to that space.
 
 The Dock works the same way: clicking a running app's icon goes to that app, using its window in
 the current Workspace if it has one, else switching to the Workspace its window is in. An app that
