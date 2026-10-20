@@ -592,6 +592,9 @@ final class Tiler {
     }
 
     private var pendingNewWindow: (pid: pid_t, existing: Set<CGWindowID>, deadline: CFTimeInterval)?
+    /// An app brought forward to open a new window here, and the windows it had: focus landing on
+    /// one of those in another Workspace meanwhile is the app coming forward, nothing more.
+    private var comingForward: (pid: pid_t, existing: Set<CGWindowID>, until: CFTimeInterval)?
 
     /// Registers a window and adds it to or removes it from the layout as needed.
     /// Returns true when the layout changed.
@@ -1698,7 +1701,8 @@ final class Tiler {
             switch ForeignFocus.decide(summoned: summoned, fromDockMenu: menu != nil, fromDockClick: clicked,
                                        windowHere: clicked ? windowHere(ofApp: app.pid) : nil,
                                        settling: now <= quietFocusUntil,
-                                       placedForYou: (placedForYou[id] ?? 0) > now) {
+                                       placedForYou: (placedForYou[id] ?? 0) > now,
+                                       openingNewWindow: comingForward.map { $0.pid == app.pid && now < $0.until && $0.existing.contains(id) } ?? false) {
             case .bringHere:
                 bringToCurrentSpace(id)
             case .waitForNewWindow:
@@ -1716,6 +1720,9 @@ final class Tiler {
                 showRing(on: here)
             case .goThere:
                 go(to: id, in: space)
+            case .leaveIt:
+                // Coming forward to open a new window here: it stays where it is.
+                break
             case .stay:
                 // Right after we switch spaces or a window closes, macOS often hands focus
                 // to some other window of the app, which may be parked in another space.
@@ -1760,7 +1767,7 @@ final class Tiler {
         persist()
         activate(id)
         showRing(on: id)
-        log.notice("brought window \(id) to space \(self.currentSpace + 1) from the Dock")
+        log.notice("brought window \(id) to space \(self.currentSpace + 1) for Summon")
     }
 
     /// Focus changes before this time don't switch spaces.
@@ -2831,6 +2838,12 @@ final class Tiler {
         quietFocus()
         lastActivation = CACurrentMediaTime()
         pendingNewWindow = (pid, existing, CACurrentMediaTime() + 4)
+        // What's coming here is a new window. The app comes forward on one of the windows it has,
+        // maybe one in another Workspace: that one stays where it is, rather than being taken for
+        // what Summon opened and brought along.
+        comingForward = (pid, existing, CACurrentMediaTime() + 2)
+        if summonActivation?.pid == pid { summonActivation = nil }
+        if expectedArrival?.bundleID == app.bundleID { expectedArrival = nil }
         let anchor = mine.first { place(of: $0.id)?.space == currentSpace && !$0.hidden }
             ?? mine.first { !$0.minimized } ?? mine.first
         if !(anchor.map { WindowFocus.focus(pid: pid, windowID: $0.id) } ?? false) {

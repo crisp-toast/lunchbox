@@ -11,11 +11,18 @@ public enum ForeignFocus: Equatable, Sendable {
     case goThere
     /// macOS handed focus over by itself (right after a close or a switch): stay put.
     case stay
+    /// The app came forward on this window to open a new one here (Summon's New Window): the
+    /// window stays where it is, and nothing else happens. The new window is on its way.
+    case leaveIt
 
     /// - placedForYou: LunchboxWM just opened this window in its app's Workspace while you stayed
     ///   here. Its app reaching for focus isn't you asking to go there.
+    /// - openingNewWindow: LunchboxWM is opening a new window of this app here, and this is one of
+    ///   the windows the app already had.
     public static func decide(summoned: Bool, fromDockMenu: Bool, fromDockClick: Bool,
-                              windowHere: WindowID?, settling: Bool, placedForYou: Bool = false) -> ForeignFocus {
+                              windowHere: WindowID?, settling: Bool, placedForYou: Bool = false,
+                              openingNewWindow: Bool = false) -> ForeignFocus {
+        if openingNewWindow { return .leaveIt }
         if placedForYou { return .stay }
         if summoned { return .bringHere }
         if fromDockMenu { return .waitForNewWindow }

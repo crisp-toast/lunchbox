@@ -26,4 +26,13 @@ import Testing
         #expect(ForeignFocus.decide(summoned: false, fromDockMenu: false, fromDockClick: false, windowHere: nil, settling: true) == .stay)
         #expect(ForeignFocus.decide(summoned: false, fromDockMenu: false, fromDockClick: false, windowHere: nil, settling: false) == .goThere)
     }
+
+    @Test func openingANewWindowLeavesTheAppsOtherWindowsWhereTheyAre() {
+        // Summon's New Window for Arc in Workspace 3: Arc comes forward on its window parked in
+        // Workspace 1 first. That window isn't what Summon opened, and isn't a reason to go there.
+        #expect(ForeignFocus.decide(summoned: true, fromDockMenu: false, fromDockClick: false, windowHere: nil,
+                                    settling: false, openingNewWindow: true) == .leaveIt)
+        #expect(ForeignFocus.decide(summoned: false, fromDockMenu: false, fromDockClick: false, windowHere: nil,
+                                    settling: false, openingNewWindow: true) == .leaveIt)
+    }
 }
