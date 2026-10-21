@@ -47,6 +47,7 @@ export async function onRequestPost({ request, env }) {
   });
   const session = await response.json();
   if (!response.ok || !session.url) {
+    console.error("checkout: Stripe said", response.status, session?.error?.code, session?.error?.message);
     const back = `${site}/?checkout=unavailable#pricing`;
     return type.includes("application/json")
       ? new Response(JSON.stringify({ error: "checkout-unavailable" }), { status: 502, headers: { "Content-Type": "application/json" } })
