@@ -505,7 +505,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   <div class="nav-inner">
     <a class="brand" href="#top"><svg><use href="#logo"/></svg><span>Lunchbox<span class="wm">WM</span></span></a>
     <div class="nav-links"><a href="#why">Features</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></div>
-    <a class="btn dark small" href="#pricing">Buy · $4.99</a>
+    <a class="btn dark small" href="#pricing" data-checkout>Buy · $4.99</a>
   </div>
 </nav>
 
@@ -520,7 +520,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     <h1>Break free from the <br><span class="bad">pile of windows</span>.</h1>
     <p class="lede">Lunchbox is the ultimate window manager for Mac. Every window opens neatly based on what it is. No account, no config files, no complexity.</p>
     <div class="actions">
-      <a class="btn dark" href="#pricing"><svg><use href="#apple"/></svg>Download for Mac<span class="sep"></span><span class="price">$4.99</span></a>
+      <a class="btn dark" href="#pricing" data-checkout><svg><use href="#apple"/></svg>Download for Mac<span class="sep"></span><span class="price">$4.99</span></a>
       <a class="btn" href="#how">See how it works</a>
     </div>
     <p class="owned">Already own Lunchbox? <a href="download/LunchboxWM.dmg">Download it</a> · <a href="recover.html">Find my license</a></p>
@@ -677,7 +677,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     <svg class="icon"><use href="#logo"/></svg>
     <h2>Go on, open another window.</h2>
     <p class="lede">It already knows where to go.</p>
-    <div class="actions"><a class="btn dark" href="#pricing">Buy once · $4.99</a><a class="btn" href="#how">See how it works</a></div>
+    <div class="actions"><a class="btn dark" href="#pricing" data-checkout>Buy once · $4.99</a><a class="btn" href="#how">See how it works</a></div>
     <p class="fine">One-time purchase · No subscription · Lifetime updates</p>
   </section>
 
@@ -717,8 +717,25 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     buyButton.disabled = true;
     buyLabel.textContent = "Opening secure checkout…";
   });
-  // Back from Stripe with the browser's Back button: the button works again.
-  addEventListener("pageshow", () => { buyButton.disabled = false; buyLabel.innerHTML = 'Buy Lunchbox · $4.99'; });
+  // The other Buy buttons (the header's, Download for Mac, the closing one) open checkout
+  // straight away too, through the same form; without JavaScript they lead to Pricing.
+  const quickBuys = [...document.querySelectorAll("[data-checkout]")];
+  for (const link of quickBuys) {
+    link.dataset.label = link.innerHTML;
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (!storeLive) { document.getElementById("pricing").scrollIntoView({ behavior: "smooth" }); buyNote.textContent = "Checkout opens at launch. Thanks for your patience."; return; }
+      if (buyButton.disabled) return;
+      link.textContent = "Opening secure checkout…";
+      link.setAttribute("aria-busy", "true");
+      buyButton.click();
+    });
+  }
+  // Back from Stripe with the browser's Back button: the buttons work again.
+  addEventListener("pageshow", () => {
+    buyButton.disabled = false; buyLabel.innerHTML = 'Buy Lunchbox · $4.99';
+    for (const link of quickBuys) { link.innerHTML = link.dataset.label; link.removeAttribute("aria-busy"); }
+  });
   if (new URLSearchParams(location.search).get("checkout") === "unavailable") {
     buyNote.textContent = "Checkout didn't open, and you weren't charged. Please try again in a minute.";
   }
