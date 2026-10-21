@@ -30,7 +30,8 @@ curl -fsS "https://lunchboxwm.com/appcast.xml" | grep -q "<sparkle:shortVersionS
   || { echo "The live update feed doesn't list $VERSION yet. Check the deploy."; exit 1; }
 
 git add site/appcast.xml
-git commit -q -m "Release Lunchbox $VERSION" -m "$NOTES"
+# GIT_TRAILER: an extra last paragraph for the release commit (a Co-Authored-By line, say).
+git commit -q -m "Release Lunchbox $VERSION" -m "$NOTES" ${GIT_TRAILER:+-m "$GIT_TRAILER"}
 git tag "v$VERSION"
 git push -q
 git push -q origin "v$VERSION"
