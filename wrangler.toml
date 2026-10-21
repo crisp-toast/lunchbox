@@ -13,7 +13,7 @@ SUPPORT_EMAIL = "support@sentientdonut.com"
 # Create it once with: npx wrangler kv namespace create REVOKED   and paste the id here.
 [[kv_namespaces]]
 binding = "REVOKED"
-id = "REPLACE_ME"
+id = "4df31eedfd2549088a21fede991da089"
 
 # Secrets (never in this file): set each once with
 #   npx wrangler pages secret put NAME --project-name lunchbox
