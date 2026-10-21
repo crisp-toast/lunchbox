@@ -12,6 +12,9 @@ final class ShortcutsWindow: NSObject, NSWindowDelegate {
     private let list = NSStackView()
     private let message = NSTextField(labelWithString: "")
     private let showDefaultsBox = NSButton(checkboxWithTitle: "Show defaults", target: nil, action: nil)
+    /// Ready-made keys for moving around: the arrows, or Vim's H J K L. Neither is selected once
+    /// one of those shortcuts is changed by hand.
+    private let presets = NSSegmentedControl(labels: Keymap.Preset.allCases.map(\.title), trackingMode: .selectOne, target: nil, action: nil)
     private var recording: Command?
 
     init(tap: HotkeyTap) {
@@ -101,6 +104,17 @@ final class ShortcutsWindow: NSObject, NSWindowDelegate {
 
     @objc private func toggleDefaults() { render() }
 
+    @objc private func pickPreset() {
+        guard Keymap.Preset.allCases.indices.contains(presets.selectedSegment) else { return }
+        let preset = Keymap.Preset.allCases[presets.selectedSegment]
+        stopRecording()
+        apply(tap.keymap.applying(preset))
+        say(preset == .vim
+            ? "Vim keys: Left ⌘ and H J K L move focus, add ⇧ to move the window. Hide is ⇧ Left ⌘ M."
+            : "Arrow keys: Left ⌘ and the arrows move focus, add ⇧ to move the window.")
+        render()
+    }
+
     private func apply(_ map: Keymap) {
         tap.keymap = map
         onChange?(map)
@@ -113,6 +127,7 @@ final class ShortcutsWindow: NSObject, NSWindowDelegate {
     private func render() {
         list.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let map = tap.keymap
+        presets.selectedSegment = map.preset.flatMap { Keymap.Preset.allCases.firstIndex(of: $0) } ?? -1
         let keys = tap.spaceKeys
         let showDefaults = showDefaultsBox.state == .on
         var group = ""
@@ -188,6 +203,12 @@ final class ShortcutsWindow: NSObject, NSWindowDelegate {
         showDefaultsBox.action = #selector(toggleDefaults)
         let restore = NSButton(title: "Restore All Defaults", target: self, action: #selector(restoreAll))
         restore.bezelStyle = .rounded
+        presets.target = self
+        presets.action = #selector(pickPreset)
+        let presetLabel = NSTextField(labelWithString: "Move around with")
+        presetLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        let presetRow = NSStackView(views: [presetLabel, presets])
+        presetRow.spacing = 10
 
         list.orientation = .vertical
         list.alignment = .leading
@@ -202,7 +223,7 @@ final class ShortcutsWindow: NSObject, NSWindowDelegate {
         scroll.documentView = document
 
         let content = NSView()
-        for v in [intro, message, scroll, showDefaultsBox, restore] as [NSView] {
+        for v in [intro, presetRow, message, scroll, showDefaultsBox, restore] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(v)
         }
@@ -210,7 +231,9 @@ final class ShortcutsWindow: NSObject, NSWindowDelegate {
             intro.topAnchor.constraint(equalTo: content.topAnchor, constant: 18),
             intro.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 22),
             intro.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -22),
-            message.topAnchor.constraint(equalTo: intro.bottomAnchor, constant: 8),
+            presetRow.topAnchor.constraint(equalTo: intro.bottomAnchor, constant: 12),
+            presetRow.leadingAnchor.constraint(equalTo: intro.leadingAnchor),
+            message.topAnchor.constraint(equalTo: presetRow.bottomAnchor, constant: 8),
             message.leadingAnchor.constraint(equalTo: intro.leadingAnchor),
             message.trailingAnchor.constraint(equalTo: intro.trailingAnchor),
             scroll.topAnchor.constraint(equalTo: message.bottomAnchor, constant: 10),

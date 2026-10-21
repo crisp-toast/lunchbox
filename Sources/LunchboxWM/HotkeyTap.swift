@@ -261,7 +261,11 @@ final class HotkeyTap {
         // does, and so does an arrow with ⌘ (⌘ and an arrow moves focus, as ever).
         let now = CACurrentMediaTime()
         if now < s.resizeUntil {
-            let along: [Int64: Direction] = [124: .right, 123: .left, 126: .up, 125: .down]
+            var along: [Int64: Direction] = [124: .right, 123: .left, 126: .up, 125: .down]
+            // And the keys that move focus, without their modifiers: H J K L with Vim keys.
+            for (c, d) in [(Command.focusLeft, Direction.left), (.focusRight, .right), (.focusUp, .up), (.focusDown, .down)] {
+                if case .code(let key) = s.keymap.binding(for: c).key, along[key] == nil { along[key] = d }
+            }
             var step: KeyAction?
             if let direction = along[code], !event.flags.contains(.maskCommand) { step = .resizeAlong(direction) }
             else if code == 24 || code == 69 { step = .grow } else if code == 27 || code == 78 { step = .shrink }

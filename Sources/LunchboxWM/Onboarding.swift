@@ -11,6 +11,8 @@ final class Onboarding: NSObject, NSWindowDelegate {
 
     var onRequestAccess: (() -> Void)?
     var onCustomize: (() -> Void)?
+    /// The shortcuts changed here (arrow keys or Vim keys, on the practice step).
+    var onKeymapChange: ((Keymap) -> Void)?
     /// The welcome window went away: finished, or closed.
     var onClose: (() -> Void)?
 
@@ -193,7 +195,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
         icon.heightAnchor.constraint(equalToConstant: 128).isActive = true
         return page(top: icon,
                     title: "Welcome to LunchboxWM",
-                    body: "Every window, right where it belongs. In about a minute Lunchbox will be tiling your windows, and you'll know the few keys that matter.")
+                    body: "Every window, right where it belongs. In about a minute Lunchbox will be tiling your windows, and you'll know the few keys that matter. Every one can be changed, and Vim keys are one click away.")
     }
 
     // MARK: Accessibility
@@ -250,8 +252,11 @@ final class Onboarding: NSObject, NSWindowDelegate {
         let anyDirection = { (dirs: [Command]) -> [String] in
             let all = dirs.map(caps)
             let mods = all[0].dropLast()
-            guard all.allSatisfy({ $0.dropLast() == mods }), Set(all.compactMap(\.last)) == ["←", "→", "↑", "↓"] else { return all[1] }
-            return Array(mods) + ["arrows"]
+            guard all.allSatisfy({ $0.dropLast() == mods }) else { return all[1] }
+            let lasts = Set(all.compactMap(\.last))
+            if lasts == ["←", "→", "↑", "↓"] { return Array(mods) + ["arrows"] }
+            if lasts == ["H", "J", "K", "L"] { return Array(mods) + ["H", "J", "K", "L"] }
+            return all[1]
         }
         // ⌘ and each Workspace's number: going between all of them.
         let betweenWorkspaces: [String] = {
@@ -313,11 +318,25 @@ final class Onboarding: NSObject, NSWindowDelegate {
         text.font = .systemFont(ofSize: 14)
         text.textColor = .secondaryLabelColor
         text.preferredMaxLayoutWidth = 400
-        let right = NSStackView(views: [heading, text, list])
+        // Arrow keys or Vim keys, right here; and every shortcut can be changed later.
+        let presets = NSSegmentedControl(labels: Keymap.Preset.allCases.map(\.title), trackingMode: .selectOne,
+                                         target: self, action: #selector(pickPreset(_:)))
+        presets.selectedSegment = keymap.preset.flatMap { Keymap.Preset.allCases.firstIndex(of: $0) } ?? -1
+        let presetLabel = NSTextField(labelWithString: "Move around with")
+        presetLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        let presetRow = NSStackView(views: [presetLabel, presets])
+        presetRow.spacing = 10
+        let changeLater = NSTextField(wrappingLabelWithString: "Every shortcut can be changed to keys you like: menu bar icon › Settings › Keyboard Shortcuts.")
+        changeLater.font = .systemFont(ofSize: 12)
+        changeLater.textColor = .secondaryLabelColor
+        changeLater.preferredMaxLayoutWidth = 400
+        let right = NSStackView(views: [heading, text, presetRow, changeLater, list])
         right.orientation = .vertical
         right.alignment = .leading
         right.spacing = 14
-        right.setCustomSpacing(22, after: text)
+        right.setCustomSpacing(16, after: text)
+        right.setCustomSpacing(6, after: presetRow)
+        right.setCustomSpacing(22, after: changeLater)
         right.translatesAutoresizingMaskIntoConstraints = false
         right.widthAnchor.constraint(equalToConstant: 420).isActive = true
         for row in rows { row.widthAnchor.constraint(equalToConstant: 420).isActive = true }
@@ -330,6 +349,13 @@ final class Onboarding: NSObject, NSWindowDelegate {
     }
 
     @objc private func resetPlayground() { playground?.reset() }
+
+    @objc private func pickPreset(_ sender: NSSegmentedControl) {
+        guard Keymap.Preset.allCases.indices.contains(sender.selectedSegment) else { return }
+        onKeymapChange?(tap.keymap.applying(Keymap.Preset.allCases[sender.selectedSegment]))
+        // The list shows the new keys.
+        go(to: .practice, animated: false)
+    }
 
     // MARK: Finish
 

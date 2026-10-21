@@ -81,6 +81,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shortcuts.onChange = { KeymapStore.save($0) }
         help.onCustomize = { [weak self] in self?.shortcuts.show() }
         onboarding.onCustomize = { [weak self] in self?.shortcuts.show() }
+        onboarding.onKeymapChange = { [weak self] map in
+            self?.tap.keymap = map
+            KeymapStore.save(map)
+        }
         onboarding.onClose = { [weak self] in self?.waitForLicense() }
         onboarding.onRequestAccess = {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary

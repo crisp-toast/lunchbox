@@ -41,7 +41,7 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + ← → | Move the window one step sideways: first it stacks with its neighbor, a second press moves it past |
 | Left ⌘ ⇧ + ↑ ↓ | Swap with the window above or below in a stack |
 | Left ⌘ ⇧ + plus / minus | Give the window more or less space (a lone window, or one in Focus, grows or shrinks around the center) |
-| Left ⌘ ⇧ + R | **Resize**: then the arrows push the window's edges (hold to keep going); Return or Esc when done |
+| Left ⌘ ⇧ + R | **Resize**: then the arrows (or your focus keys) push the window's edges (hold to keep going); Return or Esc when done |
 | Left ⌘ ⇧ + F | **Focus**: the window alone in the center, the rest of the Workspace on the Shelf. Again, a click on a Shelf card, ⌘ (or ⌘ ⇧) with any arrow, or a file dragged onto a Shelf card ends it |
 | Left ⌘ ⇧ + H | **Hide** the window: it goes out of sight, parked off the screen the way other Workspaces' windows wait, still open; the others close the gap |
 | Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
@@ -49,6 +49,8 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + 1 / 2 / 3 | Move the focused window to that Workspace and go there with it |
 | ⇧ Space | **Summon**: open an app, or go to any open window or website |
 | Left ⌘ ⇧ + Space | The **Cheat Sheet**: every shortcut, with search |
+
+**Prefer Vim keys?** Pick **Vim keys (H J K L)** on the setup's practice screen, or under Settings › Keyboard Shortcuts › Move around with. Left ⌘ and H J K L then move focus, ⇧ adds the window, Hide moves to ⇧ Left ⌘ M, and in Resize H J K L push the edges too. Every shortcut can also be changed one by one.
 
 **Resize mode** (Left ⌘ ⇧ + R): an arrow pushes the window's edge on its side, so it works the way
 the window sits. In the right column ← makes it wider and → narrower; in the left column the other

@@ -81,7 +81,7 @@ public enum Command: String, CaseIterable, Codable, Sendable {
         case .moveDown: return "Move the window down in its stack"
         case .grow: return "Give the window more space"
         case .shrink: return "Give the window less space"
-        case .resize: return "Resize: then the arrows push the window's edges"
+        case .resize: return "Resize: then the arrows (or your focus keys) push the window's edges"
         case .focusMode: return "Focus: this window centered, the rest on the Shelf"
         case .tidy: return "Tidy: even out every window in this Workspace"
         case .hide: return "Hide: put the window out of sight, still open (Summon brings it back)"
@@ -315,5 +315,62 @@ public enum KeyNames {
     /// keys, never keys that type or edit text.
     public static func isGoodWorkspaceKey(_ code: Int64) -> Bool {
         (96...122).contains(code) || [64, 79, 80, 90].contains(code)
+    }
+}
+
+extension Keymap {
+    /// Ready-made sets of keys for moving around: the arrows (the defaults), or Vim's H J K L,
+    /// as tiling window managers usually offer. Either way left ⌘ moves focus and left ⌘⇧ moves the
+    /// window; with Vim keys, Hide moves from ⌘⇧H to ⌘⇧M, since ⌘⇧H moves left.
+    public enum Preset: String, CaseIterable, Sendable {
+        case arrows, vim
+
+        public var title: String {
+            switch self {
+            case .arrows: return "Arrow keys"
+            case .vim: return "Vim keys (H J K L)"
+            }
+        }
+
+        /// The commands a preset sets; it leaves every other shortcut alone.
+        public static let commands: [Command] = [.focusLeft, .focusDown, .focusUp, .focusRight,
+                                                  .moveLeft, .moveDown, .moveUp, .moveRight, .hide]
+
+        public var bindings: [Command: KeyBinding] {
+            switch self {
+            case .arrows:
+                return Dictionary(uniqueKeysWithValues: Self.commands.map { ($0, Keymap.defaults[$0]!) })
+            case .vim:
+                let leftCmd = { (code: Int64) in KeyBinding(.code(code), command: true, leftCommandOnly: true) }
+                let leftCmdShift = { (code: Int64) in KeyBinding(.code(code), command: true, shift: true, leftCommandOnly: true) }
+                let h: Int64 = 4, j: Int64 = 38, k: Int64 = 40, l: Int64 = 37, m: Int64 = 46
+                return [
+                    .focusLeft: leftCmd(h), .focusDown: leftCmd(j), .focusUp: leftCmd(k), .focusRight: leftCmd(l),
+                    .moveLeft: leftCmdShift(h), .moveDown: leftCmdShift(j), .moveUp: leftCmdShift(k), .moveRight: leftCmdShift(l),
+                    .hide: leftCmdShift(m),
+                ]
+            }
+        }
+    }
+
+    /// The preset these shortcuts follow, or nil once one of its keys was changed by hand.
+    public var preset: Preset? {
+        Preset.allCases.first { p in Preset.commands.allSatisfy { binding(for: $0) == p.bindings[$0] } }
+    }
+
+    /// These shortcuts with a preset's keys. Anything else changed by hand stays, unless it used one
+    /// of the preset's keys: that goes back to its default.
+    public func applying(_ preset: Preset) -> Keymap {
+        var map = self
+        let keys = preset.bindings
+        for (command, binding) in keys { map.overrides[command] = binding == Self.defaults[command] ? nil : binding }
+        for command in Command.allCases where keys[command] == nil {
+            let mine = map.binding(for: command)
+            if keys.values.contains(where: { $0.key == mine.key && $0.command == mine.command && $0.shift == mine.shift
+                && $0.option == mine.option && $0.control == mine.control }) {
+                map.overrides[command] = nil
+            }
+        }
+        return map
     }
 }
