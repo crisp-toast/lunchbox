@@ -1,7 +1,7 @@
 import AppKit
 import Sparkle
 
-/// Auto-updates for copies sold from the website: Sparkle checks the appcast once a day,
+/// Auto-updates for copies sold from the website: Sparkle checks the appcast about once an hour,
 /// asks before installing, and only accepts updates signed with LunchboxWM's update key
 /// (SUPublicEDKey in Info.plist; the private key is in the release Mac's Keychain).
 final class Updater {
@@ -9,7 +9,7 @@ final class Updater {
 
     var canCheck: Bool { controller.updater.canCheckForUpdates }
 
-    /// The daily check (Settings › Check for Updates Automatically). Installing always asks.
+    /// The hourly check (Settings › Check for Updates Automatically). Installing always asks.
     var checksAutomatically: Bool {
         get { controller.updater.automaticallyChecksForUpdates }
         set { controller.updater.automaticallyChecksForUpdates = newValue }

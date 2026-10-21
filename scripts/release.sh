@@ -94,8 +94,13 @@ if [[ "$DRY" != "--dry-run" ]]; then
   SPARKLE_BIN="${SPARKLE_BIN:-Vendor/sparkle-bin}"
   mkdir -p "$RELEASES"
   cp "$DMG" "$RELEASES/"
-  [[ -f "$OUT/notes.html" ]] && cp "$OUT/notes.html" "$RELEASES/LunchboxWM-$VERSION.html"
-  "$SPARKLE_BIN/generate_appcast" --download-url-prefix "https://lunchboxwm.com/download/" -o site/appcast.xml "$RELEASES"
+  # What's new, shown in the update prompt: RELEASE_NOTES is an HTML file (scripts/ship.sh writes it).
+  [[ -n "${RELEASE_NOTES:-}" && -f "$RELEASE_NOTES" ]] && cp "$RELEASE_NOTES" "$RELEASES/LunchboxWM-$VERSION.html"
+  # CRITICAL=1: copies can't skip this one.
+  extra=()
+  [[ -n "${CRITICAL:-}" ]] && extra=(--critical-update-version "")
+  "$SPARKLE_BIN/generate_appcast" --download-url-prefix "https://lunchboxwm.com/download/" --embed-release-notes \
+    ${extra[@]+"${extra[@]}"} -o site/appcast.xml "$RELEASES"
   cp "$DMG" "site/download/LunchboxWM-$VERSION.dmg"
 fi
 echo "Built $DMG ($(du -h "$DMG" | cut -f1)) and copied it to site/download/LunchboxWM.dmg${DRY:+ (dry run: not notarized, do not publish)}"

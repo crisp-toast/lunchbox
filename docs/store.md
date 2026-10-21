@@ -104,8 +104,9 @@ leak it and anyone can.
 ## Releases and auto-updates
 
 LunchboxWM updates itself with [Sparkle](https://sparkle-project.org): it checks
-`https://<domain>/appcast.xml` once a day, asks before installing, and accepts only updates signed
-with LunchboxWM's update key.
+`https://lunchboxwm.com/appcast.xml` about once an hour (the shortest Sparkle allows), asks before
+installing, and accepts only updates signed with LunchboxWM's update key. Settings › Check for
+Updates… looks straight away; Settings › Check for Updates Automatically turns the hourly check off.
 
 - **The public key** is `SUPublicEDKey` in `Resources/Info.plist`.
 - **The private key** is in this Mac's login Keychain (Sparkle's `generate_keys` put it there).
@@ -113,13 +114,17 @@ with LunchboxWM's update key.
   `Vendor/sparkle-bin/generate_keys -x lunchbox-update-key.txt`,
   store the file in 1Password, then delete it. Lose it and installed copies can never update again.
 
-To ship version X:
-1. Optionally write release notes to `build/release/notes.html`.
-2. Run `scripts/release.sh X`. It builds, signs and notarizes, copies the DMG to
-   `/Volumes/Master Storage/Projects/lunchbox/releases/`, regenerates `site/appcast.xml` (signed),
-   and puts `LunchboxWM.dmg` and `LunchboxWM-X.dmg` in `site/download/`.
-3. Deploy the site (`npx wrangler pages deploy`). Running copies pick the update up within a day,
-   or straight away with Settings › Check for Updates….
+To ship version X, from a clean, pushed `main`:
+
+```
+scripts/ship.sh X "What changed, in a sentence or two."
+```
+
+It builds, signs and notarizes the app and the DMG (`scripts/release.sh`), puts the notes in the
+update prompt, copies the DMG to `/Volumes/Master Storage/Projects/lunchbox/releases/` and
+`site/download/`, regenerates and signs `site/appcast.xml`, deploys the site, checks the live feed
+lists X, then commits the feed, tags `vX` and pushes. Running copies offer it within about an hour.
+Add `--critical` for a fix nobody should skip: Sparkle won't let it be skipped.
 
 ## Tests
 

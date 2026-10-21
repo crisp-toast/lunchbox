@@ -124,7 +124,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             guard let updater = self?.updater else { return }
             updater.checksAutomatically.toggle()
         }
-        automatic.toolTip = "Looks for a new version once a day. Lunchbox always asks before installing one."
+        automatic.toolTip = "Looks for a new version about once an hour. Lunchbox always asks before installing one."
         options.addItem(automatic)
         options.addItem(action("Check for Updates…") { [weak self] in self?.onCheckForUpdates?() })
         let diagnostics = action("Copy Diagnostics") { [weak self] in self?.onCopyDiagnostics?() }
