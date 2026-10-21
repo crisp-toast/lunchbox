@@ -28,6 +28,10 @@ final class Onboarding: NSObject, NSWindowDelegate {
     /// Set up before, and only Accessibility is missing again: just that step, which closes
     /// itself once access is back.
     private var accessOnly = false
+    /// Dragged somewhere by the user: it stays there (growing around its own center) instead of
+    /// going back to the middle of the screen.
+    private var placedByUser = false
+    private var placing = false
 
     // Practice step
     private var practiceRows: [String: PracticeRow] = [:]
@@ -60,10 +64,29 @@ final class Onboarding: NSObject, NSWindowDelegate {
     func show(at start: Step = .welcome, accessOnly: Bool = false) {
         self.accessOnly = accessOnly && start == .access
         let window = self.window ?? makeWindow()
-        if !isVisible { window.center() }
+        if !isVisible {
+            placedByUser = false
+            // The screen you're using: the one with the pointer.
+            let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
+            if let area = screen?.visibleFrame { place(window, at: Self.centered(window.frame.size, in: area), animated: false) }
+        }
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         go(to: start, animated: false)
+    }
+
+    func windowDidMove(_ notification: Notification) {
+        if !placing { placedByUser = true }
+    }
+
+    private static func centered(_ size: NSSize, in area: NSRect) -> NSRect {
+        NSRect(x: (area.midX - size.width / 2).rounded(), y: (area.midY - size.height / 2).rounded(), width: size.width, height: size.height)
+    }
+
+    private func place(_ window: NSWindow, at frame: NSRect, animated: Bool) {
+        placing = true
+        window.setFrame(frame, display: true, animate: animated)
+        placing = false
     }
 
     /// Opens a step centered on one display without activating LunchboxWM, so an
@@ -130,15 +153,18 @@ final class Onboarding: NSObject, NSWindowDelegate {
     }
 
     /// The practice step opens up into a big window with the playground; the
-    /// other steps stay compact. Grows around its center, kept on screen.
+    /// other steps stay compact. In the middle of its screen, until it's dragged somewhere: then it
+    /// grows around its own center. Kept on screen either way.
     private func resizeWindow(to size: NSSize, animated: Bool) {
         guard let window, window.frame.size != size else { return }
         let area = (window.screen ?? NSScreen.main)?.visibleFrame ?? window.frame
-        var frame = NSRect(x: window.frame.midX - size.width / 2, y: window.frame.midY - size.height / 2,
-                           width: min(size.width, area.width), height: min(size.height, area.height))
+        let fitted = NSSize(width: min(size.width, area.width), height: min(size.height, area.height))
+        var frame = placedByUser
+            ? NSRect(x: window.frame.midX - fitted.width / 2, y: window.frame.midY - fitted.height / 2, width: fitted.width, height: fitted.height)
+            : Self.centered(fitted, in: area)
         frame.origin.x = min(max(frame.minX, area.minX), area.maxX - frame.width)
         frame.origin.y = min(max(frame.minY, area.minY), area.maxY - frame.height)
-        window.setFrame(frame, display: true, animate: animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+        place(window, at: frame, animated: animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     }
 
     private func updateFooter() {

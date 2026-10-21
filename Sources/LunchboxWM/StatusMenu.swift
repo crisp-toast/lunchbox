@@ -15,6 +15,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     var onEnterLicense: (() -> Void)?
     var onBuy: (() -> Void)?
     var onCheckForUpdates: (() -> Void)?
+    var updater: Updater?
     var onCopyDiagnostics: (() -> Void)?
     var licensing: Licensing?
 
@@ -119,6 +120,12 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         options.addItem(login)
         options.addItem(action("Keyboard Shortcuts…") { [weak self] in self?.onShowShortcuts?() })
         options.addItem(action("Welcome & Setup…") { [weak self] in self?.onShowWelcome?() })
+        let automatic = action("Check for Updates Automatically", checked: updater?.checksAutomatically ?? true) { [weak self] in
+            guard let updater = self?.updater else { return }
+            updater.checksAutomatically.toggle()
+        }
+        automatic.toolTip = "Looks for a new version once a day. Lunchbox always asks before installing one."
+        options.addItem(automatic)
         options.addItem(action("Check for Updates…") { [weak self] in self?.onCheckForUpdates?() })
         let diagnostics = action("Copy Diagnostics") { [weak self] in self?.onCopyDiagnostics?() }
         diagnostics.toolTip = "Copies a summary for support to paste into an email: versions, displays, and which apps' windows are in each Workspace. No window titles, files or license key."

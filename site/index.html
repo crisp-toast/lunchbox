@@ -6,9 +6,7 @@
 <title>LunchboxWM</title>
 <meta name="description" content="Break free from the pile of windows. Lunchbox tiles every window as it opens: dialogs float, fixed-size apps keep their size, and there's no config file. $4.99 once.">
 <link rel="icon" href="logo.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="fonts/fonts.css">
 <style>
 /* Layout: one calm, centered column; the product itself (a live mini Mac) is the only loud thing on the page. */
 :root {
@@ -129,8 +127,12 @@ p { margin: 0; }
 @keyframes scrawl { from { background-size: 0 .62em; } to { background-size: 100% .62em; } }
 .hero-copy .lede { color: #3f454d; max-width: 30em; text-shadow: 0 1px 10px rgba(251,251,253,.8); }
 .hero-copy .meta { color: #4b525b; text-shadow: 0 1px 8px rgba(251,251,253,.8); }
+.hero-copy .owned { color: #4b525b; text-shadow: 0 1px 8px rgba(251,251,253,.8); }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
 .meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.owned { margin: -6px 0 14px; text-align: center; font-size: 14px; color: var(--muted); }
+.owned a { color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); }
+.owned a:hover { color: var(--ink); }
 .meta span::before { content: "·"; margin-right: 18px; color: #b9bec6; }
 .meta span:first-child::before { content: none; }
 
@@ -516,11 +518,12 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     </video>
     <div class="hero-copy">
     <h1>Break free from the <br><span class="bad">pile of windows</span>.</h1>
-    <p class="lede">Lunchbox is the ultimate window manager for Mac. Every window opens neatly based on what it is. No account, no backend, no complexity.</p>
+    <p class="lede">Lunchbox is the ultimate window manager for Mac. Every window opens neatly based on what it is. No account, no config files, no complexity.</p>
     <div class="actions">
       <a class="btn dark" href="#pricing"><svg><use href="#apple"/></svg>Download for Mac<span class="sep"></span><span class="price">$4.99</span></a>
       <a class="btn" href="#how">See how it works</a>
     </div>
+    <p class="owned">Already own Lunchbox? <a href="download/LunchboxWM.dmg">Download it</a> · <a href="recover.html">Find my license</a></p>
     <div class="meta"><span>No subscription, no account</span><span>One-time purchase, lifetime updates<sup class="fn"><a href="#fn-lifetime" aria-label="Footnote 1">1</a></sup></span><span>macOS 14 or later, Apple silicon<sup class="fn"><a href="#fn-silicon" aria-label="Footnote 2">2</a></sup></span></div>
     </div>
   </section>
@@ -614,7 +617,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   <section class="trust" aria-label="What you can count on">
     <span class="eyebrow">The fine print, up front</span>
     <ul>
-      <li><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.8-2.6 2.7-4 5-4s4.2 1.4 5 4"/><path d="M2.5 2.5l11 11"/></svg><b>No account</b><span>Nothing to sign up for or sign in to. Your license is a key in an email.</span></li>
+      <li><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.8-2.6 2.7-4 5-4s4.2 1.4 5 4"/><path d="M2.5 2.5l11 11"/></svg><b>No account</b><span>Nothing to sign up for or sign in to. Your license is a key you get the moment you pay.</span></li>
       <li><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/><path d="M2.5 2.5l11 11"/></svg><b>No tracking</b><span>The app sends no analytics, crash reports or keystrokes, and this site has no trackers. <a href="privacy.html">Privacy</a></span></li>
       <li><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="8" r="2.8"/><path d="M7.8 8h6.7M12 8v2.5M14.5 8v2"/></svg><b>License works offline</b><span>It's checked on your Mac, so tiling never waits on a server.</span></li>
       <li><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8l5 2v4.1c0 3.1-2.1 5.4-5 6.3-2.9-.9-5-3.2-5-6.3V3.8z"/></svg><b>Asks only when it needs to</b><span>Accessibility, to tile. Screen Recording, the first time the Focus Shelf appears, for its live previews. Browser control, the first time Summon sends a web search to your browser. No folder prompts: Summon doesn't search files.</span></li>
@@ -661,7 +664,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       <details><summary>Is there a free trial?</summary><p>No. Lunchbox is $4.99, paid once, up front. The recording and the walkthrough above show exactly how it works, and if it isn't right for you, you get a full refund within 14 days, no questions asked.</p></details>
       <details><summary><span>What does Lunchbox need permission for?</span></summary><p><strong>Accessibility</strong> is required: it's how Lunchbox moves and resizes other apps' windows and hears its shortcuts. <strong>Screen Recording</strong> is asked the first time the Focus Shelf appears, so the Shelf can show live previews of your windows instead of app icons. <strong>Browser control</strong> is asked the first time Summon sends a web search to Safari, Chrome, Arc, Edge, Brave or Vivaldi, so the page opens as a tab in the Workspace you're in; say no and links open the usual way. There are no folder prompts: Summon doesn't search your files.</p></details>
       <details><summary>Will it take over my keyboard?</summary><p>Only a handful of combinations, all with the left ⌘ key, plus ⇧ then Space for Summon (tapped one after the other, so typing a capital and a space never opens it). Right ⌘ keeps doing what it always did: ⌘← still jumps to the start of a line, and ⌘1 still picks a browser tab.</p></details>
-      <details><summary>Can I change the shortcuts?</summary><p>Yes, every one. Open Keyboard Shortcuts from the menu bar, click a command and press the keys you want. Lunchbox turns down combinations that would get in the way of typing or that another command already uses, and Restore All Defaults puts everything back.</p></details>
+      <details><summary>Can I change the shortcuts?</summary><p>Yes, every one. Open Keyboard Shortcuts from the menu bar, click a command and press the keys you want. Lunchbox turns down combinations that would get in the way of typing or that another command already uses, and Restore All Defaults puts everything back. Prefer Vim keys? One click switches the arrows to H J K L, during setup or in Keyboard Shortcuts.</p></details>
       <details><summary>How do I set it up?</summary><p>Lunchbox walks you through it the first time it opens: allow Accessibility, then try every shortcut on a practice screen that can't touch your real windows. It takes about a minute, and Welcome &amp; Setup in the menu bar runs it again.</p></details>
       <details><summary>How do Workspaces work?</summary><p>Left ⌘ and a number goes to that Workspace instantly: ⌘1, ⌘2, ⌘3. Add ⇧ (⌘⇧2) and the focused window comes with you. You start with three and can add up to nine from the menu bar. Hide (⌘⇧H) tucks a window out of sight, still open; Summon brings it back to wherever you are. Right ⌘ and a number still reach the app in front, and with three Workspaces ⌘⇧4 and ⌘⇧5 are still the Mac's screenshot keys.</p></details>
       <details><summary>Does it work with more than one display?</summary><p>Yes. Each display has its own layout and focus crosses between them at the edges. If a second display is a dummy plug or you only want your main screen tiled, turn off Use All Displays in Settings.</p></details>
@@ -682,7 +685,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     <ol>
       <li id="fn-lifetime">Every future version of Lunchbox we release is included at no extra charge. See the <a href="terms.html">Terms of Sale</a>.</li>
       <li id="fn-silicon">Requires a Mac with Apple silicon (M1 or later) and macOS 14 Sonoma or later. Lunchbox doesn't run on Intel-based Macs.</li>
-      <li id="fn-price">Price in US dollars. Sales tax or VAT is added at checkout where it applies.</li>
+      <li id="fn-price">Price in US dollars, plus any sales tax or VAT we're required to charge, shown at checkout before you pay.</li>
     </ol>
   </section>
 

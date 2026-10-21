@@ -9,6 +9,12 @@ final class Updater {
 
     var canCheck: Bool { controller.updater.canCheckForUpdates }
 
+    /// The daily check (Settings › Check for Updates Automatically). Installing always asks.
+    var checksAutomatically: Bool {
+        get { controller.updater.automaticallyChecksForUpdates }
+        set { controller.updater.automaticallyChecksForUpdates = newValue }
+    }
+
     func checkNow() {
         NSApp.activate(ignoringOtherApps: true)
         controller.checkForUpdates(nil)
