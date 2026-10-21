@@ -251,7 +251,7 @@ final class Playground: NSView {
         guard let id = focused, index != current else { return }
         layout.remove(id)
         workspaces[current] = layout
-        workspaces[index].insert(id, near: workspaces[index].windows.last, maxColumns: 3)
+        workspaces[index].insert(id, near: workspaces[index].windows.last, maxColumns: Layout.maxColumns(forWidth: 2560))
         if follow {
             current = index
         } else {
@@ -268,7 +268,7 @@ final class Playground: NSView {
         window.opacity = 0
         var layout = workspaces[current]
         layout.spotlight = nil
-        layout.insert(id, near: focused, maxColumns: 3)
+        layout.insert(id, near: focused, maxColumns: Layout.maxColumns(forWidth: 2560))
         workspaces[current] = layout
         // Appear where it's going, then fade in as the others make room.
         if let frame = frames(for: layout)[id] {

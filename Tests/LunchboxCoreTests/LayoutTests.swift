@@ -238,8 +238,11 @@ func layout(_ columns: [[WindowID]]) -> Layout {
     }
 
     @Test func maxColumnsByWidth() {
-        #expect(Layout.maxColumns(forWidth: 2560) == 3)
+        #expect(Layout.maxColumns(forWidth: 2560) == 2) // a 5K display
         #expect(Layout.maxColumns(forWidth: 1920) == 2)
+        #expect(Layout.maxColumns(forWidth: 1470) == 2) // a 13" MacBook Air: two side by side
+        #expect(Layout.maxColumns(forWidth: 3440) == 3) // ultrawide
+        #expect(Layout.maxColumns(forWidth: 5120) == 4)
         #expect(Layout.maxColumns(forWidth: 700) == 1)
     }
 }

@@ -786,7 +786,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     { t: 0, keys: [], cap: "An empty Workspace on a real Mac." },
     { t: 1.1, keys: [], cap: "Open a window. It sits centered at 16:10." },
     { t: 3.0, keys: [], cap: "Open another and they share the screen." },
-    { t: 4.8, keys: [], cap: "A third gets its own column." },
+    { t: 4.8, keys: [], cap: "A third slots right in." },
     { t: 6.75, keys: ["⌘", "←"], cap: "Move focus with ⌘ and an arrow." },
     { t: 8.75, keys: ["⇧", "⌘", "→"], cap: "Add ⇧ to carry the window. It stacks, then passes." },
     { t: 11.4, keys: ["⇧", "⌘", "+"], cap: "Give it more room." },
@@ -981,8 +981,8 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     { title: "It tiles itself", hint: "just open windows", steps: [
       { win: { A: R.single }, focus: "A", keys: [], cap: "One window sits centered at a calm 16:10. Never stretched edge to edge." },
       { win: { A: R.halfL, B: R.halfR }, focus: "B", keys: [], cap: "Open a second and they share the screen." },
-      { win: { A: R.c1, B: R.c2, C: R.c3 }, focus: "C", keys: [], cap: "A third gets its own column." },
-      { win: four, focus: "D", keys: [], cap: "A fourth makes a 2×2 grid." },
+      { win: { A: R.halfL, B: R.gTR, C: R.gBR }, focus: "C", keys: [], cap: "A third goes beneath the second. The first keeps its half." },
+      { win: { A: R.gTL, D: R.gBL, B: R.gTR, C: R.gBR }, focus: "D", keys: [], cap: "A fourth goes beneath the first: a 2×2 grid, and nothing crossed the screen." },
     ]},
     { title: "Move focus", hint: "left ⌘ + arrows", steps: [
       { win: four, focus: "A", keys: [], cap: "Hold the left ⌘ key and point with the arrows." },

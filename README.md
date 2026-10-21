@@ -2,8 +2,10 @@
 
 A small, fast tiling window manager for macOS that lives in the menu bar.
 
-- One window on a screen sits centered at a comfortable 16:10 size. Two or three tile side by side;
-  the fourth makes a 2×2 grid.
+- One window on a screen sits centered at a comfortable 16:10 size. Two tile side by side; a third
+  goes beneath the second, so the first keeps its half; a fourth goes beneath the first, making a
+  2×2 grid without any window crossing the screen. Ultrawide displays give each new window a column
+  of its own (up to four), and any window can be moved into more columns by hand.
 - Everything is driven by the **left** ⌘ key, so right ⌘ + arrows still move the text cursor.
 - Windows slide into place, in one move each. Apps that can't keep up, or stall now and then, just
   snap, so LunchboxWM never adds lag; and an app's windows move together, never one after another. An

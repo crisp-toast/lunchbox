@@ -170,7 +170,9 @@ public struct Layout: Equatable, Sendable {
         }
         let fewest = candidates.map { columns[$0].windows.count }.min() ?? 0
         var target = candidates.last { columns[$0].windows.count == fewest } ?? columns.count - 1
-        if let f = focusedPos, candidates.contains(f.column), columns[f.column].windows.count == fewest {
+        // The third window always goes beneath the right one, so the first keeps its half.
+        // After that, the stack beside the focused window, when it's among the shortest.
+        if windowCount != 2, let f = focusedPos, candidates.contains(f.column), columns[f.column].windows.count == fewest {
             target = f.column
         }
         let row = (focusedPos?.column == target) ? focusedPos!.row + 1 : columns[target].windows.count
@@ -760,9 +762,15 @@ public struct Layout: Equatable, Sendable {
         }
     }
 
-    /// How many side-by-side columns new windows get before they start stacking.
+    /// How many side-by-side columns new windows get before they start stacking. Two on any
+    /// laptop or desktop display, so the first window keeps half the screen and the next ones
+    /// split the other half (the third goes beneath the second, the fourth beneath the first:
+    /// nothing crosses the screen); an ultrawide display takes a column per 1000 points, up to
+    /// four; a very narrow one, a single stack. Windows can still be moved into more columns.
     public static func maxColumns(forWidth width: CGFloat) -> Int {
-        max(1, min(4, Int(width / 800)))
+        if width < 1000 { return 1 }
+        if width < 3000 { return 2 }
+        return min(4, Int(width / 1000))
     }
 }
 
