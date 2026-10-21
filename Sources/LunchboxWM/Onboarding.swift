@@ -126,6 +126,8 @@ final class Onboarding: NSObject, NSWindowDelegate {
         case .spotlight: id = "focusMode"
         case .normalize: id = "tidy"
         case .close: id = "close"
+        // Resize mode counts once an arrow (or a focus key) has pushed an edge.
+        case .resizeAlong: id = "resize"
         case .switchSpace, .sendToSpace: id = "space"
         case .launcher: id = "summon"
         case .help: id = "help"
@@ -306,6 +308,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
             ("focus", anyDirection([.focusLeft, .focusRight, .focusUp, .focusDown]), "Move focus in any direction"),
             ("move", anyDirection([.moveLeft, .moveRight, .moveUp, .moveDown]), "Move a window any way"),
             ("size", growOrShrink, "Give a window more or less space"),
+            ("resize", caps(.resize), "Resize, then push an edge with \(keymap.preset == .vim ? "H J K L" : "the arrows")"),
             ("focusMode", caps(.focusMode), "Focus on one window, then again to undo"),
             ("tidy", caps(.tidy), "Tidy everything back to even"),
             ("close", caps(.close), "Close a window (Reset brings it back)"),
