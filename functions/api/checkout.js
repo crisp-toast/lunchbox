@@ -21,7 +21,8 @@ export async function onRequestPost({ request, env }) {
     mode: "payment",
     "line_items[0][price]": env.STRIPE_PRICE_ID,
     "line_items[0][quantity]": "1",
-    "automatic_tax[enabled]": "true",
+    // Stripe Tax adds sales tax or VAT where you're registered; STRIPE_TAX = "off" until it's set up.
+    "automatic_tax[enabled]": env.STRIPE_TAX === "off" ? "false" : "true",
     customer_creation: "always",
     allow_promotion_codes: "true",
     "consent_collection[terms_of_service]": "required",
