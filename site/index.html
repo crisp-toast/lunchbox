@@ -1006,7 +1006,8 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     { title: "Focus", hint: "⇧ + left ⌘ + F", steps: [
       { win: four, focus: "A", keys: [], cap: "Need to concentrate on one window?" },
       { win: { A: R.single, B: shelf(R.s1), C: shelf(R.s2), D: shelf(R.s3) }, focus: "A", keys: ["⇧", "Left ⌘", "F"], cap: "It takes the center. The rest wait on the Shelf, tilted out of the way." },
-      { win: four, focus: "A", keys: ["⇧", "Left ⌘", "F"], cap: "⇧⌘F again, or a click on any card on the Shelf, brings everything back." },
+      { win: { B: R.single, A: shelf(R.s1), C: shelf(R.s2), D: shelf(R.s3) }, focus: "B", keys: [], cap: "Click a card on the Shelf and it swaps into the center." },
+      { win: four, focus: "B", keys: ["⇧", "Left ⌘", "F"], cap: "⇧⌘F again brings everything back, each window in its tile." },
     ]},
     { title: "Workspaces", hint: "left ⌘ + 1, 2, 3", steps: [
       { win: four, focus: "C", space: 1, keys: [], cap: "Three Workspaces to start, on left ⌘ and a number." },

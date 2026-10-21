@@ -50,6 +50,9 @@ public struct Layout: Equatable, Sendable {
     /// While set, this window sits alone in the center and the rest wait as
     /// small windows down the left edge (⌘⇧F). Any change to the layout ends it.
     public var spotlight: WindowID?
+    /// The Shelf's order while in Focus, once a card was swapped into the center (`swapSpotlight`):
+    /// the window that was there takes the picked card's place. Otherwise the layout's own order.
+    public var shelfOrder: [WindowID]?
     /// The arrangement sized smaller than the screen, centered (`Area`), or nil to fill it.
     public var area: Area?
     /// While a placeholder that made the 2×2 grid waits for its window: the columns from
@@ -631,7 +634,7 @@ public struct Layout: Equatable, Sendable {
         if let spot = spotlight, contains(spot) {
             let center = Self.fit(spot, in: centeredFrame(spot, in: usable), limits: limits, within: usable)
             result[spot] = center
-            let others = windows.filter { $0 != spot }
+            let others = shelved
             for (id, frame) in zip(others, Self.shelfFrames(count: others.count, beside: center, in: usable, gap: gap)) {
                 result[id] = frame
             }
@@ -709,13 +712,30 @@ public struct Layout: Equatable, Sendable {
     /// The windows waiting on the shelf while another is spotlighted.
     public var shelved: [WindowID] {
         guard let spot = spotlight, contains(spot), windowCount > 1 else { return [] }
-        return windows.filter { $0 != spot }
+        let rest = windows.filter { $0 != spot }
+        if let order = shelfOrder, order.count == rest.count, Set(order) == Set(rest) { return order }
+        return rest
+    }
+
+    /// In Focus, a card picked from the Shelf: it takes the center, and the window that was there
+    /// takes the card's place on the Shelf. The tiles underneath stay as they were, so ending Focus
+    /// brings back the same arrangement. False when `id` isn't on the Shelf.
+    @discardableResult
+    public mutating func swapSpotlight(with id: WindowID) -> Bool {
+        guard let spot = spotlight, spot != id else { return false }
+        var order = shelved
+        guard let i = order.firstIndex(of: id) else { return false }
+        order[i] = spot
+        spotlight = id
+        shelfOrder = order
+        return true
     }
 
     /// ⌘⇧F: puts `id` alone in the center with the others shelved, or ends
     /// spotlight if it's on. Does nothing for a window that's already alone.
     @discardableResult
     public mutating func toggleSpotlight(_ id: WindowID) -> Bool {
+        shelfOrder = nil
         if spotlight != nil {
             spotlight = nil
             return true

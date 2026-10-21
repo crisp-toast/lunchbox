@@ -42,7 +42,7 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Left ⌘ ⇧ + ↑ ↓ | Swap with the window above or below in a stack |
 | Left ⌘ ⇧ + plus / minus | Give the window more or less space (a lone window, or one in Focus, grows or shrinks around the center) |
 | Left ⌘ ⇧ + R | **Resize**: then the arrows (or your focus keys) push the window's edges (hold to keep going); Return or Esc when done |
-| Left ⌘ ⇧ + F | **Focus**: the window alone in the center, the rest of the Workspace on the Shelf. Again, a click on a Shelf card, ⌘ (or ⌘ ⇧) with any arrow, or a file dragged onto a Shelf card ends it |
+| Left ⌘ ⇧ + F | **Focus**: the window alone in the center, the rest of the Workspace on the Shelf. Click a Shelf card to swap that window into the center. Again, ⌘ (or ⌘ ⇧) with any arrow, or a file dragged onto a Shelf card ends it, every window back in its tile |
 | Left ⌘ ⇧ + H | **Hide** the window: it goes out of sight, parked off the screen the way other Workspaces' windows wait, still open; the others close the gap |
 | Left ⌘ ⇧ + Delete | Close the window (like clicking its close button, so unsaved-changes prompts still appear) |
 | Left ⌘ + 1 / 2 / 3 | Go to that Workspace |

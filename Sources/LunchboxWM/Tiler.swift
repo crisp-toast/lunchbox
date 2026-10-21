@@ -153,11 +153,7 @@ final class Tiler {
         // Back from Mission Control: the windows never left their tiles. Look again anyway, for
         // anything closed or opened meanwhile.
         overview.onEnd = { [weak self] in self?.scanAll(after: [0.05, 0.4, 1.0]) }
-        shelf.onPick = { [weak self] id in
-            guard let self else { return }
-            self.activate(id)
-            self.showRing(on: id)
-        }
+        shelf.onPick = { [weak self] id in self?.swapIntoFocus(id) }
         // Dragging a file onto a card: Focus ends and the windows come back to their tiles,
         // so the drop can land in any of them. Nothing is activated mid-drag.
         shelf.onDragRest = { [weak self] _ in self?.exitSpotlight() }
@@ -3277,6 +3273,25 @@ final class Tiler {
             return
         }
         shelf.hide(animated: true)
+    }
+
+    /// A card clicked on the Shelf: that window takes the center, and the one that was there takes
+    /// its card's place. ⇧⌘F still ends Focus, with every window back in its tile.
+    private func swapIntoFocus(_ id: CGWindowID) {
+        guard let (space, uuid) = place(of: id), space == currentSpace, var layout = spaces[space][uuid],
+              let old = layout.spotlight, layout.swapSpotlight(with: id) else {
+            activate(id)
+            showRing(on: id)
+            return
+        }
+        spaces[space][uuid] = layout
+        // A picture of the window leaving the center for its card, while it's still on screen.
+        Snapshotter.capture([old]) { [weak self] images in
+            for (wid, image) in images { self?.shelf.setSnapshot(image, for: wid) }
+        }
+        relayout(animated: true)
+        activate(id)
+        showRing(on: id)
     }
 
     /// Leaves Focus in the Workspace being viewed, keeping focus where it is.
