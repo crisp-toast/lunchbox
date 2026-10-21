@@ -40,7 +40,9 @@ form.addEventListener("submit", async (e) => {
     if (r.ok && (await r.json()).status === "write-to-support") return emailOff();
     result.textContent = r.ok
       ? "Done. If that address bought Lunchbox, its license is on its way. Check your spam folder if it isn't there in a few minutes."
-      : "That doesn't look like an email address. Check it and try again.";
+      : r.status === 400
+        ? "That doesn't look like an email address. Check it and try again."
+        : "We couldn't send that just now. Try again in a moment, or write to support@sentientdonut.com.";
   } catch {
     result.textContent = "We couldn't reach the server. Try again in a moment.";
   }
