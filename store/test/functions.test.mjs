@@ -68,7 +68,8 @@ test("no license for a refunded or charged-back purchase", async () => {
   sessions.cs_test_abcdefghij1 = session({ payment_intent: { id: "pi_buyer", latest_charge: { disputed: true } } });
   assert.equal((await get("cs_test_abcdefghij1")).status, 404);
   await recover("buyer@example.com");
-  assert.equal(emails.length, 0);
+  assert.equal(emails.length, 1);
+  assert.doesNotMatch(emails[0].body.text, /lunchbox1\./);
 });
 
 test("full refunds and chargebacks go on the revoked list; partial refunds don't", async () => {
@@ -125,14 +126,20 @@ test("webhook refuses forged or stale calls and skips unpaid sessions", async ()
 
 const recover = (email, e = env) => recoverPost({ request: new Request("https://lunchbox.example/api/recover", { method: "POST", body: JSON.stringify({ email }), headers: { "Content-Type": "application/json" } }), env: e });
 
-test("lost license: emails the buyer's licenses, and answers the same either way", async () => {
+test("lost license: emails the buyer's licenses, or a note that there are none, and answers the same either way", async () => {
   sessions.cs_test_second00001 = session({ id: "cs_test_second00001", created: 1792100000 });
   const found = await (await recover(" buyer@example.com ")).json();
   const missing = await (await recover("nobody@example.com")).json();
   assert.deepEqual(found, missing);
-  assert.equal(emails.length, 1);
+  assert.equal(emails.length, 2);
   assert.equal((emails[0].body.text.match(/^lunchbox1\./gm) || []).length, 2);
   assert.match(emails[0].key, /^lunchbox-recover-buyer@example\.com-\d{4}-\d{2}-\d{2}$/);
+  assert.deepEqual(emails[1].body.to, ["nobody@example.com"]);
+  assert.match(emails[1].body.text, /couldn't find a Lunchbox license/);
+  assert.doesNotMatch(emails[1].body.text, /lunchbox1\./);
+  assert.equal(emails[1].body.reply_to, "support@example.com");
+  // Its own key, so buying later the same day still lets the license email through.
+  assert.match(emails[1].key, /^lunchbox-recover-none-nobody@example\.com-\d{4}-\d{2}-\d{2}$/);
   assert.equal((await recover("not-an-email")).status, 400);
 });
 

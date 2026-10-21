@@ -23,7 +23,9 @@ the steps below need your accounts, so they're yours to do.
    consent record. It's sent once, even when Stripe retries.
 4. **Activate:** the link, or LunchboxWM's menu → Enter License… → paste. Checked offline against the
    public key in `Sources/LunchboxWM/Licensing.swift`: no account, no server, works on all their Macs.
-5. **Lost it:** `recover.html` emails every license for that address, to that address.
+5. **Lost it:** `recover.html` emails every license for that address, to that address, or a note
+   that it has none (at most one of each per address per day). The page answers the same either
+   way, then makes the buyer wait a minute before sending again.
    Without `RESEND_API_KEY` it sends nothing, so the page and `/api/recover` tell the buyer to
    write to support instead.
 6. **Reinstalling and new Macs:** there's no account; the license key is the login.

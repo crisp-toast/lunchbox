@@ -28,8 +28,19 @@ const form = document.getElementById("form"), send = document.getElementById("se
 // Until the store can send email, the page doesn't offer one: it points at support instead.
 const emailOff = () => { for (const id of ["on", "form", "stuck"]) document.getElementById(id).hidden = true; document.getElementById("off").hidden = false; };
 fetch("api/recover").then((r) => r.json()).then((d) => { if (d.email === false) emailOff(); }).catch(() => {});
+// After a send, the button waits a minute, so repeat clicks don't pile up emails.
+// The wait survives a reload; without storage it simply starts over.
+const label = send.textContent;
+const countdown = (until) => {
+  const left = Math.ceil((until - Date.now()) / 1000);
+  send.disabled = left > 0;
+  send.textContent = left > 0 ? `Email Again in ${left}s` : label;
+  if (left > 0) setTimeout(() => countdown(until), 1000);
+};
+try { countdown(Number(localStorage.getItem("recoverWaitUntil")) || 0); } catch {}
+const sent = "Done. We've emailed that address its license, or a note if it doesn't have one. Check your spam folder if nothing's there in a few minutes.";
 // Back from a no-JavaScript form post.
-if (location.search === "?sent") result.textContent = "Done. If that address bought Lunchbox, its license is on its way.";
+if (location.search === "?sent") result.textContent = sent;
 if (location.search === "?bad") result.textContent = "That doesn't look like an email address. Check it and try again.";
 if (location.search === "?support") emailOff();
 form.addEventListener("submit", async (e) => {
@@ -38,11 +49,15 @@ form.addEventListener("submit", async (e) => {
   try {
     const r = await fetch("api/recover", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: document.getElementById("address").value }) });
     if (r.ok && (await r.json()).status === "write-to-support") return emailOff();
-    result.textContent = r.ok
-      ? "Done. If that address bought Lunchbox, its license is on its way. Check your spam folder if it isn't there in a few minutes."
-      : r.status === 400
-        ? "That doesn't look like an email address. Check it and try again."
-        : "We couldn't send that just now. Try again in a moment, or write to support@sentientdonut.com.";
+    if (r.ok) {
+      result.textContent = sent;
+      const until = Date.now() + 60_000;
+      try { localStorage.setItem("recoverWaitUntil", String(until)); } catch {}
+      return countdown(until);
+    }
+    result.textContent = r.status === 400
+      ? "That doesn't look like an email address. Check it and try again."
+      : "We couldn't send that just now. Try again in a moment, or write to support@sentientdonut.com.";
   } catch {
     result.textContent = "We couldn't reach the server. Try again in a moment.";
   }
