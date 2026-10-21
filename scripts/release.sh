@@ -18,6 +18,10 @@ if [[ "$DRY" == "--dry-run" ]]; then
   IDENTITY=$(security find-identity -v -p codesigning | awk '/Apple Development/ && /ZV7V23WVKL/ {print $2; exit}')
   [[ -n "$IDENTITY" ]] || IDENTITY=$(security find-identity -v -p codesigning | awk '/Apple Development/ {print $2; exit}')
 else
+  # The Developer ID key lives in its own keychain, unlocked here so codesign never asks (see docs/store.md).
+  SIGNING_KC="$HOME/Library/Keychains/lunchbox-signing.keychain-db"
+  SIGNING_PW="$HOME/.config/sentient-donut/signing-keychain-password"
+  [[ -f "$SIGNING_KC" && -f "$SIGNING_PW" ]] && security unlock-keychain -p "$(cat "$SIGNING_PW")" "$SIGNING_KC"
   IDENTITY=$(security find-identity -v -p codesigning | awk '/Developer ID Application/ {print $2; exit}')
   [[ -n "$IDENTITY" ]] || { echo "No Developer ID Application certificate in the keychain (see docs/store.md)."; exit 1; }
 fi

@@ -33,6 +33,11 @@ the steps below need your accounts, so they're yours to do.
    For support, gifts or press,
    `node scripts/license.mjs issue someone@example.com`.
 
+The Developer ID certificate (Sentient Donut LLC, 8W7XL99F58, expires 2027-11-19) lives in its own
+keychain, `~/Library/Keychains/lunchbox-signing.keychain-db`, whose password is in
+`~/.config/sentient-donut/signing-keychain-password`; `scripts/release.sh` unlocks it, so codesign
+never asks. Notarization uses the App Store Connect API key through the `lunchbox-notary` profile.
+
 The signing key is at `~/.config/sentient-donut/tessel-license-signing.jwk` (internal disk, 600).
 **Back it up in 1Password now.** Lose it and you can't issue keys that match shipped apps;
 leak it and anyone can.

@@ -1,0 +1,15 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>LunchboxWM</title>
+        <item>
+            <title>1.0</title>
+            <pubDate>Tue, 20 Oct 2026 22:52:05 -0500</pubDate>
+            <sparkle:version>184</sparkle:version>
+            <sparkle:shortVersionString>1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://lunchboxwm.com/download/LunchboxWM-1.0.dmg" length="3008333" type="application/octet-stream" sparkle:edSignature="hrpbLFVmAWdKH/4Uwg+gxCtIi8oFw3qzAmrn/0bA7j+Qgnkafc9wNefp/w/2w4kMXJLUUB1acUh4fBh5EBYRBw=="/>
+        </item>
+    </channel>
+</rss>
