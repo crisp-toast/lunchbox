@@ -203,7 +203,7 @@ p { margin: 0; }
 }
 .panel[hidden] { display: block !important; opacity: 0; transform: translateX(-50%) translateY(-6px) scale(.98); pointer-events: none; }
 .panel .q { font-size: 1.5em; padding: .2em .3em .35em; border-bottom: 1px solid #e8eaee; color: #1d2126; min-height: 1.9em; }
-.panel .q .ph { color: #9aa1aa; }
+.panel .q .hint { color: #9aa1aa; }
 .panel .q .caret { display: inline-block; width: 1px; height: 1em; background: var(--accent); vertical-align: -.12em; margin-left: 1px; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 .row { display: grid; grid-template-columns: 1.9em 1fr auto; gap: .2em .7em; align-items: center; padding: .55em .6em; border-radius: .6em; margin-top: .3em; }
@@ -906,7 +906,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     mac.launcher.hidden = !L;
     if (L) {
       const rows = (L.rows || []).map((r, i) => `<div class="row ${i === (L.sel ?? 0) ? "sel" : ""}"><span class="ic" style="${r.ic || ""}"></span><span class="t">${r.t}</span><span class="mini-kc ret">↩</span><span class="s">${r.s}</span>${r.sub ? `<div class="sub"><span>＋ ${r.sub}</span><span class="mini-kc">⇧↩</span></div>` : ""}</div>`).join("");
-      mac.launcher.innerHTML = `<div class="q">${L.q ? L.q : '<span class="ph">Summon an app, window or website</span>'}<span class="caret"></span></div>${rows}`;
+      mac.launcher.innerHTML = `<div class="q">${L.q ? L.q : '<span class="hint">Summon an app, window or website</span>'}<span class="caret"></span></div>${rows}`;
     }
     const H = step.help;
     mac.help.hidden = !H;
@@ -917,7 +917,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
         ["SUMMON", [["⇧ then", "Space"], "Summon an app, window or website", "launcher open search spotlight"]],
       ];
       const q = (H.q || "").toLowerCase();
-      let html = `<div class="q">${H.q || '<span class="ph">Search shortcuts</span>'}<span class="caret"></span></div>`;
+      let html = `<div class="q">${H.q || '<span class="hint">Search shortcuts</span>'}<span class="caret"></span></div>`;
       for (const [group, ...rows] of all) {
         const shown = rows.filter(([k, t, words]) => !q || (k.join(" ") + " " + t + " " + words).toLowerCase().includes(q));
         if (!shown.length) continue;
