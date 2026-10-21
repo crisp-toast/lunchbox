@@ -23,6 +23,9 @@ final class Onboarding: NSObject, NSWindowDelegate {
     private let next = NSButton(title: "Continue", target: nil, action: nil)
     private var step: Step = .welcome
     private var trustTimer: Timer?
+    /// Set up before, and only Accessibility is missing again: just that step, which closes
+    /// itself once access is back.
+    private var accessOnly = false
 
     // Practice step
     private var practiceRows: [String: PracticeRow] = [:]
@@ -52,7 +55,8 @@ final class Onboarding: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
-    func show(at start: Step = .welcome) {
+    func show(at start: Step = .welcome, accessOnly: Bool = false) {
+        self.accessOnly = accessOnly && start == .access
         let window = self.window ?? makeWindow()
         if !isVisible { window.center() }
         NSApp.activate(ignoringOtherApps: true)
@@ -139,23 +143,32 @@ final class Onboarding: NSObject, NSWindowDelegate {
         for (i, dot) in dots.arrangedSubviews.enumerated() {
             dot.layer?.backgroundColor = (i == step.rawValue ? NSColor.controlAccentColor : NSColor.tertiaryLabelColor).cgColor
         }
-        back.isHidden = step == .welcome
+        back.isHidden = step == .welcome || accessOnly
+        dots.isHidden = accessOnly
         switch step {
         case .welcome: next.title = "Get Started"; next.isEnabled = true
-        case .access: next.title = "Continue"; next.isEnabled = AXIsProcessTrusted()
+        case .access: next.title = accessOnly ? "Done" : "Continue"; next.isEnabled = AXIsProcessTrusted()
         case .practice: next.title = practiced.count == practiceRows.count ? "Continue" : "Skip for Now"; next.isEnabled = true
         case .finish: next.title = "Start Using Lunchbox"; next.isEnabled = true
         }
     }
 
     @objc private func goNext() {
-        if let following = Step(rawValue: step.rawValue + 1) {
+        if accessOnly {
+            finish()
+        } else if let following = Step(rawValue: step.rawValue + 1) {
             go(to: following)
         } else {
-            UserDefaults.standard.set(true, forKey: "onboardingDone")
-            window?.orderOut(nil)
-            onClose?()
+            finish()
         }
+    }
+
+    private func finish() {
+        trustTimer?.invalidate()
+        accessOnly = false
+        UserDefaults.standard.set(true, forKey: "onboardingDone")
+        window?.orderOut(nil)
+        onClose?()
     }
 
     @objc private func goBack() {
@@ -190,14 +203,31 @@ final class Onboarding: NSObject, NSWindowDelegate {
         let open = NSButton(title: "Open System Settings", target: self, action: #selector(requestAccess))
         open.bezelStyle = .rounded
         open.controlSize = .large
-        let row = NSStackView(views: [status, open])
+        // macOS keeps a switch that's on for an older copy of the app (after an update from another
+        // developer certificate, or a reinstall) but no longer works for this one: after a while,
+        // say how to clear it.
+        let stale = NSTextField(wrappingLabelWithString: "Already switched on? macOS can keep an old switch that no longer works after an update or a reinstall. In the list, select LunchboxWM, click −, then turn it on again.")
+        stale.font = .systemFont(ofSize: 12)
+        stale.textColor = .secondaryLabelColor
+        stale.alignment = .center
+        stale.preferredMaxLayoutWidth = 440
+        stale.isHidden = true
+        let row = NSStackView(views: [status, open, stale])
         row.orientation = .vertical
         row.spacing = 16
+        let shown = Date()
+        var finishing = false
         let refresh = { [weak self] in
             let granted = AXIsProcessTrusted()
             status.set(granted ? "Access granted" : "Waiting for access…", done: granted)
             open.isHidden = granted
+            stale.isHidden = granted || Date().timeIntervalSince(shown) < 8
             if self?.step == .access { self?.next.isEnabled = granted }
+            // Only access was missing: once it's back, there's nothing else to do here.
+            if granted, self?.accessOnly == true, !finishing {
+                finishing = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { self?.finish() }
+            }
         }
         refresh()
         trustTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in refresh() }

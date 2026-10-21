@@ -103,9 +103,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // New here (or setup unfinished): the welcome window walks through Accessibility and a
         // little practice instead of a bare system prompt. (Earlier versions had you choose
         // three Workspace keys: having them means setup was done.)
-        let setUp = AXIsProcessTrusted()
-            && (UserDefaults.standard.bool(forKey: "onboardingDone") || tap.spaceKeys.count == 3)
-        if !setUp { onboarding.show() }
+        let setUpBefore = UserDefaults.standard.bool(forKey: "onboardingDone") || tap.spaceKeys.count == 3
+        if !AXIsProcessTrusted() {
+            // Set up before (only access is missing again, say after a reinstall): just that step.
+            onboarding.show(at: setUpBefore ? .access : .welcome, accessOnly: setUpBefore)
+        } else if !setUpBefore {
+            onboarding.show()
+        }
         if AXIsProcessTrusted() {
             begin()
         } else {

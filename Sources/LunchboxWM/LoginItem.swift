@@ -1,4 +1,5 @@
 import AppKit
+import Security
 import ServiceManagement
 
 /// "Open at login", done as a launchd agent so LunchboxWM also comes back by itself after a
@@ -13,6 +14,7 @@ enum LoginItem {
         do {
             if on { try agent.register() } else { try agent.unregister() }
             UserDefaults.standard.set(on ? Bundle.main.bundlePath : nil, forKey: registeredFromKey)
+            UserDefaults.standard.set(on ? signer : nil, forKey: registeredSignerKey)
         } catch {
             log.error("login item: \(error.localizedDescription, privacy: .public)")
         }
@@ -20,6 +22,20 @@ enum LoginItem {
 
     /// Where the app was when it registered the login item.
     private static let registeredFromKey = "loginItemRegisteredFrom"
+    /// Who signed the app that registered it: macOS won't start the agent for an app signed by
+    /// someone else since (a development build replaced by a release, or the other way round).
+    private static let registeredSignerKey = "loginItemRegisteredSigner"
+
+    /// The certificate this copy is signed with, as macOS names it.
+    static var signer: String? {
+        var code: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(Bundle.main.bundleURL as CFURL, [], &code) == errSecSuccess, let code else { return nil }
+        var info: CFDictionary?
+        guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+              let certificates = (info as? [String: Any])?[kSecCodeInfoCertificates as String] as? [SecCertificate],
+              let leaf = certificates.first else { return nil }
+        return SecCertificateCopySubjectSummary(leaf) as String?
+    }
 
     /// Earlier versions registered the app itself as the login item: switch to the agent, once.
     /// And an app that's moved or been renamed since it registered (run from Downloads, then put
@@ -32,9 +48,11 @@ enum LoginItem {
             return
         }
         // Not from launchd's own copy: taking the old registration out would end it.
+        let defaults = UserDefaults.standard
         guard isEnabled, !startedByLaunchd,
-              UserDefaults.standard.string(forKey: registeredFromKey) != Bundle.main.bundlePath else { return }
-        log.notice("login item: the app moved; registering it again from here")
+              defaults.string(forKey: registeredFromKey) != Bundle.main.bundlePath
+                || defaults.string(forKey: registeredSignerKey) != signer else { return }
+        log.notice("login item: the app moved or is signed differently; registering it again")
         try? agent.unregister()
         set(true)
     }

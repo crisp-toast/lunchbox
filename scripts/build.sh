@@ -13,6 +13,9 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/LunchboxWM"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+# The same build number a release of this commit gets, so Sparkle never takes a newer development
+# build for an older one and "updates" it to the last release.
+plutil -replace CFBundleVersion -string "$(git rev-list --count HEAD)" "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 mkdir -p "$APP/Contents/Library/LaunchAgents"
 cp Resources/com.sentientdonut.lunchbox.agent.plist "$APP/Contents/Library/LaunchAgents/"
@@ -23,8 +26,14 @@ SPARKLE="$(find Vendor/Sparkle.xcframework -maxdepth 2 -type d -name Sparkle.fra
 mkdir -p "$APP/Contents/Frameworks"
 ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
 
-# Sign with a stable Apple Development identity so macOS keeps the Accessibility
-# permission across rebuilds. Ad-hoc signing would lose it on every build.
+# Sign with the Developer ID certificate releases use, so macOS keeps the Accessibility permission
+# and the login item across rebuilds and across updates to a release: both belong to the
+# signature. (Its keychain is unlocked as scripts/release.sh does.) Without it, a stable Apple
+# Development identity; ad-hoc signing would lose the permission on every build.
+SIGNING_KC="$HOME/Library/Keychains/lunchbox-signing.keychain-db"
+SIGNING_PW="$HOME/.config/sentient-donut/signing-keychain-password"
+[[ -f "$SIGNING_KC" && -f "$SIGNING_PW" ]] && security unlock-keychain -p "$(cat "$SIGNING_PW")" "$SIGNING_KC"
+IDENTITY="${IDENTITY:-$(security find-identity -v -p codesigning | awk '/Developer ID Application/ && /8W7XL99F58/ {print $2; exit}')}"
 IDENTITY="${IDENTITY:-$(security find-identity -v -p codesigning | awk '/Apple Development/ && /ZV7V23WVKL/ {print $2; exit}')}"
 codesign --force --deep --sign "${IDENTITY:--}" "$APP/Contents/Frameworks/Sparkle.framework"
 codesign --force --sign "${IDENTITY:--}" "$APP"
