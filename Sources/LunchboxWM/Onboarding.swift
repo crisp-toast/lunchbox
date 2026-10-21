@@ -45,6 +45,13 @@ final class Onboarding: NSObject, NSWindowDelegate {
 
     func close() { window?.close() }
 
+    /// Back in front, on the step it was on (after the license window, say).
+    func bringToFront() {
+        guard let window, window.isVisible else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
     func show(at start: Step = .welcome) {
         let window = self.window ?? makeWindow()
         if !isVisible { window.center() }
@@ -156,6 +163,9 @@ final class Onboarding: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        // Closed once Accessibility is on: set up enough not to come back at every launch.
+        // (The menu's Welcome… opens it again.)
+        if AXIsProcessTrusted() { UserDefaults.standard.set(true, forKey: "onboardingDone") }
         tap.learnNextKey(nil)
         trustTimer?.invalidate()
         DispatchQueue.main.async { [weak self] in self?.onClose?() }

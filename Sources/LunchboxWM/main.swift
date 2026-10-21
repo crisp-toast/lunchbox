@@ -32,6 +32,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var signalSource: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if !(DEBUG || LUNCHBOX_DEV)
+        // Run from its disk image or Downloads: offer to move to Applications first.
+        if Install.offerMoveToApplications() { return }
+        #endif
+        // Dragged to the Trash while running: stop opening at login, and quit (parked windows come back).
+        Install.watchForTrash {
+            log.notice("moved to the Trash; quitting, and no longer opening at login")
+            Install.stopOpeningAtLogin()
+            NSApp.terminate(nil)
+        }
         // The time back is read now, so the menu has it even before tiling starts (waiting for
         // Accessibility, or for a license).
         TimeBackLedger.shared.load()
@@ -62,6 +72,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.onCheckForUpdates = { [weak self] in self?.updater.checkNow() }
         menu.onCopyDiagnostics = { [weak self] in self?.copyDiagnostics() }
         licensing.onChange = { [weak self] in self?.licenseChanged() }
+        // Activated mid-setup (the thank-you page's link): the welcome window comes back to the front.
+        licenseWindow.onActivated = { [weak self] in self?.onboarding.bringToFront() }
         // licenseChanged has already paused tiling by then; this says why.
         licensing.onRevoked = { [weak self] license in
             self?.licenseWindow.show(error: "The license for \(license.email) was refunded, so it no longer unlocks Lunchbox. If that's a mistake, write to support@sentientdonut.com.")
@@ -428,6 +440,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+// Thrown away: don't run (or open at login) from the Trash.
+Install.quitIfInTrash()
 // LunchboxWM was Tessel: on a Mac that had it, take over from it, once.
 OldAppID.carryOver()
 // One LunchboxWM at a time; and when it's set to open at login, launchd runs it, so it comes

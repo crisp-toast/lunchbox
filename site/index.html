@@ -649,7 +649,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       <p class="buy-note" id="buy-note" aria-live="polite"></p>
       <p class="fine">Pay once, then download it and enter your license. No subscription. Refunds within 14 days, no questions.</p>
       <p class="fine">macOS 14 Sonoma or later · Apple silicon<sup class="fn"><a href="#fn-silicon" aria-label="Footnote 2">2</a></sup></p>
-      <p class="fine"><a href="recover.html">Already bought it? Get your license again</a></p>
+      <p class="fine">Already bought it? <a href="download/LunchboxWM.dmg">Download Lunchbox</a> · <a href="recover.html">Get your license again</a></p>
     </div>
   </section>
 
@@ -739,6 +739,10 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   if (reduce) {
     film.poster = "media/break-end.jpg";
   } else {
+    // The clip opens on 0.77 s of still glass: start 0.3 s in, so the break comes a little sooner.
+    const START = 0.3;
+    const skipStill = () => { try { if (film.currentTime < START) film.currentTime = START; } catch (e) {} };
+    if (film.readyState >= 1) skipStill(); else film.addEventListener("loadedmetadata", skipStill, { once: true });
     film.addEventListener("playing", () => requestAnimationFrame(watchHit), { once: true });
     film.addEventListener("timeupdate", () => { if (film.currentTime >= HIT) rise(); });
     film.play().catch(() => { film.poster = "media/break-end.jpg"; rise(); });

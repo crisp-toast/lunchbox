@@ -14,6 +14,9 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
     private let activate = NSButton(title: "Activate", target: nil, action: nil)
     private let buy = NSButton(title: "Buy Lunchbox – $4.99…", target: nil, action: nil)
     private let lost = NSButton(title: "Lost your license?", target: nil, action: nil)
+    /// After a key or link activates Lunchbox and the window has closed itself (the welcome
+    /// window may want the front again).
+    var onActivated: (() -> Void)?
 
     init(licensing: Licensing) {
         self.licensing = licensing
@@ -28,6 +31,16 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
         window.center()
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(field)
+        // Activated by a link: say so, then get out of the way, as a pasted key does.
+        if activated != nil { closeSoon() }
+    }
+
+    private func closeSoon() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+            guard let self, self.window?.isVisible == true, self.licensing.license != nil else { return }
+            self.window?.close()
+            self.onActivated?()
+        }
     }
 
     /// Debugging: draws the window into a PNG without putting it on any screen.
@@ -48,7 +61,7 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
             setDetail("Licensed to \(license.email). Paste a different key below to replace it.")
         } else {
             heading.stringValue = "Enter your license"
-            setDetail("Paste the license key from your email, or click the activation link in it. Tiling starts as soon as it's in. No license yet? It's $4.99, once.")
+            setDetail("Paste your license key from the thank-you page or your license email. Tiling starts as soon as it's in. No license yet? It's $4.99, once.")
         }
         message.stringValue = error ?? activated.map { "Activated. Thanks for buying Lunchbox, \($0.email)!" } ?? ""
         message.textColor = activated == nil ? .systemRed : .systemGreen
@@ -145,10 +158,10 @@ final class LicenseWindow: NSObject, NSWindowDelegate {
         if let license = licensing.activate(text) {
             message.textColor = .systemGreen
             message.stringValue = "Activated. Thanks, \(license.email)!"
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in self?.window?.close() }
+            closeSoon()
         } else {
             message.textColor = .systemRed
-            message.stringValue = "That key doesn't check out. Copy it again from your license email (the whole thing, starting with lunchbox1.), or have it sent again."
+            message.stringValue = "That key doesn't check out. Copy it again, the whole thing, starting with lunchbox1. Can't find it? Click Lost your license?"
         }
     }
 

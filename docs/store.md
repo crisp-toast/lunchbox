@@ -26,7 +26,17 @@ the steps below need your accounts, so they're yours to do.
 5. **Lost it:** `recover.html` emails every license for that address, to that address.
    Without `RESEND_API_KEY` it sends nothing, so the page and `/api/recover` tell the buyer to
    write to support instead.
-6. **Refunds:** 14 days, no questions. Refund from the Stripe Dashboard and the rest is automatic:
+6. **Reinstalling and new Macs:** there's no account; the license key is the login.
+   - The license is kept in Lunchbox's settings, so deleting the app and installing it again on
+     the same Mac needs no key.
+   - On another Mac, buyers paste the key from the thank-you page or the license email, or get it
+     again with Lost License.
+   - The pricing section links past buyers straight to the download.
+   - The app looks after its own install: dragged to the Trash while running, it quits and stops
+     opening at login (started from the Trash, it quits at once). Run from its disk image or
+     Downloads, it offers to move itself to Applications, then reopens from there and ejects the
+     image (`Install.swift`).
+7. **Refunds:** 14 days, no questions. Refund from the Stripe Dashboard and the rest is automatic:
    - the webhook puts the order on the revoked list (`/api/revoked`, as one-way hashes);
    - licensed copies check that list about once a week and switch the license off;
    - chargebacks go on the list too, and partial refunds don't;
