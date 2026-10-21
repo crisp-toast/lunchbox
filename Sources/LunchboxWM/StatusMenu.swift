@@ -36,11 +36,20 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
+        // Without a license nothing tiles, so the tiling and window items would do nothing: the
+        // menu offers the license instead, plus help, settings and Quit.
+        let unlicensed = licensing.map { $0.license == nil } ?? false
         if !trusted {
             menu.addItem(disabled: "Lunchbox needs Accessibility access to move windows.")
             menu.addItem(action("Allow Accessibility Access…") { [weak self] in self?.onGrantAccess?() })
             menu.addItem(.separator())
-        } else {
+        }
+        if unlicensed {
+            menu.addItem(disabled: "Not licensed: tiling is off")
+            menu.addItem(action("Buy Lunchbox – $4.99…") { [weak self] in self?.onBuy?() })
+            menu.addItem(action("Enter License…") { [weak self] in self?.onEnterLicense?() })
+            menu.addItem(.separator())
+        } else if trusted {
             menu.addItem(action("Tiling", checked: tiler.enabled) { [weak self] in self?.onToggle?() })
             menu.addItem(.separator())
             for i in 0..<tiler.spaceCount {
@@ -85,20 +94,13 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
-        // The time LunchboxWM gave back this week, once there's any. How it's counted is in its tooltip.
+        // The time Lunchbox gave back this week, once there's any. How it's counted is in its tooltip.
         let week = TimeBackLedger.shared.week
-        let unlicensed = licensing.map { $0.license == nil } ?? false
-        if trusted, !week.isEmpty {
+        if trusted, !unlicensed, !week.isEmpty {
             let line = NSMenuItem(title: TimeBackWords.menuLine(week), action: nil, keyEquivalent: "")
             line.isEnabled = false
             line.toolTip = Self.howCounted(week)
             menu.addItem(line)
-            if !unlicensed { menu.addItem(.separator()) }
-        }
-        if let licensing, licensing.license == nil {
-            menu.addItem(disabled: "Not licensed: tiling is off")
-            menu.addItem(action("Buy Lunchbox – $4.99…") { [weak self] in self?.onBuy?() })
-            menu.addItem(action("Enter License…") { [weak self] in self?.onEnterLicense?() })
             menu.addItem(.separator())
         }
         let shortcuts = action("Cheat Sheet…") { [weak self] in self?.onShowHelp?() }
