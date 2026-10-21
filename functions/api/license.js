@@ -21,5 +21,6 @@ export async function onRequestGet({ request, env }) {
   }
   if (!isPaidLunchbox(session, env)) return json({ status: "unknown" }, 404);
   const license = await licenseFor(session, env);
-  return json({ status: "paid", email: session.customer_details?.email, license });
+  // The page says the license was emailed only when the store can send email.
+  return json({ status: "paid", email: session.customer_details?.email, license, emailed: Boolean(env.RESEND_API_KEY) });
 }

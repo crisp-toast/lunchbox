@@ -19,7 +19,7 @@
   <section id="paid" hidden>
     <span class="status ok">✓ Payment received</span>
     <h1>Thanks! Lunchbox is yours.</h1>
-    <p class="lede">Licensed to <strong id="email"></strong>. We've emailed this license there too.</p>
+    <p class="lede">Licensed to <strong id="email"></strong>.<span id="emailed" hidden> We've emailed this license there too.</span></p>
     <div class="card">
       <div class="btns">
         <a class="btn dark" id="activate" href="#"><span>Activate Lunchbox on this Mac</span></a>
@@ -31,7 +31,7 @@
       </ol>
       <div class="key" id="key"></div>
       <div class="btns"><button class="btn" type="button" id="copy">Copy License</button></div>
-      <p class="note">Use it on all your own Macs. Changed your mind? Reply to the license email within 14 days for a full refund.</p>
+      <p class="note">Use it on all your own Macs. Changed your mind? Write to <a href="mailto:support@sentientdonut.com">support@sentientdonut.com</a> within 14 days for a full refund.</p>
     </div>
   </section>
 
@@ -63,6 +63,7 @@ async function load(attempt = 0) {
     const d = await r.json();
     if (d.status === "paid") {
       document.getElementById("email").textContent = d.email;
+      document.getElementById("emailed").hidden = !d.emailed;
       document.getElementById("key").textContent = d.license;
       document.getElementById("activate").href = "lunchbox://activate?key=" + encodeURIComponent(d.license);
       document.getElementById("copy").onclick = (e) => copyKey(d.license, e.currentTarget);
