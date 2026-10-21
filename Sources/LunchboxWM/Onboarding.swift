@@ -76,7 +76,8 @@ final class Onboarding: NSObject, NSWindowDelegate {
     }
 
     func windowDidMove(_ notification: Notification) {
-        if !placing { placedByUser = true }
+        // Only a drag (the mouse is down) counts, never one of Lunchbox's own moves.
+        if !placing, NSEvent.pressedMouseButtons & 1 != 0 { placedByUser = true }
     }
 
     private static func centered(_ size: NSSize, in area: NSRect) -> NSRect {
@@ -458,6 +459,15 @@ final class Onboarding: NSObject, NSWindowDelegate {
 
     private func swap(to view: NSView, animated: Bool) {
         let old = stage.subviews
+        // The page on its way out stops holding the window to its size: it fades where it is, so the
+        // window can take the new page's size (and stay centered) straight away. Otherwise the wide
+        // practice page kept the next page's window wide and off center.
+        for page in old {
+            let frame = page.frame
+            stage.removeConstraints(stage.constraints.filter { $0.firstItem === page || $0.secondItem === page })
+            page.translatesAutoresizingMaskIntoConstraints = true
+            page.frame = frame
+        }
         view.translatesAutoresizingMaskIntoConstraints = false
         stage.addSubview(view)
         NSLayoutConstraint.activate([
