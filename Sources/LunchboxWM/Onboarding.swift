@@ -125,6 +125,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
         case .grow, .shrink: id = "size"
         case .spotlight: id = "focusMode"
         case .normalize: id = "tidy"
+        case .close: id = "close"
         case .switchSpace, .sendToSpace: id = "space"
         case .launcher: id = "summon"
         case .help: id = "help"
@@ -307,6 +308,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
             ("size", growOrShrink, "Give a window more or less space"),
             ("focusMode", caps(.focusMode), "Focus on one window, then again to undo"),
             ("tidy", caps(.tidy), "Tidy everything back to even"),
+            ("close", caps(.close), "Close a window (Reset brings it back)"),
             ("space", betweenWorkspaces, "Go between Workspaces"),
             ("help", caps(.cheatSheet), "Open the Cheat Sheet (Esc closes it)"),
         ]
