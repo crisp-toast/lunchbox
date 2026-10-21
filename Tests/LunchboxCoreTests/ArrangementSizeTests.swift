@@ -3,8 +3,8 @@ import Foundation
 import Testing
 @testable import LunchboxCore
 
-/// Any arrangement resizes around the middle from its outer edges and corners; edges between
-/// windows move the split.
+/// Any arrangement stays centered as it resizes: an outer side, top or bottom resizes only that
+/// window, an outer corner resizes them all evenly, and edges between windows move the split.
 @Suite struct ArrangementSizes {
     let usable = CGRect(x: 8, y: 33, width: 2544, height: 1399)
     typealias Handle = Layout.Handle
@@ -21,13 +21,14 @@ import Testing
 
     // MARK: Two windows
 
-    @Test func aFarSideResizesThePairAroundTheMiddle() throws {
-        let next = try drag(layout([[1], [2]]), 1, .low, nil, to: CGPoint(x: usable.minX + 200, y: 500))
-        let f = frames(next)
+    @Test func aFarSideResizesOnlyThatWindow() throws {
+        let l = layout([[1], [2]])
+        let before = try #require(frames(l)[2])
+        let f = frames(try drag(l, 1, .low, nil, to: CGPoint(x: usable.minX + 200, y: 500)))
         let left = try #require(f[1]), right = try #require(f[2])
         #expect(abs(left.minX - (usable.minX + 200)) <= 1 && abs(right.maxX - (usable.maxX - 200)) <= 1)
-        #expect(left.size == right.size && right.minX - left.maxX == gap)
-        #expect(left.height == usable.height)
+        #expect(abs(right.width - before.width) <= 1 && right.minX - left.maxX == gap) // slid over, same size
+        #expect(left.height == usable.height && right.height == usable.height)
     }
 
     @Test func aTopResizesThePairUpAndDownAroundTheMiddle() throws {
@@ -55,26 +56,46 @@ import Testing
         #expect(abs(left.minY - p.y) <= 1 && centered(f))
     }
 
-    @Test func aFarSideKeepsTheSplitYouMade() throws {
+    @Test func theOtherWindowKeepsTheWidthYouGaveIt() throws {
         var l = layout([[1], [2]])
         l.columns[0].weight = 2 // the left window has two thirds
+        let before = try #require(frames(l)[1])
         let f = frames(try drag(l, 2, .high, nil, to: CGPoint(x: usable.maxX - 300, y: 500)))
         let left = try #require(f[1]), right = try #require(f[2])
-        #expect(abs(left.width - 2 * right.width) <= 2)
+        #expect(abs(left.width - before.width) <= 1 && abs(right.maxX - (usable.maxX - 300)) <= 1)
         #expect(centered(f))
     }
 
     @Test func stackedPairsWorkTheSameWayUpAndDown() throws {
-        let f = frames(try drag(layout([[1, 2]]), 1, nil, .low, to: CGPoint(x: 900, y: usable.minY + 100)))
+        let l = layout([[1, 2]])
+        let before = try #require(frames(l)[2])
+        let f = frames(try drag(l, 1, nil, .low, to: CGPoint(x: 900, y: usable.minY + 100)))
         let top = try #require(f[1]), bottom = try #require(f[2])
         #expect(abs(top.minY - (usable.minY + 100)) <= 1 && abs(bottom.maxY - (usable.maxY - 100)) <= 1)
-        #expect(bottom.minY - top.maxY == gap && top.width == bottom.width && abs(top.height - bottom.height) <= 1)
+        #expect(bottom.minY - top.maxY == gap && top.width == bottom.width && abs(bottom.height - before.height) <= 1)
+    }
+
+    @Test func aStackedPairsCornerResizesBothEvenly() throws {
+        let f = frames(try drag(layout([[1, 2]]), 2, .high, .high, to: CGPoint(x: usable.maxX - 300, y: usable.maxY - 100)))
+        let top = try #require(f[1]), bottom = try #require(f[2])
+        #expect(abs(bottom.maxX - (usable.maxX - 300)) <= 1 && abs(bottom.maxY - (usable.maxY - 100)) <= 1)
+        #expect(abs(top.height - bottom.height) <= 1 && centered(f))
     }
 
     // MARK: More windows
 
-    @Test func threeColumnsKeepTheirSharesAsTheyResize() throws {
-        let f = frames(try drag(layout([[1], [2], [3]]), 3, .high, nil, to: CGPoint(x: usable.maxX - 400, y: 600)))
+    @Test func ofThreeColumnsOnlyTheDraggedOneResizes() throws {
+        let l = layout([[1], [2], [3]])
+        let before = frames(l)
+        let f = frames(try drag(l, 3, .high, nil, to: CGPoint(x: usable.maxX - 300, y: 600)))
+        for id: WindowID in [1, 2] { #expect(abs(try #require(f[id]).width - (try #require(before[id])).width) <= 1) }
+        #expect(abs(try #require(f[3]).width - (try #require(before[3])).width + 600) <= 2)
+        #expect(abs(try #require(f[1]).minX - (usable.minX + 300)) <= 1)
+        #expect(centered(f))
+    }
+
+    @Test func aCornerResizesThreeColumnsEvenly() throws {
+        let f = frames(try drag(layout([[1], [2], [3]]), 3, .high, .low, to: CGPoint(x: usable.maxX - 400, y: usable.minY + 100)))
         let widths = [1, 2, 3].compactMap { f[WindowID($0)]?.width }
         #expect(widths.count == 3 && widths.max()! - widths.min()! <= 2) // still even thirds
         #expect(abs(try #require(f[1]).minX - (usable.minX + 400)) <= 1)
@@ -100,11 +121,13 @@ import Testing
         #expect(abs(topLeft.minX - usable.minX) <= 1 && abs(topLeft.minY - usable.minY) <= 1) // the grid keeps its size
     }
 
-    @Test func aStacksOuterBottomResizesEveryColumnUpAndDown() throws {
+    @Test func aStacksOuterBottomResizesThatWindowAndTheFullHeightOnes() throws {
         let l = layout([[1], [2, 3]])
+        let before = try #require(frames(l)[2])
         let f = frames(try drag(l, 3, nil, .high, to: CGPoint(x: 2000, y: usable.maxY - 200)))
         for (_, w) in f { #expect(w.minY >= usable.minY + 199 && w.maxY <= usable.maxY - 199) }
-        #expect(abs(try #require(f[1]).height - (usable.height - 400)) <= 1)
+        #expect(abs(try #require(f[1]).height - (usable.height - 400)) <= 1) // spans the height, so changes with it
+        #expect(abs(try #require(f[2]).height - before.height) <= 1) // its neighbor in the stack keeps its height
         #expect(centered(f))
     }
 

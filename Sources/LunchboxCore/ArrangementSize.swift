@@ -1,10 +1,12 @@
 import CoreGraphics
 
 /// Any arrangement of two or more windows can sit centered on the screen, smaller than it. Drag an
-/// outer edge of the arrangement (the outside side, top or bottom of a window on its edge) and the
-/// whole arrangement resizes around the middle of the screen, every window keeping its share. An
-/// edge between two windows moves the split between them. A corner does both at once, so it follows
-/// the pointer while the opposite corners move to match. The size belongs to those windows: open or
+/// outer side, top or bottom of the arrangement and only that window grows or shrinks, its edge
+/// following the pointer: the others keep their size and slide over, so the arrangement stays
+/// centered on the screen. (Up and down, windows that span the whole height change with it, or the
+/// tops and bottoms wouldn't line up.) Drag an outer corner and the whole arrangement resizes evenly
+/// around the middle, every window keeping its share, the opposite corners moving to match. An edge
+/// between two windows moves the split between them. The size belongs to those windows: open or
 /// close one, or Tidy, and the arrangement fills the screen again.
 extension Layout {
     public struct Area: Codable, Equatable, Sendable {
@@ -67,10 +69,22 @@ extension Layout {
         let leastHeight = columns.map { col in col.windows.map(rowLeast).reduce(0, +) + gap * CGFloat(col.windows.count - 1) }.max() ?? 80
         var next = self
         var width = area.width, height = area.height
+        // A corner resizes every window evenly; a side, top or bottom only the window dragged.
+        let corner = handle.horizontal != nil && handle.vertical != nil
 
         if let side = handle.horizontal {
-            if isOuter(id, horizontal: side) {
-                width = min(usable.width, max(leastWidth, 2 * abs(usable.midX - point.x)))
+            let wanted = min(usable.width, max(leastWidth, 2 * abs(usable.midX - point.x)))
+            if isOuter(id, horizontal: side) && corner {
+                width = wanted
+            } else if isOuter(id, horizontal: side) {
+                // Only the dragged column takes the change; the others keep their widths.
+                let avail = area.width - gap * CGFloat(columns.count - 1)
+                let total = columns.map(\.weight).reduce(0, +)
+                var widths = columns.map { CGFloat($0.weight / total) * avail }
+                widths[c] = max(columnLeast[c], widths[c] + wanted - area.width)
+                width = min(usable.width, widths.reduce(0, +) + gap * CGFloat(columns.count - 1))
+                let sum = widths.reduce(0, +)
+                for i in columns.indices { next.columns[i].weight = Double(widths[i] / sum) * Double(columns.count) }
             } else {
                 // The split between this column and its neighbor on that side follows the pointer.
                 let n = side == .low ? c - 1 : c + 1, lo = min(c, n), hi = max(c, n)
@@ -87,8 +101,20 @@ extension Layout {
             }
         }
         if let side = handle.vertical {
-            if isOuter(id, vertical: side) {
-                height = min(usable.height, max(leastHeight, 2 * abs(usable.midY - point.y)))
+            let wanted = min(usable.height, max(leastHeight, 2 * abs(usable.midY - point.y)))
+            if isOuter(id, vertical: side) && corner {
+                height = wanted
+            } else if isOuter(id, vertical: side) {
+                // In the dragged window's column only it takes the change; its neighbors in the stack
+                // keep their heights. Other columns span the whole height, so they change with it.
+                let column = columns[c]
+                let avail = area.height - gap * CGFloat(column.windows.count - 1)
+                let total = column.weights.reduce(0, +)
+                var heights = column.weights.map { CGFloat($0 / total) * avail }
+                heights[r] = max(rowLeast(column.windows[r]), heights[r] + wanted - area.height)
+                height = min(usable.height, max(leastHeight, heights.reduce(0, +) + gap * CGFloat(column.windows.count - 1)))
+                let sum = heights.reduce(0, +)
+                next.columns[c].weights = heights.map { Double($0 / sum) * Double(heights.count) }
             } else {
                 // The split between this window and its neighbor in the stack follows the pointer.
                 let column = columns[c]

@@ -133,12 +133,14 @@ Apps you open often rise to the top.
 With the mouse: drag a tiled window onto another to swap them, onto the other screen to move it
 there, or drag its edge to resize. A centered window (alone, or in Focus) stretches on both sides as you drag an edge or corner, as if ⌥
 were held, so it stays centered, and keeps the shape you give it; Tidy (⌘⇧0) returns it to the default size without leaving Focus.
-Any arrangement of two or more windows works the same way. Drag an outer edge (the outside side,
-top or bottom of a window on the arrangement's edge) and the whole arrangement resizes around the
-middle of the screen as you drag, every window keeping its share and all of them touching. Drag an
-edge between two windows and the split between them moves. A corner does both at once: it follows
-the pointer while the opposite corners move to match. Nothing gets smaller than a window allows. The
-size is for those windows: open or close one, or Tidy, and the arrangement fills the screen again. ⌘-Tab to a window in another space switches to that space.
+Any arrangement of two or more windows stays centered and touching as you resize it. Drag an outer
+side, top or bottom (one on the arrangement's edge) and only that window grows or shrinks, its edge
+following the pointer, while the others keep their size and slide over. Windows that span the full
+height change with a top or bottom, so the tops and bottoms stay lined up. Drag an outer corner and
+the whole arrangement resizes evenly around the middle, every window keeping its share, the opposite
+corners moving to match. Drag an edge between two windows and the split between them moves. Nothing
+gets smaller than a window allows. The size is for those windows: open or close one, or Tidy, and
+the arrangement fills the screen again. ⌘-Tab to a window in another space switches to that space.
 
 The Dock works the same way: clicking a running app's icon goes to that app, using its window in
 the current Workspace if it has one, else switching to the Workspace its window is in. An app that
