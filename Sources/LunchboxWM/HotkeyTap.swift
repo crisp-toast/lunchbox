@@ -44,14 +44,14 @@ final class HotkeyTap {
     struct ArrangedWindow {
         let id: CGWindowID
         let frame: CGRect
-        let outerLeft: Bool, outerRight: Bool, outerTop: Bool, outerBottom: Bool
     }
 
     /// A drag on an arrangement's outer edge or a corner: LunchboxWM resizes every window itself,
     /// around the middle of the screen (macOS's own resize keeps the far side where it is). Called
     /// on the main thread.
     enum ArrangementDragEvent {
-        case began(CGWindowID, Layout.Handle)
+        /// The window, its edge or corner, and where the press was.
+        case began(CGWindowID, Layout.Handle, CGPoint)
         case moved(CGPoint)
         case ended(CGPoint)
     }
@@ -101,32 +101,17 @@ final class HotkeyTap {
         set { state.withLock { $0.arranged = newValue } }
     }
 
-    /// The window and handle under `p`: any corner, or an edge on the arrangement's outside. From
-    /// just outside the edge to a few points in, about where macOS itself starts a resize, so a click
-    /// on a title bar or a scroll bar still goes to the window.
+    /// The window and handle under `p`: any corner or edge, from just outside it to a few points in,
+    /// about where macOS itself starts a resize, so a click on a title bar or a scroll bar still goes
+    /// to the window. An edge between two windows too, so both follow the drag together instead of
+    /// one resizing alone until the mouse comes up.
     private func arrangementHandle(at p: CGPoint, in windows: [ArrangedWindow]) -> (id: CGWindowID, handle: Layout.Handle)? {
-        let out = Self.edgeReach, edgeIn: CGFloat = 3, cornerIn: CGFloat = 5
+        Self.handle(at: p, in: windows)
+    }
+
+    static func handle(at p: CGPoint, in windows: [ArrangedWindow]) -> (id: CGWindowID, handle: Layout.Handle)? {
         for w in windows {
-            let f = w.frame
-            for (x, y) in [(f.minX, f.minY), (f.maxX, f.minY), (f.minX, f.maxY), (f.maxX, f.maxY)] {
-                let left = x == f.minX, top = y == f.minY
-                let zone = CGRect(x: left ? x - out : x - cornerIn, y: top ? y - out : y - cornerIn,
-                                  width: out + cornerIn, height: out + cornerIn)
-                if zone.contains(p) { return (w.id, Layout.Handle(horizontal: left ? .low : .high, vertical: top ? .low : .high)) }
-            }
-            let along = f.insetBy(dx: cornerIn, dy: cornerIn)
-            if w.outerLeft, CGRect(x: f.minX - out, y: along.minY, width: out + edgeIn, height: along.height).contains(p) {
-                return (w.id, Layout.Handle(horizontal: .low, vertical: nil))
-            }
-            if w.outerRight, CGRect(x: f.maxX - edgeIn, y: along.minY, width: out + edgeIn, height: along.height).contains(p) {
-                return (w.id, Layout.Handle(horizontal: .high, vertical: nil))
-            }
-            if w.outerTop, CGRect(x: along.minX, y: f.minY - out, width: along.width, height: out + edgeIn).contains(p) {
-                return (w.id, Layout.Handle(horizontal: nil, vertical: .low))
-            }
-            if w.outerBottom, CGRect(x: along.minX, y: f.maxY - edgeIn, width: along.width, height: out + edgeIn).contains(p) {
-                return (w.id, Layout.Handle(horizontal: nil, vertical: .high))
-            }
+            if let handle = Layout.Handle.at(p, of: w.frame, reach: edgeReach) { return (w.id, handle) }
         }
         return nil
     }
@@ -219,7 +204,7 @@ final class HotkeyTap {
             } else if let hit = arrangementHandle(at: p, in: arranged), let onArrangementDrag {
                 // An arrangement's outer edge or a corner: LunchboxWM resizes it, all centered.
                 arrangementDragging = true
-                DispatchQueue.main.async { onArrangementDrag(.began(hit.id, hit.handle)) }
+                DispatchQueue.main.async { onArrangementDrag(.began(hit.id, hit.handle, p)) }
                 return nil
             }
             return pass

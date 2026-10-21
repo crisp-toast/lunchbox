@@ -3399,9 +3399,7 @@ final class Tiler {
             guard let layout = spaces[currentSpace][d.uuid], resizesAsArrangement(layout) else { return [] }
             return layout.windows.compactMap { id in
                 guard let w = windows[id], !w.hidden else { return nil }
-                return HotkeyTap.ArrangedWindow(id: id, frame: w.target ?? w.frame,
-                                                outerLeft: layout.isOuter(id, horizontal: .low), outerRight: layout.isOuter(id, horizontal: .high),
-                                                outerTop: layout.isOuter(id, vertical: .low), outerBottom: layout.isOuter(id, vertical: .high))
+                return HotkeyTap.ArrangedWindow(id: id, frame: w.target ?? w.frame)
             }
         }
     }
@@ -3416,25 +3414,34 @@ final class Tiler {
 
     /// A drag on an arrangement's outer edge or a corner, handed over by `HotkeyTap`: the window, the
     /// handle, and the layout as the drag began.
-    private var arrangementDrag: (id: CGWindowID, handle: Layout.Handle, space: Int, display: Display, start: Layout)?
+    private var arrangementDrag: (id: CGWindowID, handle: Layout.Handle, space: Int, display: Display, start: Layout, grab: CGVector)?
 
     /// The arrangement follows the drag live: the dragged edge or corner under the pointer, the
     /// opposite ones moving with it, everything centered (`Layout.dragged`); letting go keeps it.
     func arrangementDrag(_ event: HotkeyTap.ArrangementDragEvent) {
         switch event {
-        case .began(let id, let handle):
+        case .began(let id, let handle, let press):
             guard enabled, let (space, uuid) = place(of: id), space == currentSpace, let layout = spaces[space][uuid],
                   resizesAsArrangement(layout), let d = activeDisplays.first(where: { $0.uuid == uuid }) else { arrangementDrag = nil; return }
-            arrangementDrag = (id, handle, space, d, layout)
+            // The edge keeps the distance it had from the pointer when grabbed, instead of jumping
+            // to the pointer on the first move.
+            var grab = CGVector.zero
+            if let f = layout.frames(in: d.visible, gap: Self.gap, limits: limits)[id] {
+                if let h = handle.horizontal { grab.dx = (h == .low ? f.minX : f.maxX) - press.x }
+                if let v = handle.vertical { grab.dy = (v == .low ? f.minY : f.maxY) - press.y }
+            }
+            arrangementDrag = (id, handle, space, d, layout, grab)
             activate(id)
-        case .moved(let point):
-            guard let drag = arrangementDrag,
-                  let next = drag.start.dragged(drag.id, handle: drag.handle, to: point, in: drag.display.visible, gap: Self.gap, limits: limits)
+        case .moved(let pointer):
+            guard let drag = arrangementDrag else { return }
+            let point = CGPoint(x: pointer.x + drag.grab.dx, y: pointer.y + drag.grab.dy)
+            guard let next = drag.start.dragged(drag.id, handle: drag.handle, to: point, in: drag.display.visible, gap: Self.gap, limits: limits)
             else { return }
             for (id, frame) in next.frames(in: drag.display.visible, gap: Self.gap, limits: limits) { moveLive(id, to: frame) }
-        case .ended(let point):
+        case .ended(let pointer):
             guard let drag = arrangementDrag else { return }
             arrangementDrag = nil
+            let point = CGPoint(x: pointer.x + drag.grab.dx, y: pointer.y + drag.grab.dy)
             guard let next = drag.start.dragged(drag.id, handle: drag.handle, to: point, in: drag.display.visible, gap: Self.gap, limits: limits),
                   spaces[drag.space][drag.display.uuid]?.windows.sorted() == next.windows.sorted()
             else { relayout(animated: true); return }

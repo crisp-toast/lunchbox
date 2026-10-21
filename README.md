@@ -138,7 +138,7 @@ side, top or bottom (one on the arrangement's edge) and only that window grows o
 following the pointer, while the others keep their size and slide over. Windows that span the full
 height change with a top or bottom, so the tops and bottoms stay lined up. Drag an outer corner and
 the whole arrangement resizes evenly around the middle, every window keeping its share, the opposite
-corners moving to match. Drag an edge between two windows and the split between them moves. Nothing
+corners moving to match. Drag an edge between two windows and the split between them moves, both windows following as you drag. Corners reach a little way along each edge, as macOS's rounded corners do, and whatever you grab keeps its distance from the pointer. Nothing
 gets smaller than a window allows. The size is for those windows: open or close one, or Tidy, and
 the arrangement fills the screen again. ⌘-Tab to a window in another space switches to that space.
 

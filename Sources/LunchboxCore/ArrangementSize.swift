@@ -27,6 +27,30 @@ extension Layout {
             self.horizontal = horizontal
             self.vertical = vertical
         }
+
+        /// The edge or corner of a window at `frame` that a press at `p` grabs, if any: from `reach`
+        /// points outside an edge to a few points in, about where macOS itself starts a resize, so a
+        /// click on a title bar or a scroll bar still goes to the window. Corners reach a little way
+        /// along each edge, as macOS's rounded corners do.
+        public static func at(_ p: CGPoint, of frame: CGRect, reach: CGFloat) -> Handle? {
+            let edgeIn: CGFloat = 3, cornerIn: CGFloat = 5, cornerAlong: CGFloat = 16
+            // How far past each edge `p` is, outward: on that edge from `inside` points in to `reach` out.
+            let past = (left: frame.minX - p.x, right: p.x - frame.maxX, top: frame.minY - p.y, bottom: p.y - frame.maxY)
+            func on(_ distance: CGFloat, inside: CGFloat) -> Bool { distance >= -inside && distance <= reach }
+            // A corner: on one edge, and near that edge's end.
+            for (h, v) in [(Side.low, Side.low), (.high, .low), (.low, .high), (.high, .high)] {
+                let x = h == .low ? past.left : past.right, y = v == .low ? past.top : past.bottom
+                if (on(x, inside: cornerIn) && on(y, inside: cornerAlong)) || (on(y, inside: cornerIn) && on(x, inside: cornerAlong)) {
+                    return Handle(horizontal: h, vertical: v)
+                }
+            }
+            let alongY = p.y >= frame.minY && p.y <= frame.maxY, alongX = p.x >= frame.minX && p.x <= frame.maxX
+            if alongY, on(past.left, inside: edgeIn) { return Handle(horizontal: .low, vertical: nil) }
+            if alongY, on(past.right, inside: edgeIn) { return Handle(horizontal: .high, vertical: nil) }
+            if alongX, on(past.top, inside: edgeIn) { return Handle(horizontal: nil, vertical: .low) }
+            if alongX, on(past.bottom, inside: edgeIn) { return Handle(horizontal: nil, vertical: .high) }
+            return nil
+        }
     }
 
     /// The smallest an arrangement gets, as a fraction of the screen each way.

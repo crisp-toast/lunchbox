@@ -139,6 +139,38 @@ import Testing
         #expect(l.isOuter(3, vertical: .high) && l.isOuter(4, horizontal: .high))
     }
 
+    // MARK: Where a press grabs
+
+    @Test func cornersReachAlongTheEdgesLikeMacOSRoundedCorners() {
+        let f = CGRect(x: 100, y: 100, width: 800, height: 600)
+        let at = { (x: CGFloat, y: CGFloat) in Handle.at(CGPoint(x: x, y: y), of: f, reach: 7) }
+        #expect(at(100, 100) == Handle(horizontal: .low, vertical: .low))       // the tip
+        #expect(at(98, 112) == Handle(horizontal: .low, vertical: .low))        // 12 points down the left edge
+        #expect(at(112, 103) == Handle(horizontal: .low, vertical: .low))       // 12 points along the top
+        #expect(at(905, 695) == Handle(horizontal: .high, vertical: .high))     // just outside the bottom right
+        #expect(at(98, 140) == Handle(horizontal: .low, vertical: nil))         // further down: the side
+        #expect(at(500, 102) == Handle(horizontal: nil, vertical: .low))        // the top, mid way
+    }
+
+    @Test func pressesInsideTheWindowOrFarOutsideGrabNothing() {
+        let f = CGRect(x: 100, y: 100, width: 800, height: 600)
+        #expect(Handle.at(CGPoint(x: 500, y: 400), of: f, reach: 7) == nil)    // the middle
+        #expect(Handle.at(CGPoint(x: 120, y: 400), of: f, reach: 7) == nil)    // a scroll bar's width in
+        #expect(Handle.at(CGPoint(x: 80, y: 400), of: f, reach: 7) == nil)     // 20 points outside
+    }
+
+    @Test func theSeamBetweenTwoWindowsMovesTheSplitLive() throws {
+        // The edge between them is grabbed like any other, and a drag on it moves the split.
+        let l = layout([[1], [2]])
+        let f = frames(l)
+        let left = try #require(f[1])
+        let handle = try #require(Handle.at(CGPoint(x: left.maxX + 2, y: left.midY), of: left, reach: 7))
+        #expect(handle == Handle(horizontal: .high, vertical: nil) && !l.isOuter(1, horizontal: .high))
+        let moved = frames(try drag(l, 1, .high, nil, to: CGPoint(x: left.maxX - 300, y: left.midY)))
+        #expect(abs(try #require(moved[1]).maxX - (left.maxX - 300)) <= 2)
+        #expect(try #require(moved[2]).minX - (try #require(moved[1])).maxX == gap)
+    }
+
     // MARK: Limits, resets, saving
 
     @Test func neverSmallerThanAnyWindowsMinimum() throws {
