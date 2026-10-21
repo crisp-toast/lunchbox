@@ -1107,6 +1107,18 @@ final class Tiler {
     /// A window was just made. Put it where it's going before it shows (`prePlace`), then
     /// lay it out the moment it's on screen instead of on the next routine scan.
     private func windowCreated(_ element: AXUIElement, app: AppHandle) {
+        // Opened from the Dock or Summon, a placeholder already holds the window's tile: it goes
+        // straight there, ahead of the full look at it below, which waits on its app (busy starting
+        // up) and behind any scan of its windows, so the window showed where its app put it for a
+        // moment first. Only a standard window that can take the tile's size; anything else (a
+        // dialog, a welcome window at its own size) goes the usual way.
+        if let held = heldTile(forNewWindowOf: app) {
+            Self.arrivalQueue.async {
+                guard element.subrole == kAXStandardWindowSubrole as String, element.isResizable,
+                      let id = element.windowID else { return }
+                WindowHandle.queue(for: id).async { _ = element.place(in: held) }
+            }
+        }
         app.queue.async { [weak self] in
             let info = Self.readWindow(element, app: app)
             DispatchQueue.main.async {
@@ -1132,6 +1144,21 @@ final class Tiler {
                 }
             }
         }
+    }
+
+    /// Where a new window first goes when its tile is already held: its own queue, so it never
+    /// waits behind other work for its app.
+    private static let arrivalQueue = DispatchQueue(label: "com.sentientdonut.lunchbox.arrival", qos: .userInteractive, attributes: .concurrent)
+
+    /// The tile a placeholder holds in the Workspace you're in for the next window of `app`, if any.
+    private func heldTile(forNewWindowOf app: AppHandle) -> CGRect? {
+        guard initialScanDone, NSEvent.pressedMouseButtons & 1 == 0,
+              // It may be about to become a tab, which would drag its whole tab group along.
+              !windows.values.contains(where: { $0.pid == app.pid && $0.tabs >= 2 }),
+              let e = expected.first(where: { $0.bundleID == app.bundleID && ($0.pid == nil || $0.pid == app.pid) }),
+              let (s, uuid) = place(of: e.id), s == currentSpace,
+              let d = activeDisplays.first(where: { $0.uuid == uuid }) else { return nil }
+        return spaces[s][uuid]?.frames(in: d.visible, gap: Self.gap, limits: limits)[e.id]
     }
 
     /// Looks every few milliseconds until a window that was just made is on screen: every 8 ms
