@@ -3,6 +3,22 @@
     <channel>
         <title>LunchboxWM</title>
         <item>
+            <title>1.2</title>
+            <pubDate>Wed, 21 Oct 2026 18:21:03 -0500</pubDate>
+            <sparkle:version>211</sparkle:version>
+            <sparkle:shortVersionString>1.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<h2>What’s new in Lunchbox 1.2</h2>
+<p>New windows fill your screen more calmly: a third goes beneath the second and a fourth beneath the first, so nothing jumps across the screen, and on a MacBook two windows sit side by side. In Focus, the Shelf's windows light up when you point at them, and setup now teaches closing a window and Resize mode.</p>
+]]></description>
+            <enclosure url="https://lunchboxwm.com/download/LunchboxWM-1.2.dmg" length="3034526" type="application/octet-stream" sparkle:edSignature="qz6RLnh+CXMXmoSSCkc2kNxg1pNlfzXKPVD7ESX+CJq1E7MNHDjRD2b8HkrRfCQRvxX9Xt8slOjvWO1mqVG1BQ=="/>
+            <sparkle:deltas>
+                <enclosure url="https://lunchboxwm.com/download/LunchboxWM211-204.delta" sparkle:deltaFrom="204" length="117950" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="0+CayVzb60wcR5e8mZgBYhS4QqzXqvjy3M/EVy6Z9y4DzyGPJQjddQFxl35+fELToxkk6T1udpRjLV7r8ZbrAA=="/>
+                <enclosure url="https://lunchboxwm.com/download/LunchboxWM211-184.delta" sparkle:deltaFrom="184" length="251254" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="AkUwYffXuewSJNPT8ZxcNQZWhNmg1DMwl5D51t8QdC5c3fnvReFtl7BIuxbT7m1X0IsYmbszbdpwgnyUYJ1aCQ=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>1.1</title>
             <pubDate>Wed, 21 Oct 2026 15:34:05 -0500</pubDate>
             <sparkle:version>204</sparkle:version>
