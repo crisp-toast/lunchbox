@@ -14,25 +14,31 @@
 <header class="top"><a class="brand" href="./"><img src="logo.svg" alt=""><span>Lunchbox<span class="wm">WM</span></span></a></header>
 <main>
   <h1>Lost your license?</h1>
-  <p class="lede">Enter the email you bought Lunchbox with. We'll send every license for that address to that address.</p>
+  <p class="lede" id="on">Enter the email you bought Lunchbox with. We'll send every license for that address to that address.</p>
+  <p class="lede" id="off" hidden>Write to <a href="mailto:support@sentientdonut.com">support@sentientdonut.com</a> from the email you bought Lunchbox with, and say roughly when you bought it. We'll send your license back.</p>
   <form class="card" id="form" method="post" action="api/recover">
     <input type="email" name="email" id="address" required autocomplete="email" placeholder="you@example.com" aria-label="Email you bought Lunchbox with">
     <div class="btns"><button class="btn dark" type="submit" id="send">Email My License</button></div>
     <p class="note" id="result" role="status"></p>
   </form>
-  <p class="note">Still stuck, or bought it with an address you no longer use? Write to <a href="mailto:support@sentientdonut.com">support@sentientdonut.com</a> with roughly when you bought it.</p>
+  <p class="note" id="stuck">Still stuck, or bought it with an address you no longer use? Write to <a href="mailto:support@sentientdonut.com">support@sentientdonut.com</a> with roughly when you bought it.</p>
 </main>
 <footer class="foot"><span>© 2026 Sentient Donut LLC</span><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="refunds.html">Refunds</a><a href="recover.html">Lost license</a><a href="mailto:support@sentientdonut.com">support@sentientdonut.com</a></footer>
 <script>
 const form = document.getElementById("form"), send = document.getElementById("send"), result = document.getElementById("result");
+// Until the store can send email, the page doesn't offer one: it points at support instead.
+const emailOff = () => { for (const id of ["on", "form", "stuck"]) document.getElementById(id).hidden = true; document.getElementById("off").hidden = false; };
+fetch("api/recover").then((r) => r.json()).then((d) => { if (d.email === false) emailOff(); }).catch(() => {});
 // Back from a no-JavaScript form post.
 if (location.search === "?sent") result.textContent = "Done. If that address bought Lunchbox, its license is on its way.";
 if (location.search === "?bad") result.textContent = "That doesn't look like an email address. Check it and try again.";
+if (location.search === "?support") emailOff();
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   send.disabled = true; result.textContent = "Sending…";
   try {
     const r = await fetch("api/recover", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: document.getElementById("address").value }) });
+    if (r.ok && (await r.json()).status === "write-to-support") return emailOff();
     result.textContent = r.ok
       ? "Done. If that address bought Lunchbox, its license is on its way. Check your spam folder if it isn't there in a few minutes."
       : "That doesn't look like an email address. Check it and try again.";

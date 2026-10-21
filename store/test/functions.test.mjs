@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { onRequestGet as licenseGet } from "../../functions/api/license.js";
 import { onRequestPost as webhookPost } from "../../functions/api/stripe-webhook.js";
-import { onRequestPost as recoverPost } from "../../functions/api/recover.js";
+import { onRequestPost as recoverPost, onRequestGet as recoverGet } from "../../functions/api/recover.js";
 import { verifyLicense, revocationHash } from "../lib/license.js";
 import { onRequestGet as revokedGet } from "../../functions/api/revoked.js";
 
@@ -123,7 +123,7 @@ test("webhook refuses forged or stale calls and skips unpaid sessions", async ()
   assert.equal(emails.length, 0);
 });
 
-const recover = (email) => recoverPost({ request: new Request("https://lunchbox.example/api/recover", { method: "POST", body: JSON.stringify({ email }), headers: { "Content-Type": "application/json" } }), env });
+const recover = (email, e = env) => recoverPost({ request: new Request("https://lunchbox.example/api/recover", { method: "POST", body: JSON.stringify({ email }), headers: { "Content-Type": "application/json" } }), env: e });
 
 test("lost license: emails the buyer's licenses, and answers the same either way", async () => {
   sessions.cs_test_second00001 = session({ id: "cs_test_second00001", created: 1792100000 });
@@ -134,6 +134,19 @@ test("lost license: emails the buyer's licenses, and answers the same either way
   assert.equal((emails[0].body.text.match(/^lunchbox1\./gm) || []).length, 2);
   assert.match(emails[0].key, /^lunchbox-recover-buyer@example\.com-\d{4}-\d{2}-\d{2}$/);
   assert.equal((await recover("not-an-email")).status, 400);
+});
+
+test("lost license without email set up says to write to support, not that an email is coming", async () => {
+  const off = { ...env, RESEND_API_KEY: undefined };
+  assert.deepEqual(await (await recoverGet({ env: off })).json(), { email: false });
+  assert.deepEqual(await (await recoverGet({ env })).json(), { email: true });
+  const r = await recover("buyer@example.com", off);
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { status: "write-to-support" });
+  const form = await recoverPost({ request: new Request("https://lunchbox.example/api/recover", { method: "POST", body: new URLSearchParams({ email: "buyer@example.com" }), headers: { "Content-Type": "application/x-www-form-urlencoded" } }), env: off });
+  assert.equal(form.headers.get("Location"), "https://lunchbox.example/recover.html?support");
+  assert.equal(emails.length, 0);
+  assert.equal((await recover("not-an-email", off)).status, 400);
 });
 
 import { onRequestPost as checkoutPost } from "../../functions/api/checkout.js";

@@ -24,6 +24,8 @@ the steps below need your accounts, so they're yours to do.
 4. **Activate:** the link, or LunchboxWM's menu → Enter License… → paste. Checked offline against the
    public key in `Sources/LunchboxWM/Licensing.swift`: no account, no server, works on all their Macs.
 5. **Lost it:** `recover.html` emails every license for that address, to that address.
+   Without `RESEND_API_KEY` it sends nothing, so the page and `/api/recover` tell the buyer to
+   write to support instead.
 6. **Refunds:** 14 days, no questions. Refund from the Stripe Dashboard and the rest is automatic:
    - the webhook puts the order on the revoked list (`/api/revoked`, as one-way hashes);
    - licensed copies check that list about once a week and switch the license off;
