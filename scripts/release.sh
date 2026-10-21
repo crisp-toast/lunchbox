@@ -102,5 +102,8 @@ if [[ "$DRY" != "--dry-run" ]]; then
   "$SPARKLE_BIN/generate_appcast" --download-url-prefix "https://lunchboxwm.com/download/" --embed-release-notes \
     ${extra[@]+"${extra[@]}"} -o site/appcast.xml "$RELEASES"
   cp "$DMG" "site/download/LunchboxWM-$VERSION.dmg"
+  # generate_appcast also makes small delta updates from earlier versions, which the feed links
+  # to: they're served from the same folder.
+  cp "$RELEASES"/*.delta site/download/ 2>/dev/null || true
 fi
 echo "Built $DMG ($(du -h "$DMG" | cut -f1)) and copied it to site/download/LunchboxWM.dmg${DRY:+ (dry run: not notarized, do not publish)}"
