@@ -9,8 +9,8 @@ import ScreenCaptureKit
 /// macOS has no way to tilt or shrink another app's window (and many refuse to
 /// get small), so the real windows wait off screen and the shelf draws cards
 /// for them: a snapshot of the window when Screen Recording is allowed,
-/// otherwise the app's icon and name. Clicking a card brings everything back
-/// with that window focused.
+/// otherwise the app's icon and name. Clicking a card swaps that window into the
+/// center; the pointer over a card outlines it, to show it can be clicked.
 final class Shelf {
     struct Card {
         let id: CGWindowID
@@ -120,6 +120,7 @@ final class Shelf {
         order = []
         shownOn = nil
         snapshots = [:]
+        pointedAt = nil
         let finish = { [weak self] in
             panel.orderOut(nil)
             self?.cards.values.forEach { $0.removeFromSuperlayer() }
@@ -160,6 +161,16 @@ final class Shelf {
         hitRects.first(where: { $0.1.contains(point) })?.0
     }
 
+    /// The card under the pointer (or none): a light outline and a pointing hand say it can be clicked.
+    private var pointedAt: CGWindowID?
+
+    fileprivate func pointerHover(_ id: CGWindowID?) {
+        guard id != pointedAt else { return }
+        pointedAt = id
+        for (cardID, card) in cards { card.hovered = cardID == id }
+        (id == nil ? NSCursor.arrow : NSCursor.pointingHand).set()
+    }
+
     /// A drag is over this card (or none): light it up, the way Finder answers a folder.
     fileprivate func dragHover(_ id: CGWindowID?) {
         for (cardID, card) in cards { card.highlighted = cardID == id }
@@ -179,6 +190,7 @@ final class Shelf {
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+        panel.acceptsMouseMovedEvents = true
         let view = ShelfView(shelf: self)
         view.wantsLayer = true
         view.acceptDrags()
@@ -206,6 +218,23 @@ private final class ShelfView: NSView {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) { shelf?.picked(at: convert(event.locationInWindow, from: nil)) }
+
+    // MARK: The pointer over a card (tracked even while another app is in front)
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                       owner: self, userInfo: nil))
+    }
+
+    override func mouseEntered(with event: NSEvent) { pointer(event) }
+    override func mouseMoved(with event: NSEvent) { pointer(event) }
+    override func mouseExited(with event: NSEvent) { shelf?.pointerHover(nil) }
+
+    private func pointer(_ event: NSEvent) {
+        shelf?.pointerHover(shelf?.card(at: convert(event.locationInWindow, from: nil)))
+    }
 
     // MARK: Spring-loading: a dragged file resting on a card ends Focus, so it can be dropped.
 
@@ -299,11 +328,30 @@ private final class CardLayer: CALayer {
 
     /// A drag resting on the card.
     var highlighted = false {
-        didSet {
-            guard highlighted != oldValue else { return }
-            face.borderWidth = highlighted ? 2.5 : 0.5
-            face.borderColor = (highlighted ? NSColor.controlAccentColor : NSColor.white.withAlphaComponent(0.22)).cgColor
+        didSet { if highlighted != oldValue { updateOutline() } }
+    }
+
+    /// The pointer over the card: a light outline, and it lifts a little, to show it can be clicked.
+    var hovered = false {
+        didSet { if hovered != oldValue { updateOutline() } }
+    }
+
+    private func updateOutline() {
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(0.15)
+        if highlighted {
+            face.borderWidth = 2.5
+            face.borderColor = NSColor.controlAccentColor.cgColor
+        } else if hovered {
+            face.borderWidth = 1.5
+            face.borderColor = NSColor.white.withAlphaComponent(0.85).cgColor
+        } else {
+            face.borderWidth = 0.5
+            face.borderColor = NSColor.white.withAlphaComponent(0.22).cgColor
         }
+        shadowOpacity = highlighted || hovered ? 0.6 : 0.45
+        shadowRadius = highlighted || hovered ? 20 : 16
+        CATransaction.commit()
     }
 
     func layoutCard() {
