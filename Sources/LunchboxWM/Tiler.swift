@@ -1112,10 +1112,6 @@ final class Tiler {
         // Anything else (a dialog, a panel at its own size, a disk image's window) goes the usual way.
         if let quick = quickTile(forNewWindowOf: app) {
             let finder = app.bundleID == "com.apple.finder"
-            // The screen holds still until the window is in its tile (or it turns out not to be
-            // one to move), so it's first seen there, position and size together: 80 ms at most,
-            // a few ms when its app answers straight away.
-            let hold = ScreenHold(limit: 0.08)
             Self.arrivalQueue.async {
                 // What it is and where its app put it, in one round trip; then whether it can be sized.
                 let v = element.values([kAXSubroleAttribute, kAXPositionAttribute, kAXSizeAttribute, kAXModalAttribute]
@@ -1124,11 +1120,8 @@ final class Tiler {
                       let frame = AXUIElement.frame(position: v[1], size: v[2]),
                       !(finder && ((v[4] as? String).map(DiskImages.isMounted(named:)) ?? false)),
                       element.isResizable, let id = element.windowID,
-                      let tile = quick.tile(for: frame), !frame.isClose(to: tile, tolerance: 1) else { hold.release(); return }
-                WindowHandle.queue(for: id).async {
-                    _ = element.place(in: tile)
-                    hold.release()
-                }
+                      let tile = quick.tile(for: frame), !frame.isClose(to: tile, tolerance: 1) else { return }
+                WindowHandle.queue(for: id).async { _ = element.placeAtOnce(in: tile) }
             }
         }
         app.queue.async { [weak self] in
@@ -1266,7 +1259,7 @@ final class Tiler {
         log.notice("window \(info.id) (\(app.bundleID ?? "?", privacy: .public)) \(park ? "waits out of sight for the rest of its burst" : "goes straight to its tile", privacy: .public)")
         let element = info.element, resizable = info.resizable
         WindowHandle.queue(for: info.id).async { [weak self] in
-            guard let actual = element.place(in: target), resizable,
+            guard let actual = element.placeAtOnce(in: target), resizable,
                   abs(actual.width - target.width) > 2 || abs(actual.height - target.height) > 2 else { return }
             DispatchQueue.main.async { self?.fittedOnArrival(info, app: app, asked: target, got: actual) }
         }

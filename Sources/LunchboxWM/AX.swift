@@ -14,33 +14,6 @@ private func CGSMainConnectionID() -> Int32
 private func CGSCopyManagedDisplaySpaces(_ connection: Int32) -> Unmanaged<CFArray>?
 @_silgen_name("CGSCopySpacesForWindows")
 private func CGSCopySpacesForWindows(_ connection: Int32, _ mask: Int32, _ windows: CFArray) -> Unmanaged<CFArray>?
-@_silgen_name("CGSDisableUpdate")
-private func CGSDisableUpdate(_ connection: Int32) -> Int32
-@_silgen_name("CGSReenableUpdate")
-private func CGSReenableUpdate(_ connection: Int32) -> Int32
-
-/// Holds the screen still for a moment: the window server stops putting new frames on screen
-/// until `release()`, or `limit` seconds at most, whichever comes first. An app shows a new window
-/// where it put it in the same step it makes it, before it gets to Lunchbox's request to move it,
-/// so without a hold the window could be seen there for a frame or two (and its position and size
-/// could land a frame apart). yabai holds the screen the same way to avoid flicker.
-final class ScreenHold {
-    private let lock = NSLock()
-    private var held = true
-
-    init(limit: TimeInterval) {
-        _ = CGSDisableUpdate(CGSMainConnectionID())
-        DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + limit) { [self] in release() }
-    }
-
-    func release() {
-        lock.lock()
-        defer { lock.unlock() }
-        guard held else { return }
-        held = false
-        _ = CGSReenableUpdate(CGSMainConnectionID())
-    }
-}
 
 /// The Spaces the displays are showing right now.
 func shownSpaces() -> Set<Int> {
@@ -133,6 +106,19 @@ extension AXUIElement {
     var frame: CGRect? {
         guard let p = position, let s = size else { return nil }
         return CGRect(origin: p, size: s)
+    }
+
+    /// Into `slot` with its position and size sent at once, from two threads, so the app takes
+    /// both in one go and no frame shows one without the other (one after the other, they can land
+    /// a screen refresh apart). Then checked, and put right the usual way if it didn't take.
+    @discardableResult
+    func placeAtOnce(in slot: CGRect) -> CGRect? {
+        let both = DispatchGroup()
+        DispatchQueue.global(qos: .userInteractive).async(group: both) { _ = self.setPosition(slot.origin) }
+        _ = setSize(slot.size)
+        both.wait()
+        if let now = frame, now.isClose(to: slot, tolerance: 2) { return now }
+        return place(in: slot)
     }
 
     @discardableResult
