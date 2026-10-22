@@ -203,6 +203,14 @@ func isDialogShowing(_ id: CGWindowID, pid: pid_t, frame: CGRect) -> Bool {
 
 /// Whether the window server is showing a window right now: far cheaper than the
 /// whole window list, so it can be asked every few milliseconds.
+/// Where the window server has a window right now, asked of the window server (not its app,
+/// which may be busy): nil once it's gone.
+func serverFrame(of id: CGWindowID) -> CGRect? {
+    guard let info = (CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]])?.first,
+          let bounds = info[kCGWindowBounds as String] as? NSDictionary else { return nil }
+    return CGRect(dictionaryRepresentation: bounds as CFDictionary)
+}
+
 func isOnScreen(_ id: CGWindowID) -> Bool {
     var raw = UnsafeRawPointer(bitPattern: UInt(id))
     guard let array = CFArrayCreate(nil, &raw, 1, nil),

@@ -1112,7 +1112,15 @@ final class Tiler {
         // Anything else (a dialog, a panel at its own size, a disk image's window) goes the usual way.
         if let quick = quickTile(forNewWindowOf: app) {
             let finder = app.bundleID == "com.apple.finder"
+            let observer = app.observer, refcon = Unmanaged.passUnretained(app).toOpaque()
             Self.arrivalQueue.async {
+                // Hear it the moment its app moves or sizes it: apps often put a new window where
+                // they want it (centered, cascaded) just before showing it, after this first move.
+                if let observer {
+                    for name in [kAXWindowMovedNotification, kAXWindowResizedNotification] {
+                        AXObserverAddNotification(observer, element, name as CFString, refcon)
+                    }
+                }
                 // What it is and where its app put it, in one round trip; then whether it can be sized.
                 let v = element.values([kAXSubroleAttribute, kAXPositionAttribute, kAXSizeAttribute, kAXModalAttribute]
                                        + (finder ? [kAXTitleAttribute] : []))
@@ -1120,7 +1128,13 @@ final class Tiler {
                       let frame = AXUIElement.frame(position: v[1], size: v[2]),
                       !(finder && ((v[4] as? String).map(DiskImages.isMounted(named:)) ?? false)),
                       element.isResizable, let id = element.windowID,
-                      let tile = quick.tile(for: frame), !frame.isClose(to: tile, tolerance: 1) else { return }
+                      let tile = quick.tile(for: frame) else { return }
+                let now = CACurrentMediaTime()
+                Self.arrivals.withLock { arrivals in
+                    arrivals = arrivals.filter { $0.value.until > now }
+                    arrivals[element] = (id, tile, now + 1.5)
+                }
+                guard !frame.isClose(to: tile, tolerance: 1) else { return }
                 WindowHandle.queue(for: id).async { _ = element.placeAtOnce(in: tile) }
             }
         }
@@ -1150,6 +1164,11 @@ final class Tiler {
             }
         }
     }
+
+    /// Windows on their way to their tile, not laid out yet: the tile, and until when their app
+    /// moving one (to where it wants it, just before showing it) is answered by moving it straight
+    /// back, without asking the app anything first, so the move is waiting the moment it's free.
+    private static let arrivals = OSAllocatedUnfairLock(initialState: [AXUIElement: (id: CGWindowID, tile: CGRect, until: CFTimeInterval)]())
 
     /// Where a new window first goes when its tile is already held: its own queue, so it never
     /// waits behind other work for its app.
@@ -1477,6 +1496,15 @@ final class Tiler {
             if let id = app.windowIDs[element] { windows[id]?.restoredAt = CACurrentMediaTime() }
             scheduleScan(app, after: [0.03, 0.3, 0.7, 1.5])
         case kAXWindowMovedNotification, kAXWindowResizedNotification:
+            // A new window its app just moved or sized, before it's laid out: back to its tile at
+            // once, if the window server says it's not there (Lunchbox's own moves land there).
+            if let a = Self.arrivals.withLock({ $0[element] }), CACurrentMediaTime() < a.until, place(of: a.id) == nil {
+                // (Not while you're dragging it somewhere yourself.)
+                if NSEvent.pressedMouseButtons & 1 == 0, let now = serverFrame(of: a.id), !now.isClose(to: a.tile, tolerance: 2) {
+                    WindowHandle.queue(for: a.id).async { _ = element.placeAtOnce(in: a.tile) }
+                }
+                return
+            }
             if let id = app.windowIDs[element] { windowChangedOnItsOwn(id) }
         default:
             scheduleScan(app)
