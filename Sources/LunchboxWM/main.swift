@@ -101,10 +101,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         sorter.keycaps = { [weak self] command in
             guard let self else { return nil }
-            return Keymap.keycaps(for: self.tap.keymap.binding(for: command), workspaceKeys: self.tap.spaceKeys).joined()
+            // "Left ⌘1", and a sequence spaced out: "⇧ then Space".
+            return Keymap.keycaps(for: self.tap.keymap.binding(for: command), workspaceKeys: self.tap.spaceKeys)
+                .map { $0 == "then" ? " then " : $0 }.joined()
         }
         menu.onSort = { [weak self] in self?.sorter.run() }
-        menu.onUndoSort = { [weak self] in self?.tiler.undoSort() }
+        menu.onUndoSort = { [weak self] in self?.sorter.undo() }
+        onboarding.onStartFresh = { [weak self] windows in self?.sorter.startFresh(windows) }
         menu.sorting = { [weak self] in self?.sorter.isRunning ?? false }
         onboarding.onRequestAccess = {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
@@ -386,6 +389,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // sort, sort@<display id> (only that display's windows), sort-demo@<display id> (made-up
         // windows, nothing moves), sort-undo, sort-sound:<wav path>.
+        // fresh-app:<bundle id>@<display id>: Start Fresh on one app's windows, no question asked,
+        // its note on that display; fresh-question and fresh-cancel: setup's question, for screenshots.
+        if command.hasPrefix("fresh-app:") {
+            let bits = String(command.dropFirst(10)).split(separator: "@").map(String.init)
+            let display = bits.count > 1 ? UInt32(bits[1]).flatMap { id in Display.current().first { $0.id == id } } : nil
+            StartFresh.windows(onlyApp: bits[0]) { [weak self] found in self?.sorter.startFresh(found, noteOn: display) }
+            return
+        }
+        if command == "fresh-question" { onboarding.showStartFreshQuestion(); return }
+        if command == "fresh-cancel" { onboarding.cancelSheet(); return }
         if command == "sort" || command.hasPrefix("sort@") || command.hasPrefix("sort-") {
             let bits = command.split(separator: "@").map(String.init)
             let display = bits.count > 1 ? UInt32(bits[1]).flatMap { id in Display.current().first { $0.id == id } } : nil

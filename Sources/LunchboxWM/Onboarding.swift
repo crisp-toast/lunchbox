@@ -22,6 +22,8 @@ final class Onboarding: NSObject, NSWindowDelegate {
     var canTile: (() -> Bool)?
     /// Organize My Windows, on setup's last step.
     var onSort: (() -> Void)?
+    /// Start Fresh, confirmed: close these windows.
+    var onStartFresh: (([StartFresh.Window]) -> Void)?
 
     private let tap: HotkeyTap
     private let tiler: Tiler
@@ -51,7 +53,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
     private static let normalSize = NSSize(width: 760, height: 560)
     private static let practiceSize = NSSize(width: 1300, height: 760)
     private static let finishSize = NSSize(width: 600, height: 540)
-    private static let sortSize = NSSize(width: 640, height: 580)
+    private static let sortSize = NSSize(width: 640, height: 640)
 
     // Finish step
     private let previewStatus = NSTextField(labelWithString: "")
@@ -473,27 +475,70 @@ final class Onboarding: NSObject, NSWindowDelegate {
         row.spacing = 12
         row.alignment = .top
         var views: [NSView] = [row]
-        var notes: [String] = []
-        if !plan.hidden.isEmpty {
-            notes.append("\(plan.hidden.count) more, the ones used least lately, stay open but hidden: Summon finds them.")
-        }
-        if canTile?() == false { notes.append("It happens as soon as Lunchbox is activated.") }
-        if !notes.isEmpty {
-            let note = NSTextField(wrappingLabelWithString: notes.joined(separator: " "))
+        if canTile?() == false {
+            let note = NSTextField(wrappingLabelWithString: "It happens as soon as Lunchbox is activated.")
             note.font = .systemFont(ofSize: 12)
             note.textColor = .secondaryLabelColor
             note.alignment = .center
-            note.preferredMaxLayoutWidth = 500
             views.append(note)
         }
+        // Or a clean desk: every window closed, as if by its red button.
+        let freshNote = NSTextField(labelWithString: "Rather begin with a clean desk?")
+        freshNote.font = .systemFont(ofSize: 13)
+        freshNote.textColor = .secondaryLabelColor
+        let fresh = NSButton(title: "Start Fresh…", target: self, action: #selector(startFresh))
+        fresh.bezelStyle = .rounded
+        let freshRow = NSStackView(views: [freshNote, fresh])
+        freshRow.spacing = 10
+        views.append(freshRow)
         let content = NSStackView(views: views)
         content.orientation = .vertical
         content.spacing = 14
-        return page(top: symbol("rectangle.3.group"),
-                    title: "Organize your open windows?",
-                    body: "You have \(total) windows open. Lunchbox can sort them by kind into \(into), so each one starts out calm, and show you where everything went. Nothing closes, and Undo puts it all back.",
-                    content: content)
+        content.setCustomSpacing(22, after: views[views.count - 2])
+        let summon = Keymap.keycaps(for: tap.keymap.binding(for: .summon), workspaceKeys: tap.spaceKeys).joined(separator: " ")
+        let shown = total - plan.hidden.count
+        let body = plan.hidden.isEmpty
+            ? "You have \(total) windows open. Lunchbox can sort them by kind into \(into), so each one starts out calm, and show you where everything went. Nothing closes, and Undo puts it all back."
+            : "You have \(total) windows open. Lunchbox can sort the \(shown) you've used most recently by kind into \(into), and show you where everything went. The other \(plan.hidden.count) stay open, out of the way: Summon (\(summon)) finds any of them. Nothing closes, and Undo puts it all back."
+        return page(top: symbol("rectangle.3.group"), title: "Organize your open windows?", body: body, content: content)
     }
+
+    /// Start Fresh…: how many windows it would close, and a last word before it does.
+    @objc private func startFresh() {
+        StartFresh.windows { [weak self] found in
+            guard let self, let window = self.window, self.step == .sort, window.attachedSheet == nil else { return }
+            let alert = NSAlert()
+            alert.icon = NSApp.applicationIconImage
+            guard !found.isEmpty else {
+                alert.messageText = "There are no windows to close"
+                alert.informativeText = "Your desk is already clear."
+                alert.beginSheetModal(for: window)
+                return
+            }
+            alert.messageText = found.count == 1 ? "Close the open window?" : "Close all \(found.count) open windows?"
+            alert.informativeText = "Each one closes as if you clicked its red button, so apps still ask before closing anything unsaved. Browser windows close with all their tabs. This can't be undone."
+            let close = alert.addButton(withTitle: found.count == 1 ? "Close Window" : "Close All Windows")
+            close.hasDestructiveAction = true
+            let cancel = alert.addButton(withTitle: "Cancel")
+            // Return cancels: closing everything takes a click.
+            close.keyEquivalent = ""
+            cancel.keyEquivalent = "\r"
+            alert.beginSheetModal(for: window) { [weak self] response in
+                guard response == .alertFirstButtonReturn, let self else { return }
+                self.finish()
+                self.onStartFresh?(found)
+            }
+        }
+    }
+
+    #if DEBUG || LUNCHBOX_DEV
+    /// For screenshots on a display nobody watches: Start Fresh's question, then Cancel.
+    func showStartFreshQuestion() { startFresh() }
+    func cancelSheet() {
+        guard let window, let sheet = window.attachedSheet else { return }
+        window.endSheet(sheet, returnCode: .alertSecondButtonReturn)
+    }
+    #endif
 
     // MARK: Building blocks
 

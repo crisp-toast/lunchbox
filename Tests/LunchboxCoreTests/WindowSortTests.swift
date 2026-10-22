@@ -100,7 +100,7 @@ import Testing
             return Int(seed >> 33) % n
         }
         let apps = [xcode, safari, slack, notes, music, arc, nil]
-        for count in 0...60 {
+        for count in Array(0...60) + [80, 150, 400] {
             for fit in [2, 4, 6] {
                 for limit in [1, 2, 3] {
                     let items = (0..<count).map { item(WindowID(1000 + $0), apps[next(apps.count)]) }

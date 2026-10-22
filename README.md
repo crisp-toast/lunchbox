@@ -22,13 +22,18 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
   only as many windows as fit two to a column (four, a 2×2, on most displays; six on an ultrawide),
   each an even share: a few windows stay together, small kinds share a Workspace while they fit, and a
   big kind spills into the next free Workspace. With all three taken, they share a third row (six on
-  most displays); only past that are the least recently used hidden, still open, for Summon (30
-  windows: three Workspaces of six, twelve hidden). A short show covers the screen in color while the windows move,
+  most displays); only past that do the least recently used go out of the way, still open, parked
+  off screen like Hide: Summon, the Dock or ⌘-Tab brings one back (80 windows: three Workspaces of
+  six, 62 out of the way, and setup says so before you agree). A short show covers the screen in color while the windows move,
   flies each window to its Workspace so you see where everything went, then opens onto the Workspace
   with the window you used last; a soft chord and bells play with it when macOS plays interface
-  sounds, and with Reduce Motion nothing flies. Undo (on the note afterwards, and in the menu for ten
-  minutes) puts everything back. Setup asks once at the end, only when there's a mess worth sorting;
-  otherwise it's in the menu. It never runs on its own.
+  sounds, and with Reduce Motion nothing flies. Undo (on the note afterwards, which stays until you
+  close it, and in the menu for ten minutes) puts everything back. Setup asks once at the end, only
+  when there's a mess worth sorting; otherwise it's in the menu. It never runs on its own.
+- **Start Fresh**, the other choice on that setup step, closes every window instead, each as if you
+  clicked its red button: apps still ask before closing anything unsaved, nothing is forced, no app
+  quits, and windows with no close button are left alone. It asks first (Return cancels), says how
+  many it closed and how many are still open, and is in setup only.
 - Dialogs (Open, Save, alerts, password prompts) float, centered on their screen, instead of
   splitting the tiled windows apart, and stay in view when you switch Workspaces. So do small
   windows that can't be resized or minimized, like About boxes and progress windows. A "dialog"
@@ -244,7 +249,9 @@ onboarding's practice screen), `timeback-add:<action>:<count>[:<days ago>]`, `co
 `float` (float or tile the focused window), `sort` (Sort My Windows), `sort@<display id>` (only that
 display's windows, without switching Workspace, taking focus or playing sound), `sort-demo@<display id>`
 (the show with made-up windows of apps on the Mac, moving nothing), `sort-undo`, `sort-sound:<wav path>`
-(writes the show's sound), and `dump`, which writes the current state (Summon's results with
+(writes the show's sound), `fresh-app:<bundle id>@<display id>` (Start Fresh on one app's windows,
+no question asked, its note on that display), `fresh-question` and `fresh-cancel` (setup's Start
+Fresh question, for screenshots), and `dump`, which writes the current state (Summon's results with
 file paths among it) to `~/Library/Application Support/LunchboxWM/state.json`.
 
 `pause` and `resume` do what the menu's **Tiling** item does. Pausing brings back windows parked in

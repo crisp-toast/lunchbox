@@ -21,6 +21,23 @@ final class WindowSorter {
 
     var isRunning: Bool { show != nil }
 
+    /// Undo Sort from the menu: the note goes too.
+    func undo() {
+        summary.dismiss(animated: true)
+        tiler.undoSort()
+    }
+
+    /// Start Fresh, said yes to in setup: closes `windows` (see `StartFresh`) and says how it went,
+    /// on the main display (or `display`, for tests).
+    func startFresh(_ windows: [StartFresh.Window], noteOn display: Display? = nil) {
+        summary.dismiss()
+        StartFresh.close(windows) { [weak self] closed, open in
+            let detail = open == 0 ? (closed == 1 ? "Closed 1 window" : "Closed \(closed) windows")
+                : "Closed \(closed) of \(closed + open)  ·  \(open == 1 ? "1 is" : "\(open) are") still open, maybe asking to save"
+            self?.summary.show(title: "Started fresh", detail: detail, on: display ?? Display.current().first(where: \.isMain), undo: false)
+        }
+    }
+
     /// Sorts every tiled window (or only those on the display with UUID `display`, for tests).
     func run(onDisplay display: String? = nil) {
         guard show == nil, tiler.enabled else { return }
@@ -55,7 +72,7 @@ final class WindowSorter {
         let spaces = plan.workspaces.enumerated().map { i, w in
             SortShow.Space(title: w.title, key: keycaps?(.goTo(i)), accent: SortShow.accent(for: w.groups.first ?? .work))
         }
-        let show = SortShow(cards: cards, spaces: spaces, landing: plan.landing, quiet: quiet)
+        let show = SortShow(cards: cards, spaces: spaces, landing: plan.landing, summonKey: keycaps?(.summon), quiet: quiet)
         self.show = show
         show.onCovered = covered
         show.onFinished = { [weak self] in
@@ -66,7 +83,7 @@ final class WindowSorter {
             var detail = spaces.map { ($0.key.map { $0 + " " } ?? "") + $0.title }.joined(separator: "  ·  ")
             if !plan.hidden.isEmpty {
                 let summon = self.keycaps?(.summon).map { " (\($0))" } ?? ""
-                detail += "  ·  \(plan.hidden.count) hidden: Summon\(summon) finds them"
+                detail += "  ·  \(plan.hidden.count) out of the way, still open: Summon\(summon) finds them"
             }
             let main = cards.first(where: { $0.display.isMain })?.display ?? cards.first?.display
             self.summary.show(title: title, detail: detail, on: main, undo: undoable)
@@ -159,6 +176,8 @@ final class SortShow {
     private let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     /// No sound, and Lunchbox doesn't come forward (so there's no Esc either).
     private let quiet: Bool
+    /// Summon's keys, for where windows past what fits went.
+    private let summonKey: String?
 
     static func accent(for group: WindowSort.Group) -> NSColor {
         switch group {
@@ -168,10 +187,11 @@ final class SortShow {
         }
     }
 
-    init(cards: [Card], spaces: [Space], landing: Int, quiet: Bool) {
+    init(cards: [Card], spaces: [Space], landing: Int, summonKey: String?, quiet: Bool) {
         self.cards = cards
         self.spaces = spaces
         self.landing = landing
+        self.summonKey = summonKey
         self.quiet = quiet
         timeline = Timeline(cards: cards.count, still: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     }
@@ -217,7 +237,7 @@ final class SortShow {
         let main = displays.values.first(where: \.isMain)?.uuid ?? displays.keys.sorted().first
         stages = displays.values.compactMap { d in
             Stage(display: d, cards: cards.indices.filter { cards[$0].display.uuid == d.uuid }, all: cards, spaces: spaces,
-                  landing: landing, headline: d.uuid == main, still: still) { [weak self] in self?.skip() }
+                  landing: landing, summonKey: summonKey, headline: d.uuid == main, still: still) { [weak self] in self?.skip() }
         }
         guard !stages.isEmpty else { finish(); return }
         if quiet {
@@ -344,6 +364,7 @@ private final class Stage {
     private var trayHidden = 0
     private let spaces: [SortShow.Space]
     private let landing: Int
+    private let summonKey: String?
     private let headline: Bool
     private let visible: CGRect
     private let scale: CGFloat
@@ -359,13 +380,14 @@ private final class Stage {
     }
 
     init?(display: Display, cards indices: [Int], all: [SortShow.Card], spaces: [SortShow.Space], landing: Int,
-          headline: Bool, still: Bool, skip: @escaping () -> Void) {
+          summonKey: String?, headline: Bool, still: Bool, skip: @escaping () -> Void) {
         guard let screen = NSScreen.screens.first(where: {
             ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == display.id
         }) else { return nil }
         self.display = display
         self.spaces = spaces
         self.landing = landing
+        self.summonKey = summonKey
         self.headline = headline
         scale = screen.backingScaleFactor
         let size = display.frame.size
@@ -550,7 +572,8 @@ private final class Stage {
     }
 
     private func updateTray() {
-        tray?.text = trayHidden == 0 ? "Past what fits: hidden, still open" : "\(trayHidden) hidden, still open  ·  Summon finds them"
+        let summon = summonKey.map { "Summon (\($0))" } ?? "Summon"
+        tray?.text = trayHidden == 0 ? "Out of the way, still open" : "\(trayHidden) out of the way, still open  ·  \(summon) finds them"
     }
 
     // MARK: Playing
@@ -817,12 +840,11 @@ private final class ShowPanel: NSPanel {
 
 // MARK: - Afterwards
 
-/// "Sorted into 3 Workspaces", which key goes where, and Undo, for ten seconds at the bottom of
-/// the screen.
+/// "Sorted into 3 Workspaces", which key goes where and how many windows are out of the way, with
+/// Undo, at the bottom of the screen until it's closed (or Undo is clicked, or the next sort).
 final class SortSummary {
     var onUndo: (() -> Void)?
     private var panel: NSPanel?
-    private var hide: DispatchWorkItem?
 
     func show(title: String, detail: String, on display: Display?, undo: Bool) {
         dismiss()
@@ -849,6 +871,13 @@ final class SortSummary {
             button.bezelStyle = .rounded
             views.append(button)
         }
+        let close = FirstClickButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close") ?? NSImage(),
+                                     target: self, action: #selector(closePressed))
+        close.isBordered = false
+        close.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
+        close.contentTintColor = .secondaryLabelColor
+        close.toolTip = "Close"
+        views.append(close)
         let row = NSStackView(views: views)
         row.spacing = 12
         row.edgeInsets = NSEdgeInsets(top: 10, left: 14, bottom: 10, right: 12)
@@ -886,13 +915,9 @@ final class SortSummary {
             panel.animator().alphaValue = 1
         }
         self.panel = panel
-        let work = DispatchWorkItem { [weak self] in self?.dismiss(animated: true) }
-        hide = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: work)
     }
 
     func dismiss(animated: Bool = false) {
-        hide?.cancel()
         guard let panel else { return }
         self.panel = nil
         guard animated else { panel.orderOut(nil); return }
@@ -906,6 +931,8 @@ final class SortSummary {
         dismiss(animated: true)
         onUndo?()
     }
+
+    @objc private func closePressed() { dismiss(animated: true) }
 }
 
 /// Works on the first click, without Lunchbox coming forward first.
