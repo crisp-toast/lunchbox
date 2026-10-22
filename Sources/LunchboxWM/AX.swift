@@ -108,18 +108,12 @@ extension AXUIElement {
         return CGRect(origin: p, size: s)
     }
 
-    /// Into `slot` with its position and size sent at once, from two threads, so the app takes
-    /// both in one go and no frame shows one without the other (one after the other, they can land
-    /// a screen refresh apart). Then checked, and put right the usual way if it didn't take.
+    /// Into `slot` for a window just made: position first, then size, so if they land a screen
+    /// refresh apart the window is already in its spot and just grows to fill it. (Sent from two
+    /// threads at once, the size often landed first, at the app's spot; macOS takes no single
+    /// frame value from other apps' windows.)
     @discardableResult
-    func placeAtOnce(in slot: CGRect) -> CGRect? {
-        let both = DispatchGroup()
-        DispatchQueue.global(qos: .userInteractive).async(group: both) { _ = self.setPosition(slot.origin) }
-        _ = setSize(slot.size)
-        both.wait()
-        if let now = frame, now.isClose(to: slot, tolerance: 2) { return now }
-        return place(in: slot)
-    }
+    func placeAtOnce(in slot: CGRect) -> CGRect? { place(in: slot) }
 
     @discardableResult
     func setPosition(_ point: CGPoint) -> Bool {
