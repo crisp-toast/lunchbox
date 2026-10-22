@@ -3,6 +3,24 @@
     <channel>
         <title>LunchboxWM</title>
         <item>
+            <title>1.2.2</title>
+            <pubDate>Wed, 21 Oct 2026 23:33:19 -0500</pubDate>
+            <sparkle:version>218</sparkle:version>
+            <sparkle:shortVersionString>1.2.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<h2>What’s new in Lunchbox 1.2.2</h2>
+<p>New windows now go straight to their spot: a window you open no longer shows for a moment where its app put it before it tiles.</p>
+]]></description>
+            <enclosure url="https://lunchboxwm.com/download/LunchboxWM-1.2.2.dmg" length="3041026" type="application/octet-stream" sparkle:edSignature="7nb6+5v3PBQj62uvX7Kci9C8Ggl+gP97WLg4hw+ECT24kK5E77dnIdPVVKXFLNAzYLm+N+9hQJ05NlO/Ess3Dg=="/>
+            <sparkle:deltas>
+                <enclosure url="https://lunchboxwm.com/download/LunchboxWM218-214.delta" sparkle:deltaFrom="214" length="106750" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="YAwqaEmFzAbCCqcr0wMmiMSjJM9PVuDhmYs9M1AvZ3o7PoHGTy8i/IrlmWDZGcQWhD+Q7rOHVc3nHlZqyOojAw=="/>
+                <enclosure url="https://lunchboxwm.com/download/LunchboxWM218-211.delta" sparkle:deltaFrom="211" length="126830" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="u0FOXEfGPC5sqsher+XSPcLSIbBxwwCeC0hS1mIEfiPSd2VSaPZASHsXgDQpn4nL3vvgDFI6lXgoBBDoUhdbCQ=="/>
+                <enclosure url="https://lunchboxwm.com/download/LunchboxWM218-204.delta" sparkle:deltaFrom="204" length="147050" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="B00CP/1/Qh5+80uV9JJzrP4KbmhE2H33e7kUfGJYJXFfVz0HOnX2vuCG3ndA57MHRPF8IZ3zXt2agKsNR9dSCg=="/>
+                <enclosure url="https://lunchboxwm.com/download/LunchboxWM218-184.delta" sparkle:deltaFrom="184" length="262710" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="Zk5esJER5q19QWfjkJ5PEy0P0UvooF09mbt3bvRvtJ9jDNs1g6ouTNJfP18UUM7+jN0yD9uJCSw2d75epEuQCg=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>1.2.1</title>
             <pubDate>Wed, 21 Oct 2026 21:32:43 -0500</pubDate>
             <sparkle:version>214</sparkle:version>
@@ -33,21 +51,6 @@
             <sparkle:deltas>
                 <enclosure url="https://lunchboxwm.com/download/LunchboxWM211-204.delta" sparkle:deltaFrom="204" length="117950" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="0+CayVzb60wcR5e8mZgBYhS4QqzXqvjy3M/EVy6Z9y4DzyGPJQjddQFxl35+fELToxkk6T1udpRjLV7r8ZbrAA=="/>
                 <enclosure url="https://lunchboxwm.com/download/LunchboxWM211-184.delta" sparkle:deltaFrom="184" length="251254" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="AkUwYffXuewSJNPT8ZxcNQZWhNmg1DMwl5D51t8QdC5c3fnvReFtl7BIuxbT7m1X0IsYmbszbdpwgnyUYJ1aCQ=="/>
-            </sparkle:deltas>
-        </item>
-        <item>
-            <title>1.1</title>
-            <pubDate>Wed, 21 Oct 2026 15:34:05 -0500</pubDate>
-            <sparkle:version>204</sparkle:version>
-            <sparkle:shortVersionString>1.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<h2>What’s new in Lunchbox 1.1</h2>
-<p>Click a card on the Shelf in Focus to swap it into the center. Dragging the edge between two windows now moves both together, corners grab like macOS's own, apps opened from the Dock land straight in their tile, and Vim keys (H J K L) are one click away in Keyboard Shortcuts. Lunchbox also offers to move itself to Applications, stops opening at login when you delete it, and checks for updates about once an hour.</p>
-]]></description>
-            <enclosure url="https://lunchboxwm.com/download/LunchboxWM-1.1.dmg" length="3035689" type="application/octet-stream" sparkle:edSignature="GWaSjKd5KR2lvKDUd8aegS4+9u/zDHwEaHI/74xWnnsphIvZHx+Q6UJpAoGxYI3eknTdvhm9QkO6n6v/ylAbBg=="/>
-            <sparkle:deltas>
-                <enclosure url="https://lunchboxwm.com/download/LunchboxWM204-184.delta" sparkle:deltaFrom="184" length="248274" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="uxRjAvKNT8J5e7p62hdUQKcnkDPrwj6RRUUktDO7p0YRVm9+/W0wxr1M37kvRJzDAeCZgLN3pYfUMteje/a0Bw=="/>
             </sparkle:deltas>
         </item>
     </channel>
