@@ -3,6 +3,25 @@
     <channel>
         <title>LunchboxWM</title>
         <item>
+            <title>1.2.3</title>
+            <pubDate>Thu, 22 Oct 2026 00:28:36 -0500</pubDate>
+            <sparkle:version>224</sparkle:version>
+            <sparkle:shortVersionString>1.2.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<h2>What’s new in Lunchbox 1.2.3</h2>
+<p>New windows get to their spot faster, including windows of an app you just quit and reopened, and Lunchbox now answers right away when an app re-centers a window it's opening.</p>
+]]></description>
+            <enclosure url="https://lunchboxwm.com/download/LunchboxWM-1.2.3.dmg" length="3050198" type="application/octet-stream" sparkle:edSignature="7K52EwSBd2ba8u4nJWq87x26gqnZwgz1SJUNv+RvyUUnP82JmS/2hXh0PpMnw++TD4TPtaX3P/3gVSoAqY5vCQ=="/>
+            <sparkle:deltas>
+                <enclosure url="https://lunchboxwm.com/download/LunchboxWM224-218.delta" sparkle:deltaFrom="218" length="142174" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="sNKDTI46z1pwTBzRILLJmpdBZyMKXCBg25WvP+ofj1c9AjnCbEeH52rs25rE/xuukMnu5B6UcDapjqNQiU2nCw=="/>
+                <enclosure url="https://lunchboxwm.com/download/LunchboxWM224-214.delta" sparkle:deltaFrom="214" length="142166" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="O48OyuvOpwoH4gRnJdBNFEtz2n9GAYtLc6azYZ5Mf8bOV8oQpUuuvWZGbfIxH1mVLx6HE7aAzSmX51xHfHq4DA=="/>
+                <enclosure url="https://lunchboxwm.com/download/LunchboxWM224-211.delta" sparkle:deltaFrom="211" length="161518" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="CNzNu0K7WaTynpb1pQkaRvciyvYn49DtwdqvGo4rN/U4A3Iitq/IK6Epyk2Yc8qdMKuDdWw/ppemmOYXPxH8BQ=="/>
+                <enclosure url="https://lunchboxwm.com/download/LunchboxWM224-204.delta" sparkle:deltaFrom="204" length="166110" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="TseGgwawpSa9nEs4ian/HX6MQWCIJvfplqtmMK5WbwJ/XJ6McPNJAjHdFEuham4GvNcqpejduh++KIWrGNs+Dw=="/>
+                <enclosure url="https://lunchboxwm.com/download/LunchboxWM224-184.delta" sparkle:deltaFrom="184" length="275734" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="tPIDE3oOhy46HjLU4zaUgGT+XVXshMi0OkuT6fRSmZWn/Onvsnuzw+z7USW1P5yGM09C2mbhHJA3GxmpM3B0CA=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>1.2.2</title>
             <pubDate>Wed, 21 Oct 2026 23:33:19 -0500</pubDate>
             <sparkle:version>218</sparkle:version>
@@ -35,22 +54,6 @@
                 <enclosure url="https://lunchboxwm.com/download/LunchboxWM214-211.delta" sparkle:deltaFrom="211" length="94718" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="x1ztYEJnH+AjPvEtpS12RFSHwO2+yi4/Ugc1ddBOXHA/8j6/l/sA4rEN52QusuAHQRI/WImqNgzhPXtkh08EBQ=="/>
                 <enclosure url="https://lunchboxwm.com/download/LunchboxWM214-204.delta" sparkle:deltaFrom="204" length="128282" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="oj+n4uq/GDXT0Wmfa4UKYzlGli9wW0yXOUevbtg4I+FPBTPdbotNJcbHEkTSFmMjx5Vml+8xAedwfvuQCI4SCQ=="/>
                 <enclosure url="https://lunchboxwm.com/download/LunchboxWM214-184.delta" sparkle:deltaFrom="184" length="258630" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="33+J/zDqW8QZSwDXlZ6VRlENJn6lQY3+ygFCq4mkaDl49EJH+fZLItaZFow9p3fc+oJgy1qKkcH4C01BxQzGBA=="/>
-            </sparkle:deltas>
-        </item>
-        <item>
-            <title>1.2</title>
-            <pubDate>Wed, 21 Oct 2026 18:21:03 -0500</pubDate>
-            <sparkle:version>211</sparkle:version>
-            <sparkle:shortVersionString>1.2</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<h2>What’s new in Lunchbox 1.2</h2>
-<p>New windows fill your screen more calmly: a third goes beneath the second and a fourth beneath the first, so nothing jumps across the screen, and on a MacBook two windows sit side by side. In Focus, the Shelf's windows light up when you point at them, and setup now teaches closing a window and Resize mode.</p>
-]]></description>
-            <enclosure url="https://lunchboxwm.com/download/LunchboxWM-1.2.dmg" length="3034526" type="application/octet-stream" sparkle:edSignature="qz6RLnh+CXMXmoSSCkc2kNxg1pNlfzXKPVD7ESX+CJq1E7MNHDjRD2b8HkrRfCQRvxX9Xt8slOjvWO1mqVG1BQ=="/>
-            <sparkle:deltas>
-                <enclosure url="https://lunchboxwm.com/download/LunchboxWM211-204.delta" sparkle:deltaFrom="204" length="117950" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="0+CayVzb60wcR5e8mZgBYhS4QqzXqvjy3M/EVy6Z9y4DzyGPJQjddQFxl35+fELToxkk6T1udpRjLV7r8ZbrAA=="/>
-                <enclosure url="https://lunchboxwm.com/download/LunchboxWM211-184.delta" sparkle:deltaFrom="184" length="251254" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="AkUwYffXuewSJNPT8ZxcNQZWhNmg1DMwl5D51t8QdC5c3fnvReFtl7BIuxbT7m1X0IsYmbszbdpwgnyUYJ1aCQ=="/>
             </sparkle:deltas>
         </item>
     </channel>
