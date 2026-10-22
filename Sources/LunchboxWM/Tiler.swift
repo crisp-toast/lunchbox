@@ -1103,16 +1103,23 @@ final class Tiler {
     /// A window was just made. Put it where it's going before it shows (`prePlace`), then
     /// lay it out the moment it's on screen instead of on the next routine scan.
     private func windowCreated(_ element: AXUIElement, app: AppHandle) {
-        // Opened from the Dock or Summon, a placeholder already holds the window's tile: it goes
-        // straight there, ahead of the full look at it below, which waits on its app (busy starting
-        // up) and behind any scan of its windows, so the window showed where its app put it for a
-        // moment first. Only a standard window that can take the tile's size; anything else (a
-        // dialog, a welcome window at its own size) goes the usual way.
-        if let held = heldTile(forNewWindowOf: app) {
+        // Where the window will tile is known before anything about it is read: the tile a
+        // placeholder holds for it (opened from the Dock or Summon), or the one the next window
+        // of its app gets on each display. It goes straight there, after a few quick questions
+        // (a normal window that can take a tile's size? where did its app put it?), ahead of the
+        // full look below, which waits on its app (busy drawing the window) and behind any scan
+        // of its windows: that wait is what showed a new window where its app put it first.
+        // Anything else (a dialog, a panel at its own size, a disk image's window) goes the usual way.
+        let quick = quickTiles(forNewWindowOf: app)
+        if !quick.isEmpty {
+            let finder = app.bundleID == "com.apple.finder"
             Self.arrivalQueue.async {
                 guard element.subrole == kAXStandardWindowSubrole as String, element.isResizable,
-                      let id = element.windowID else { return }
-                WindowHandle.queue(for: id).async { _ = element.place(in: held) }
+                      !element.bool(kAXModalAttribute), let id = element.windowID, let frame = element.frame,
+                      !(finder && (element.string(kAXTitleAttribute).map(DiskImages.isMounted(named:)) ?? false)) else { return }
+                let tile = quick.first(where: \.held)?.tile ?? quick.first { $0.display.contains(frame.center) }?.tile
+                guard let tile, !frame.isClose(to: tile, tolerance: 1) else { return }
+                WindowHandle.queue(for: id).async { _ = element.place(in: tile) }
             }
         }
         app.queue.async { [weak self] in
@@ -1146,12 +1153,36 @@ final class Tiler {
     /// waits behind other work for its app.
     private static let arrivalQueue = DispatchQueue(label: "com.sentientdonut.lunchbox.arrival", qos: .userInteractive, attributes: .concurrent)
 
+    /// Where the next window of `app` goes, worked out before it's read: the tile a placeholder
+    /// holds for it, or on each display the tile it would get (as `plannedFrame` works it out).
+    /// Empty when it's not that simple: an app left alone or floating, hidden, with tab groups,
+    /// in a burst of new windows, restarting into its old spots, or a mouse drag under way.
+    private func quickTiles(forNewWindowOf app: AppHandle) -> [(display: CGRect, tile: CGRect, held: Bool)] {
+        guard initialScanDone, enabled, NSEvent.pressedMouseButtons & 1 == 0,
+              !windows.values.contains(where: { $0.pid == app.pid && $0.tabs >= 2 }) else { return [] }
+        if let held = heldTile(forNewWindowOf: app) { return [(.infinite, held, true)] }
+        let now = CACurrentMediaTime()
+        guard !leftAloneApps.contains(app.bundleID ?? ""), !Self.floatingApps.contains(app.bundleID ?? ""),
+              NSRunningApplication(processIdentifier: app.pid)?.isHidden != true, !isBursting(app.pid),
+              quitMemory.spot(for: app.bundleID ?? "", frame: .zero, now: now) == nil else { return [] }
+        let probe = CGWindowID(UInt32.max - 1)
+        let recent = prePlaced.filter { now - $0.value.at < 1.5 && place(of: $0.key) == nil }
+        return activeDisplays.compactMap { d in
+            var layout = spaces[currentSpace][d.uuid] ?? Layout()
+            let maxColumns = Layout.maxColumns(forWidth: d.visible.width)
+            for (id, _) in recent.filter({ $0.value.display == d.uuid }).sorted(by: { $0.value.at < $1.value.at }) {
+                layout.insert(id, near: layout.windows.last, maxColumns: maxColumns)
+            }
+            let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
+            layout.insert(probe, near: near, maxColumns: maxColumns, limits: limits, room: room(on: d))
+            guard let tile = layout.frames(in: d.visible, gap: Self.gap, limits: limits)[probe] else { return nil }
+            return (d.frame, tile, false)
+        }
+    }
+
     /// The tile a placeholder holds in the Workspace you're in for the next window of `app`, if any.
     private func heldTile(forNewWindowOf app: AppHandle) -> CGRect? {
-        guard initialScanDone, NSEvent.pressedMouseButtons & 1 == 0,
-              // It may be about to become a tab, which would drag its whole tab group along.
-              !windows.values.contains(where: { $0.pid == app.pid && $0.tabs >= 2 }),
-              let e = expected.first(where: { $0.bundleID == app.bundleID && ($0.pid == nil || $0.pid == app.pid) }),
+        guard let e = expected.first(where: { $0.bundleID == app.bundleID && ($0.pid == nil || $0.pid == app.pid) }),
               let (s, uuid) = place(of: e.id), s == currentSpace,
               let d = activeDisplays.first(where: { $0.uuid == uuid }) else { return nil }
         return spaces[s][uuid]?.frames(in: d.visible, gap: Self.gap, limits: limits)[e.id]
