@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var menu: StatusMenu = StatusMenu(tiler: tiler)
     private lazy var onboarding: Onboarding = Onboarding(tap: tap, tiler: tiler)
     private lazy var shortcuts: ShortcutsWindow = ShortcutsWindow(tap: tap)
+    private lazy var sorter: WindowSorter = WindowSorter(tiler: tiler)
     private let licensing = Licensing()
     private let updater = Updater()
     private lazy var licenseWindow = LicenseWindow(licensing: licensing)
@@ -87,6 +88,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             KeymapStore.save(map)
         }
         onboarding.onClose = { [weak self] in self?.waitForLicense() }
+        onboarding.sortPreview = { [weak self] in self?.tiler.previewSort() }
+        onboarding.canTile = { [weak self] in self?.licensing.canTile ?? false }
+        // Yes to sorting: right after setup closes, or once a license starts tiling.
+        onboarding.onSort = { [weak self] in
+            guard let self else { return }
+            if self.tiler.enabled {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { self.sorter.run() }
+            } else {
+                self.sorter.pending = true
+            }
+        }
+        sorter.keycaps = { [weak self] command in
+            guard let self else { return nil }
+            return Keymap.keycaps(for: self.tap.keymap.binding(for: command), workspaceKeys: self.tap.spaceKeys).joined()
+        }
+        menu.onSort = { [weak self] in self?.sorter.run() }
+        menu.onUndoSort = { [weak self] in self?.tiler.undoSort() }
+        menu.sorting = { [weak self] in self?.sorter.isRunning ?? false }
         onboarding.onRequestAccess = {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
             if !AXIsProcessTrustedWithOptions(options) { Self.openAccessibilitySettings() }
@@ -179,6 +198,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if on {
             tiler.start()
             tap.enabled = true
+            // Setup's "Organize My Windows", said before there was a license: now, once the windows are in.
+            if sorter.pending {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                    if self?.sorter.pending == true { self?.sorter.run() }
+                }
+            }
         } else {
             tiler.stop()
             tap.enabled = false
@@ -399,6 +424,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Float or tile the focused window.
         case ("float", _): tiler.toggleFloating()
         case ("dump", _): dumpState()
+        // sort, sort@<display id> (only that display's windows), sort-demo@<display id> (made-up
+        // windows, nothing moves), sort-undo, sort-sound:<wav path>.
+        case ("sort", let what):
+            let bits = command.split(separator: "@").map(String.init)
+            let display = bits.count > 1 ? UInt32(bits[1]).flatMap { id in Display.current().first { $0.id == id } } : nil
+            if what?.hasPrefix("demo") == true {
+                if let display { sorter.demo(on: display) }
+            } else if what?.hasPrefix("undo") == true {
+                tiler.undoSort()
+            } else if what?.hasPrefix("sound:") == true {
+                let path = String(command.drop(while: { $0 != ":" }).dropFirst())
+                let timeline = Timeline(cards: 12, still: false)
+                let plinks = (0..<12).map { (timeline.arrival($0), Double($0 % 3 - 1) * 0.45) }
+                try? SortSound.render(timeline, plinks: plinks).write(to: URL(fileURLWithPath: path))
+            } else {
+                sorter.run(onDisplay: display?.uuid)
+            }
         case ("copy", "diagnostics"?): copyDiagnostics()
         case ("workspaces", let n?): if let n = Int(n) { tiler.setSpaceCount(n) }
         default: log.error("unknown command \(command, privacy: .public)")

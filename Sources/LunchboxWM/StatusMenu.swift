@@ -17,6 +17,10 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     var onCheckForUpdates: (() -> Void)?
     var updater: Updater?
     var onCopyDiagnostics: (() -> Void)?
+    var onSort: (() -> Void)?
+    var onUndoSort: (() -> Void)?
+    /// The sort show is playing.
+    var sorting: (() -> Bool)?
     var licensing: Licensing?
 
     init(tiler: Tiler) {
@@ -92,6 +96,13 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             let retile = action("Re-tile All Windows") { [weak self] in self?.tiler.retile() }
             retile.isEnabled = tiler.enabled
             menu.addItem(retile)
+            let sort = action("Sort My Windows") { [weak self] in self?.onSort?() }
+            sort.toolTip = "Sorts every open window into Workspaces by kind: your work, the web, chat and music. Only as many Workspaces as it takes, and Undo puts it all back."
+            sort.isEnabled = tiler.enabled && !(sorting?() ?? false)
+            menu.addItem(sort)
+            if tiler.canUndoSort {
+                menu.addItem(action("Undo Sort") { [weak self] in self?.onUndoSort?() })
+            }
             menu.addItem(.separator())
         }
 

@@ -17,6 +17,16 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 - Three Workspaces on ⌘1, ⌘2 and ⌘3, switched instantly. Add more (up to nine) from the menu.
   Whenever you change Workspace, however you got there, "Workspace 2" shows at the top of the
   screen for a moment, with a dot for each Workspace.
+- **Sort My Windows** sorts a messy desktop into Workspaces by kind: your work, the web, and chat and
+  music, in that order, using only as many Workspaces as it takes (up to three). A few windows stay
+  together, small kinds share a Workspace while they fit a calm one (four windows), a big kind spills
+  into the next free Workspace, and a Workspace holds up to six; past that, the least recently used
+  are hidden, still open, for Summon. A short show covers the screen in color while the windows move,
+  flies each window to its Workspace so you see where everything went, then opens onto the Workspace
+  with the window you used last; a soft chord and bells play with it when macOS plays interface
+  sounds, and with Reduce Motion nothing flies. Undo (on the note afterwards, and in the menu for ten
+  minutes) puts everything back. Setup asks once at the end, only when there's a mess worth sorting;
+  otherwise it's in the menu. It never runs on its own.
 - Dialogs (Open, Save, alerts, password prompts) float, centered on their screen, instead of
   splitting the tiled windows apart, and stay in view when you switch Workspaces. So do small
   windows that can't be resized or minimized, like About boxes and progress windows. A "dialog"
@@ -229,7 +239,10 @@ opening anything, to try placeholders), `leave-app:<bundle id>` and `manage-app:
 resume tiling one app's windows, for agents testing it on a dummy-plug display), `license:<key>`,
 `license:window`, `license:remove`, `license:snapshot:<png>`, `practice:<command>` (drives
 onboarding's practice screen), `timeback-add:<action>:<count>[:<days ago>]`, `copy-diagnostics`,
-`float` (float or tile the focused window), and `dump`, which writes the current state (Summon's results with
+`float` (float or tile the focused window), `sort` (Sort My Windows), `sort@<display id>` (only that
+display's windows, without switching Workspace, taking focus or playing sound), `sort-demo@<display id>`
+(the show with made-up windows of apps on the Mac, moving nothing), `sort-undo`, `sort-sound:<wav path>`
+(writes the show's sound), and `dump`, which writes the current state (Summon's results with
 file paths among it) to `~/Library/Application Support/LunchboxWM/state.json`.
 
 `pause` and `resume` do what the menu's **Tiling** item does. Pausing brings back windows parked in

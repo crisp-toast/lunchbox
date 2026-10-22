@@ -2,11 +2,12 @@ import AppKit
 import ServiceManagement
 import LunchboxCore
 
-/// First-run setup: welcome, Accessibility, a short hands-on practice, and a few
-/// preferences. Also reachable from the menu.
+/// First-run setup: welcome, Accessibility, a short hands-on practice, a few preferences, and,
+/// when there's a mess worth it, whether to sort the windows already open. Also reachable from
+/// the menu.
 final class Onboarding: NSObject, NSWindowDelegate {
     enum Step: Int, CaseIterable {
-        case welcome, access, practice, finish
+        case welcome, access, practice, finish, sort
     }
 
     var onRequestAccess: (() -> Void)?
@@ -15,6 +16,12 @@ final class Onboarding: NSObject, NSWindowDelegate {
     var onKeymapChange: ((Keymap) -> Void)?
     /// The welcome window went away: finished, or closed.
     var onClose: (() -> Void)?
+    /// What sorting the open windows would do; nil when it wouldn't help (then setup doesn't ask).
+    var sortPreview: (() -> (plan: WindowSort.Plan, icons: [WindowID: NSImage])?)?
+    /// Whether Lunchbox can tile yet (it's licensed), for the sort step's note.
+    var canTile: (() -> Bool)?
+    /// Organize My Windows, on setup's last step.
+    var onSort: (() -> Void)?
 
     private let tap: HotkeyTap
     private let tiler: Tiler
@@ -23,6 +30,9 @@ final class Onboarding: NSObject, NSWindowDelegate {
     private let dots = NSStackView()
     private let back = NSButton(title: "Back", target: nil, action: nil)
     private let next = NSButton(title: "Continue", target: nil, action: nil)
+    private let notNow = NSButton(title: "Not Now", target: nil, action: nil)
+    /// Setup ends by asking about sorting the open windows (there are enough to be worth it).
+    private var offersSort = false
     private var step: Step = .welcome
     private var trustTimer: Timer?
     /// Set up before, and only Accessibility is missing again: just that step, which closes
@@ -41,6 +51,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
     private static let normalSize = NSSize(width: 760, height: 560)
     private static let practiceSize = NSSize(width: 1300, height: 760)
     private static let finishSize = NSSize(width: 600, height: 540)
+    private static let sortSize = NSSize(width: 640, height: 580)
 
     // Finish step
     private let previewStatus = NSTextField(labelWithString: "")
@@ -72,6 +83,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
         }
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        offersSort = !self.accessOnly && sortPreview?() != nil
         go(to: start, animated: false)
     }
 
@@ -94,6 +106,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
     /// agent can look at it on a display Tyler can't see while he keeps typing.
     func show(at start: Step, onDisplay id: CGDirectDisplayID) {
         let window = self.window ?? makeWindow()
+        offersSort = sortPreview?() != nil
         go(to: start, animated: false)
         if let screen = NSScreen.screens.first(where: {
             ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id
@@ -150,10 +163,17 @@ final class Onboarding: NSObject, NSWindowDelegate {
         case .access: view = accessView()
         case .practice: view = practiceView()
         case .finish: view = finishView()
+        case .sort: view = sortView()
         }
         swap(to: view, animated: animated)
         updateFooter()
-        resizeWindow(to: target == .practice ? Self.practiceSize : target == .finish ? Self.finishSize : Self.normalSize, animated: animated)
+        let size = switch target {
+        case .practice: Self.practiceSize
+        case .finish: Self.finishSize
+        case .sort: Self.sortSize
+        default: Self.normalSize
+        }
+        resizeWindow(to: size, animated: animated)
     }
 
     /// The practice step opens up into a big window with the playground; the
@@ -177,16 +197,26 @@ final class Onboarding: NSObject, NSWindowDelegate {
         }
         back.isHidden = step == .welcome || accessOnly
         dots.isHidden = accessOnly
+        dots.arrangedSubviews[Step.sort.rawValue].isHidden = !offersSort
+        notNow.isHidden = step != .sort
         switch step {
         case .welcome: next.title = "Get Started"; next.isEnabled = true
         case .access: next.title = accessOnly ? "Done" : "Continue"; next.isEnabled = AXIsProcessTrusted()
         case .practice: next.title = practiced.count == practiceRows.count ? "Continue" : "Skip for Now"; next.isEnabled = true
-        case .finish: next.title = "Start Using Lunchbox"; next.isEnabled = true
+        case .finish: next.title = offersSort ? "Continue" : "Start Using Lunchbox"; next.isEnabled = true
+        case .sort: next.title = "Organize My Windows"; next.isEnabled = true
         }
     }
 
     @objc private func goNext() {
-        if accessOnly {
+        if step == .finish {
+            // Asked only if it still helps: windows may have closed meanwhile.
+            offersSort = sortPreview?() != nil
+        }
+        if accessOnly || (step == .finish && !offersSort) {
+            finish()
+        } else if step == .sort {
+            onSort?()
             finish()
         } else if let following = Step(rawValue: step.rawValue + 1) {
             go(to: following)
@@ -202,6 +232,8 @@ final class Onboarding: NSObject, NSWindowDelegate {
         window?.orderOut(nil)
         onClose?()
     }
+
+    @objc private func declineSort() { finish() }
 
     @objc private func goBack() {
         if let previous = Step(rawValue: step.rawValue - 1) { go(to: previous) }
@@ -423,6 +455,46 @@ final class Onboarding: NSObject, NSWindowDelegate {
         previewStatus.stringValue = "Turn on LunchboxWM in System Settings, then reopen Lunchbox"
     }
 
+    // MARK: Sorting the open windows
+
+    private func sortView() -> NSView {
+        guard let (plan, icons) = sortPreview?() else {
+            return page(top: symbol("checkmark.circle"), title: "Your windows are in order",
+                        body: "There's nothing worth sorting right now. Whenever things pile up, Sort My Windows in Lunchbox's menu sorts them into Workspaces by kind.")
+        }
+        let total = plan.workspaces.reduce(plan.hidden.count) { $0 + $1.windows.count }
+        let n = plan.workspaces.count
+        let into = n == 1 ? "one Workspace" : "\(n) Workspaces"
+        let cards = plan.workspaces.enumerated().map { i, w in
+            WorkspacePreview(number: i + 1, title: w.title, accent: SortShow.accent(for: w.groups.first ?? .work),
+                             icons: w.windows.compactMap { icons[$0] }, windows: w.windows.count)
+        }
+        let row = NSStackView(views: cards)
+        row.spacing = 12
+        row.alignment = .top
+        var views: [NSView] = [row]
+        var notes: [String] = []
+        if !plan.hidden.isEmpty {
+            notes.append("\(plan.hidden.count) more, the ones used least lately, stay open but hidden: Summon finds them.")
+        }
+        if canTile?() == false { notes.append("It happens as soon as Lunchbox is activated.") }
+        if !notes.isEmpty {
+            let note = NSTextField(wrappingLabelWithString: notes.joined(separator: " "))
+            note.font = .systemFont(ofSize: 12)
+            note.textColor = .secondaryLabelColor
+            note.alignment = .center
+            note.preferredMaxLayoutWidth = 500
+            views.append(note)
+        }
+        let content = NSStackView(views: views)
+        content.orientation = .vertical
+        content.spacing = 14
+        return page(top: symbol("rectangle.3.group"),
+                    title: "Organize your open windows?",
+                    body: "You have \(total) windows open. Lunchbox can sort them by kind into \(into), so each one starts out calm, and show you where everything went. Nothing closes, and Undo puts it all back.",
+                    content: content)
+    }
+
     // MARK: Building blocks
 
     private func page(top: NSView, title: String, body: String, content: NSView? = nil) -> NSView {
@@ -527,8 +599,16 @@ final class Onboarding: NSObject, NSWindowDelegate {
         next.bezelStyle = .rounded
         next.controlSize = .large
         next.keyEquivalent = "\r"
+        notNow.target = self
+        notNow.action = #selector(declineSort)
+        notNow.bezelStyle = .rounded
+        notNow.controlSize = .large
+        notNow.isHidden = true
+        // Hidden buttons drop out of the row.
+        let buttons = NSStackView(views: [back, notNow, next])
+        buttons.spacing = 10
 
-        for v in [stage, dots, back, next] as [NSView] {
+        for v in [stage, dots, buttons] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             background.addSubview(v)
         }
@@ -536,17 +616,98 @@ final class Onboarding: NSObject, NSWindowDelegate {
             stage.topAnchor.constraint(equalTo: background.topAnchor, constant: 40),
             stage.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: 40),
             stage.trailingAnchor.constraint(equalTo: background.trailingAnchor, constant: -40),
-            stage.bottomAnchor.constraint(equalTo: next.topAnchor, constant: -20),
+            stage.bottomAnchor.constraint(equalTo: buttons.topAnchor, constant: -20),
             dots.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: 32),
-            dots.centerYAnchor.constraint(equalTo: next.centerYAnchor),
-            next.trailingAnchor.constraint(equalTo: background.trailingAnchor, constant: -28),
-            next.bottomAnchor.constraint(equalTo: background.bottomAnchor, constant: -26),
-            back.trailingAnchor.constraint(equalTo: next.leadingAnchor, constant: -10),
-            back.centerYAnchor.constraint(equalTo: next.centerYAnchor),
+            dots.centerYAnchor.constraint(equalTo: buttons.centerYAnchor),
+            buttons.trailingAnchor.constraint(equalTo: background.trailingAnchor, constant: -28),
+            buttons.bottomAnchor.constraint(equalTo: background.bottomAnchor, constant: -26),
         ])
         window.contentView = background
         self.window = window
         return window
+    }
+}
+
+/// One Workspace in the sort step's preview: its number and kind, the apps going there, and how
+/// many windows.
+private final class WorkspacePreview: NSView {
+    private let accent: NSColor
+
+    init(number: Int, title: String, accent: NSColor, icons: [NSImage], windows: Int) {
+        self.accent = accent
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 12
+        layer?.cornerCurve = .continuous
+        layer?.borderWidth = 1
+        translatesAutoresizingMaskIntoConstraints = false
+        widthAnchor.constraint(equalToConstant: 160).isActive = true
+
+        let dot = NSView()
+        dot.wantsLayer = true
+        dot.layer?.backgroundColor = accent.cgColor
+        dot.layer?.cornerRadius = 4
+        dot.translatesAutoresizingMaskIntoConstraints = false
+        dot.widthAnchor.constraint(equalToConstant: 8).isActive = true
+        dot.heightAnchor.constraint(equalToConstant: 8).isActive = true
+        let caption = NSTextField(labelWithString: "Workspace \(number)")
+        caption.font = .systemFont(ofSize: 11, weight: .semibold)
+        caption.textColor = .secondaryLabelColor
+        let top = NSStackView(views: [dot, caption])
+        top.spacing = 6
+        let name = NSTextField(labelWithString: title)
+        name.font = .systemFont(ofSize: 14, weight: .semibold)
+        name.lineBreakMode = .byTruncatingTail
+        name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        // Each app once, in the order its windows were used.
+        var seen = Set<ObjectIdentifier>()
+        let apps = icons.filter { seen.insert(ObjectIdentifier($0)).inserted }
+        var badges: [NSView] = apps.prefix(5).map { icon in
+            let view = NSImageView(image: icon)
+            view.translatesAutoresizingMaskIntoConstraints = false
+            view.widthAnchor.constraint(equalToConstant: 24).isActive = true
+            view.heightAnchor.constraint(equalToConstant: 24).isActive = true
+            return view
+        }
+        if apps.count > 5 {
+            let more = NSTextField(labelWithString: "+\(apps.count - 5)")
+            more.font = .systemFont(ofSize: 11, weight: .medium)
+            more.textColor = .secondaryLabelColor
+            badges.append(more)
+        }
+        let iconRow = NSStackView(views: badges)
+        iconRow.spacing = 3
+        let count = NSTextField(labelWithString: windows == 1 ? "1 window" : "\(windows) windows")
+        count.font = .systemFont(ofSize: 11)
+        count.textColor = .secondaryLabelColor
+        let column = NSStackView(views: [top, name, iconRow, count])
+        column.orientation = .vertical
+        column.alignment = .leading
+        column.spacing = 6
+        column.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        column.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(column)
+        NSLayoutConstraint.activate([
+            column.topAnchor.constraint(equalTo: topAnchor),
+            column.leadingAnchor.constraint(equalTo: leadingAnchor),
+            column.trailingAnchor.constraint(equalTo: trailingAnchor),
+            column.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        updateColors()
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateColors()
+    }
+
+    private func updateColors() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.04).cgColor
+            layer?.borderColor = accent.withAlphaComponent(0.45).cgColor
+        }
     }
 }
 

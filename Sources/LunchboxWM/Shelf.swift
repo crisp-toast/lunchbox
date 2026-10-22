@@ -369,12 +369,12 @@ private final class CardLayer: CALayer {
     }
 }
 
-/// Captures what windows look like, for the shelf's cards. Needs the Screen
-/// Recording permission; asks for it once, and returns nothing until it's given.
+/// Captures what windows look like, for the shelf's cards and Sort My Windows. Needs the Screen
+/// Recording permission; asks for it once (unless `ask` is false), and returns nothing until it's given.
 enum Snapshotter {
-    static func capture(_ ids: [CGWindowID], completion: @escaping ([CGWindowID: CGImage]) -> Void) {
+    static func capture(_ ids: [CGWindowID], ask: Bool = true, completion: @escaping ([CGWindowID: CGImage]) -> Void) {
         guard CGPreflightScreenCaptureAccess() else {
-            if !UserDefaults.standard.bool(forKey: "askedForScreenRecording") {
+            if ask, !UserDefaults.standard.bool(forKey: "askedForScreenRecording") {
                 UserDefaults.standard.set(true, forKey: "askedForScreenRecording")
                 // The system prompt can take a while; never hold up the main thread for it.
                 DispatchQueue.global(qos: .utility).async { _ = CGRequestScreenCaptureAccess() }

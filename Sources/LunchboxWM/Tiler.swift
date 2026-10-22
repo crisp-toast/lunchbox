@@ -3641,6 +3641,243 @@ final class Tiler {
         relayout(animated: true)
     }
 
+    // MARK: Sorting into Workspaces
+
+    /// One window in a sort, for the show: where it was, and where it went.
+    struct SortTrip {
+        let id: CGWindowID
+        let pid: pid_t
+        let title: String
+        /// Where it was in view (top-left coordinates); nil when it was out of sight.
+        let from: CGRect?
+        /// The Workspace it went to and its tile there; nil when it was hidden.
+        let space: Int?
+        let to: CGRect?
+        let display: Display
+    }
+
+    /// A sort worked out, nothing moved yet: `applySort` makes it so.
+    struct PreparedSort {
+        let plan: WindowSort.Plan
+        /// The most recently used first.
+        let trips: [SortTrip]
+        /// Each of the plan's Workspaces, by display.
+        let layouts: [[String: Layout]]
+        /// Every tiled window is already where the sort would put it.
+        let changesNothing: Bool
+        /// Only this display's windows (a UUID), for tests: then nothing else changes, not even
+        /// the Workspace you're in or which window has focus.
+        let scope: String?
+    }
+
+    /// Before the last sort, for Undo Sort: each Workspace, what was hidden, and where you were.
+    private var beforeSort: (spaces: [[String: Layout]], stashed: [CGWindowID: CFTimeInterval], space: Int, at: CFTimeInterval, scope: String?)?
+    /// The window to give focus once the show is over.
+    private var focusAfterSort: CGWindowID?
+    /// How long Undo Sort stays in the menu: after that, too much has moved since.
+    static let sortUndoSeconds: CFTimeInterval = 600
+
+    var canUndoSort: Bool {
+        guard enabled, let before = beforeSort else { return false }
+        return CACurrentMediaTime() - before.at < Self.sortUndoSeconds
+    }
+
+    /// The tiled windows a sort takes, with their display, the most recently used first: the
+    /// order you last used them in, then front to back. Only on `display`, when given.
+    private func sortable(on display: String? = nil) -> [(id: CGWindowID, uuid: String)] {
+        var found: [(id: CGWindowID, uuid: String)] = []
+        var seen = Set<CGWindowID>()
+        for layouts in spaces {
+            for (uuid, layout) in layouts where (display == nil || uuid == display) && activeDisplays.contains(where: { $0.uuid == uuid }) {
+                for id in layout.windows where windows[id] != nil && !Placeholder.isPlaceholder(id) && seen.insert(id).inserted {
+                    found.append((id, uuid))
+                }
+            }
+        }
+        let list = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] ?? []
+        let front = Dictionary(list.enumerated().compactMap { i, info in (info[kCGWindowNumber as String] as? Int).map { (CGWindowID($0), i) } },
+                               uniquingKeysWith: min)
+        let recency = Dictionary(recentlyFocused.enumerated().map { ($1, $0) }, uniquingKeysWith: min)
+        func rank(_ id: CGWindowID) -> (Int, Int) { (id == focusedID ? -1 : recency[id] ?? .max, front[id] ?? .max) }
+        return found.sorted { rank($0.id) < rank($1.id) }
+    }
+
+    /// Works out a sort of the tiled windows into Workspaces by kind (`WindowSort`), without
+    /// moving anything. Nil when tiling is off or nothing is tiled. Only on `display` (a UUID)
+    /// when given: for tests on a display nobody watches.
+    func prepareSort(onDisplay display: String? = nil) -> PreparedSort? {
+        guard enabled else { return nil }
+        let found = sortable(on: display)
+        guard !found.isEmpty else { return nil }
+        var categories: [pid_t: String?] = [:]
+        let items = found.map { id, _ -> WindowSort.Item in
+            let w = windows[id]!
+            if categories[w.pid] == nil {
+                categories[w.pid] = NSRunningApplication(processIdentifier: w.pid)?.bundleURL
+                    .flatMap { Bundle(url: $0)?.object(forInfoDictionaryKey: "LSApplicationCategoryType") as? String }
+            }
+            return WindowSort.Item(id: id, bundleID: w.handle.app.bundleID, category: categories[w.pid] ?? nil)
+        }
+        let plan = WindowSort.plan(items, limit: min(3, spaceCount))
+        let home = Dictionary(found.map { ($0.id, $0.uuid) }, uniquingKeysWith: { a, _ in a })
+        var layouts: [[String: Layout]] = Array(repeating: [:], count: plan.workspaces.count)
+        for (s, workspace) in plan.workspaces.enumerated() {
+            for id in workspace.windows {
+                guard let uuid = home[id], let d = activeDisplays.first(where: { $0.uuid == uuid }) else { continue }
+                var layout = layouts[s][uuid] ?? Layout()
+                layout.insert(id, near: layout.windows.last, maxColumns: Layout.maxColumns(forWidth: d.visible.width),
+                              limits: limits, room: room(on: d))
+                layouts[s][uuid] = layout
+            }
+        }
+        var to: [CGWindowID: (space: Int, frame: CGRect)] = [:]
+        for (s, byDisplay) in layouts.enumerated() {
+            for (uuid, layout) in byDisplay {
+                guard let d = activeDisplays.first(where: { $0.uuid == uuid }) else { continue }
+                for (id, frame) in layout.frames(in: d.visible, gap: Self.gap, limits: limits) { to[id] = (s, frame) }
+            }
+        }
+        let trips = found.compactMap { id, uuid -> SortTrip? in
+            guard let w = windows[id], let d = activeDisplays.first(where: { $0.uuid == uuid }) else { return nil }
+            return SortTrip(id: id, pid: w.pid, title: w.title ?? "", from: w.hidden ? nil : w.target ?? w.frame,
+                            space: to[id]?.space, to: to[id]?.frame, display: d)
+        }
+        // Already sorted: each window in the Workspace the sort gives it, and nothing to hide.
+        let changesNothing = plan.hidden.isEmpty && found.allSatisfy { id, _ in place(of: id)?.space == to[id]?.space }
+        return PreparedSort(plan: plan, trips: trips, layouts: layouts, changesNothing: changesNothing, scope: display)
+    }
+
+    /// What a sort would do now, for setup's question: the plan and each window's app icon. Nil
+    /// when it wouldn't change anything worth asking about (a few windows, already sorted). Before
+    /// tiling starts (no license yet), it goes by the windows on screen.
+    func previewSort() -> (plan: WindowSort.Plan, icons: [WindowID: NSImage])? {
+        var icons: [WindowID: NSImage] = [:]
+        var appIcons: [pid_t: NSImage] = [:]
+        func icon(_ pid: pid_t) -> NSImage {
+            if let known = appIcons[pid] { return known }
+            let found = NSRunningApplication(processIdentifier: pid)?.icon ?? NSImage(named: NSImage.applicationIconName)!
+            appIcons[pid] = found
+            return found
+        }
+        let plan: WindowSort.Plan
+        if enabled {
+            guard let sort = prepareSort(), !sort.changesNothing else { return nil }
+            for trip in sort.trips { icons[trip.id] = icon(trip.pid) }
+            plan = sort.plan
+        } else {
+            // Front to back, the order the window list comes in.
+            let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+            let me = getpid()
+            var items: [WindowSort.Item] = []
+            for info in list {
+                guard (info[kCGWindowLayer as String] as? Int) == 0, (info[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+                      let number = info[kCGWindowNumber as String] as? Int, let pid = info[kCGWindowOwnerPID as String] as? pid_t,
+                      pid != me, let bounds = (info[kCGWindowBounds as String] as? NSDictionary).flatMap({ CGRect(dictionaryRepresentation: $0) }),
+                      bounds.width >= 200, bounds.height >= 150,
+                      let app = NSRunningApplication(processIdentifier: pid), app.activationPolicy == .regular,
+                      !Self.floatingApps.contains(app.bundleIdentifier ?? "") else { continue }
+                let category = app.bundleURL.flatMap { Bundle(url: $0)?.object(forInfoDictionaryKey: "LSApplicationCategoryType") as? String }
+                items.append(WindowSort.Item(id: WindowID(number), bundleID: app.bundleIdentifier, category: category))
+                icons[WindowID(number)] = icon(pid)
+            }
+            plan = WindowSort.plan(items, limit: min(3, spaceCount))
+        }
+        guard plan.workspaces.count > 1 || !plan.hidden.isEmpty else { return nil }
+        return (plan, icons)
+    }
+
+    /// Makes a sort so, with everything out of sight (the show covers the screen): the windows go
+    /// to their Workspaces, the least recently used past what fits are hidden, and you're in the
+    /// Workspace with the window used last. Undo Sort puts it all back.
+    func applySort(_ sort: PreparedSort) {
+        guard enabled else { return }
+        beforeSort = (spaces, stashed, currentSpace, CACurrentMediaTime(), sort.scope)
+        let sorted = Set(sort.trips.map(\.id))
+        for s in spaces.indices {
+            for uuid in Array(spaces[s].keys) where sort.scope == nil || uuid == sort.scope {
+                guard var layout = spaces[s][uuid] else { continue }
+                layout.spotlight = nil
+                for id in layout.windows where sorted.contains(id) { _ = layout.remove(id) }
+                spaces[s][uuid] = layout.isEmpty ? nil : layout
+            }
+        }
+        // Whatever stays (a placeholder waiting for its window) joins the sorted windows.
+        for (s, byDisplay) in sort.layouts.enumerated() where s < spaces.count {
+            for (uuid, sortedLayout) in byDisplay {
+                var layout = sortedLayout
+                let width = activeDisplays.first { $0.uuid == uuid }?.visible.width ?? 1600
+                for id in spaces[s][uuid]?.windows ?? [] {
+                    layout.insert(id, near: layout.windows.last, maxColumns: Layout.maxColumns(forWidth: width), limits: limits)
+                }
+                spaces[s][uuid] = layout
+            }
+        }
+        let now = CACurrentMediaTime()
+        for id in sort.plan.hidden {
+            stashed[id] = now
+            if let w = windows[id] { park(w) }
+        }
+        quietFocus(for: 1.5)
+        if sort.scope == nil, sort.plan.landing < spaceCount { currentSpace = sort.plan.landing }
+        relayout(animated: false)
+        persist()
+        focusAfterSort = sort.scope == nil && sort.plan.workspaces.indices.contains(sort.plan.landing)
+            ? sort.plan.workspaces[sort.plan.landing].windows.first : nil
+        log.notice("sorted \(sorted.count) windows into \(sort.plan.workspaces.count) Workspaces, \(sort.plan.hidden.count) hidden")
+        onChange?()
+    }
+
+    /// After the show: the window used last gets focus, in the Workspace it went to.
+    func focusSorted() {
+        guard enabled, let id = focusAfterSort else { return }
+        focusAfterSort = nil
+        guard place(of: id)?.space == currentSpace else { return }
+        activate(id)
+        showRing(on: id)
+    }
+
+    /// Puts every window back where it was before the last sort. Windows opened since stay in
+    /// the Workspace you're in; windows closed since are gone.
+    func undoSort() {
+        guard canUndoSort, let before = beforeSort, before.spaces.count == spaceCount else { return }
+        beforeSort = nil
+        let had = Set(before.spaces.flatMap { $0.values.flatMap(\.windows) }).union(before.stashed.keys)
+        var restored = before.spaces
+        for s in restored.indices {
+            for uuid in Array(restored[s].keys) {
+                guard var layout = restored[s][uuid] else { continue }
+                for id in layout.windows where windows[id] == nil && tile(for: id) == nil { _ = layout.remove(id) }
+                restored[s][uuid] = layout.isEmpty ? nil : layout
+            }
+        }
+        for layouts in spaces {
+            for (uuid, layout) in layouts {
+                let width = displays.first { $0.uuid == uuid }?.visible.width ?? 1600
+                for id in layout.windows where !had.contains(id) {
+                    var into = restored[before.space][uuid] ?? Layout()
+                    into.insert(id, near: into.windows.last, maxColumns: Layout.maxColumns(forWidth: width), limits: limits)
+                    restored[before.space][uuid] = into
+                }
+            }
+        }
+        spaces = restored
+        stashed = before.stashed.filter { windows[$0.key] != nil }
+        quietFocus()
+        currentSpace = before.space
+        relayout(animated: true)
+        persist()
+        if before.scope == nil, let id = focusedID { showRing(on: id) }
+        badge.show(space: currentSpace, count: spaceCount, caption: "Windows back where they were",
+                   on: displays.first { before.scope == nil ? $0.isMain : $0.uuid == before.scope })
+        log.notice("undid the sort")
+        onChange?()
+    }
+
+    /// A line at the bottom of the main display.
+    func announce(_ text: String) {
+        quietLine.show(text, on: activeDisplays.first(where: \.isMain) ?? activeDisplays.first)
+    }
+
     // MARK: Diagnostics
 
     /// For Copy Diagnostics: each Workspace's tiles, and the windows that aren't in one, as their
