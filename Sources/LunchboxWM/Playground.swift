@@ -42,6 +42,12 @@ final class Playground: NSView {
     private let menuTitle = CATextLayer()
     private var workspaceDots: [CATextLayer] = []
     private let halo = CALayer()
+    /// Resize mode (⌘⇧R), as on the real desktop: the line along the bottom says what the arrows do,
+    /// and the focused window's outline turns orange, until it times out or another key ends it.
+    private let resizeLine = CALayer()
+    private let resizeText = CATextLayer()
+    private var resizing = false
+    private var resizeTimeout: DispatchWorkItem?
     private var windows: [WindowID: FakeWindow] = [:]
     private var windowApp: [WindowID: String] = [:]
     private var workspaces: [Layout] = []
@@ -86,6 +92,20 @@ final class Playground: NSView {
         halo.zPosition = 50
         world.addSublayer(halo)
 
+        resizeLine.backgroundColor = NSColor.black.withAlphaComponent(0.72).cgColor
+        resizeLine.cornerRadius = 11
+        resizeLine.cornerCurve = .continuous
+        resizeLine.zPosition = 90
+        resizeLine.opacity = 0
+        resizeText.string = "Resize:  the arrows push the window's edges    ↩  done"
+        resizeText.fontSize = 11
+        resizeText.font = NSFont.systemFont(ofSize: 11, weight: .medium)
+        resizeText.foregroundColor = NSColor.white.cgColor
+        resizeText.alignmentMode = .center
+        resizeText.contentsScale = 2
+        resizeLine.addSublayer(resizeText)
+        layer?.addSublayer(resizeLine)
+
         menuBar.backgroundColor = NSColor.white.withAlphaComponent(0.55).cgColor
         menuBar.zPosition = 100
         menuTitle.string = "Practice space: nothing here touches your real windows"
@@ -117,6 +137,7 @@ final class Playground: NSView {
     /// Back to the starting arrangement: four windows here, Music in Workspace 2.
     func reset() {
         closeOverlays()
+        setResizing(false)
         windows.values.forEach { $0.removeFromSuperlayer() }
         windows = [:]
         windowApp = [:]
@@ -150,9 +171,29 @@ final class Playground: NSView {
         for (i, dot) in workspaceDots.enumerated() {
             dot.frame = CGRect(x: bounds.width - 76 + CGFloat(i) * 20, y: 4, width: 14, height: 14)
         }
+        let lineWidth: CGFloat = 330
+        resizeLine.frame = flip(CGRect(x: (bounds.width - lineWidth) / 2, y: bounds.height - 40, width: lineWidth, height: 24))
+        resizeText.frame = CGRect(x: 0, y: 5, width: lineWidth, height: 15)
         CATransaction.commit()
         layoutOverlays()
         apply(animated: false)
+    }
+
+    private func setResizing(_ on: Bool) {
+        resizeTimeout?.cancel()
+        resizeTimeout = nil
+        if on {
+            let work = DispatchWorkItem { [weak self] in self?.setResizing(false) }
+            resizeTimeout = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + HotkeyTap.resizeModeSeconds, execute: work)
+        }
+        guard on != resizing else { return }
+        resizing = on
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(0.18)
+        resizeLine.opacity = on ? 1 : 0
+        halo.borderColor = (on ? NSColor.systemOrange : NSColor.controlAccentColor).cgColor
+        CATransaction.commit()
     }
 
     private func layoutOverlays() {
@@ -175,6 +216,12 @@ final class Playground: NSView {
             return
         default:
             closeOverlays()
+        }
+        // Resize mode lasts while its arrows push edges; anything else ends it, as on the desktop.
+        switch action {
+        case .resizeMode(let on): setResizing(on)
+        case .resizeAlong: setResizing(true)
+        default: setResizing(false)
         }
         var layout = workspaces[current]
         // As on the real desktop: in Focus, ⌘ or ⇧⌘ with any arrow ends it.
@@ -208,7 +255,7 @@ final class Playground: NSView {
                 layout.resize(id, toward: direction, by: 0.05, in: usable, gap: Self.gap)
             }
         case .resizeMode:
-            break // the pretend screen has no line to show; the arrows just work
+            break // shown by setResizing above: the line and the orange outline
         case .spotlight:
             if let id = focused { layout.toggleSpotlight(id) }
         case .normalize:
