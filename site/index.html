@@ -238,7 +238,7 @@ p { margin: 0; }
   padding: clamp(6px, 1.1vw, 14px); background: linear-gradient(180deg, #2b2e34, #15171b);
   box-shadow: 0 0 0 1px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.09), 0 50px 100px -40px rgba(20,30,60,.55);
 }
-.display video { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; border-radius: clamp(6px, .9vw, 10px); background: #141518; object-fit: cover; }
+.display video { display: block; width: 100%; max-width: 100%; aspect-ratio: 1920 / 1050; border-radius: clamp(6px, .9vw, 10px); background: #141518; object-fit: cover; }
 .display .toggle {
   position: absolute; right: clamp(14px, 2vw, 26px); bottom: clamp(14px, 2vw, 26px); width: 34px; height: 34px;
   border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center;
@@ -541,10 +541,10 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
 
   <section class="showcase" aria-label="Lunchbox in action">
     <div class="display" id="display">
-      <video id="reel" muted loop playsinline preload="auto" poster="media/hero.jpg?v=1.2" aria-label="Screen recording: three windows open and tile, the third beneath the second, then move, resize, focus, hide and close with Lunchbox's shortcuts">
+      <video id="reel" muted loop playsinline preload="auto" poster="media/hero.jpg?v=1.2.3" aria-label="Screen recording: three windows open and tile, the third beneath the second, then move, resize, focus, hide and close with Lunchbox's shortcuts">
         <!-- ?v= changes with each new recording, so a cached old take never plays under the new captions. -->
-        <source src="media/hero.webm?v=1.2" type="video/webm">
-        <source src="media/hero.mp4?v=1.2" type="video/mp4">
+        <source src="media/hero.webm?v=1.2.3" type="video/webm">
+        <source src="media/hero.mp4?v=1.2.3" type="video/mp4">
       </video>
       <button class="toggle" id="reel-toggle" type="button" aria-label="Pause the recording"><svg viewBox="0 0 16 16"><path id="reel-icon" d="M5 3v10M11 3v10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
     </div>
@@ -787,19 +787,19 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   // by the time they press.
   const BEATS = [
     { t: 0, keys: [], cap: "An empty Workspace on a real Mac." },
-    { t: 1.05, keys: [], cap: "Open a window. It sits centered at 16:10." },
-    { t: 2.85, keys: [], cap: "Open another and they share the screen." },
-    { t: 4.6, keys: [], cap: "A third goes beneath the second." },
-    { t: 6.73, keys: ["⌘", "←"], cap: "Move focus with ⌘ and an arrow." },
-    { t: 7.93, keys: ["⇧", "⌘", "→"], cap: "Add ⇧ to carry the window. It stacks, then passes." },
-    { t: 10.83, keys: ["⇧", "⌘", "+"], cap: "Give it more room." },
-    { t: 12.73, keys: ["⇧", "⌘", "0"], cap: "Tidy evens everything out." },
-    { t: 14.14, keys: ["⇧", "⌘", "F"], cap: "Focus. The others wait on the Shelf." },
-    { t: 16.42, keys: ["⇧", "⌘", "F"], cap: "Press it again and they come back." },
-    { t: 17.82, keys: ["⇧", "⌘", "H"], cap: "Hide tucks a window out of sight." },
-    { t: 19.74, keys: ["⇧", "⌘", "⌫"], cap: "Close it, and the rest re-tile." },
+    { t: 0.93, keys: [], cap: "Open a window. It sits centered at 16:10." },
+    { t: 2.7, keys: [], cap: "Open another and they share the screen." },
+    { t: 4.52, keys: [], cap: "A third goes beneath the second." },
+    { t: 6.62, keys: ["⌘", "←"], cap: "Move focus with ⌘ and an arrow." },
+    { t: 7.81, keys: ["⇧", "⌘", "→"], cap: "Add ⇧ to carry the window. It stacks, then passes." },
+    { t: 10.71, keys: ["⇧", "⌘", "+"], cap: "Give it more room." },
+    { t: 12.62, keys: ["⇧", "⌘", "0"], cap: "Tidy evens everything out." },
+    { t: 14.01, keys: ["⇧", "⌘", "F"], cap: "Focus. The others wait on the Shelf." },
+    { t: 16.29, keys: ["⇧", "⌘", "F"], cap: "Press it again and they come back." },
+    { t: 17.72, keys: ["⇧", "⌘", "H"], cap: "Hide tucks a window out of sight." },
+    { t: 19.61, keys: ["⇧", "⌘", "⌫"], cap: "Close it, and the rest re-tile." },
   ];
-  const PRESSES = [6.95, 8.15, 9.65, 11.05, 11.85, 12.95, 14.36, 16.64, 18.04, 19.96, 21.25];
+  const PRESSES = [6.84, 8.03, 9.53, 10.93, 11.73, 12.84, 14.23, 16.51, 17.94, 19.83, 21.13];
 
   const video = document.getElementById("reel");
   const display = document.getElementById("display");
@@ -861,7 +861,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   // The first play opens on the eye-catching part, the third window settled beneath the
   // second just before focus moves (the poster is this frame); after that the loop starts
   // from the empty desktop as usual.
-  const START = 5.6;
+  const START = 5.5;
   const startAtHook = () => { try { video.currentTime = START; } catch (e) {} };
   if (video.readyState >= 1) startAtHook(); else video.addEventListener("loadedmetadata", startAtHook, { once: true });
   video.addEventListener("seeked", () => { lastT = video.currentTime; syncCaptions(); });
