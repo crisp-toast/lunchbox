@@ -384,6 +384,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onboarding.playgroundPerform(action)
             return
         }
+        // sort, sort@<display id> (only that display's windows), sort-demo@<display id> (made-up
+        // windows, nothing moves), sort-undo, sort-sound:<wav path>.
+        if command == "sort" || command.hasPrefix("sort@") || command.hasPrefix("sort-") {
+            let bits = command.split(separator: "@").map(String.init)
+            let display = bits.count > 1 ? UInt32(bits[1]).flatMap { id in Display.current().first { $0.id == id } } : nil
+            if command.hasPrefix("sort-demo") {
+                if let display { sorter.demo(on: display) }
+            } else if command == "sort-undo" {
+                tiler.undoSort()
+            } else if command.hasPrefix("sort-sound:") {
+                let timeline = Timeline(cards: 12, still: false)
+                let plinks = (0..<12).map { (timeline.arrival($0), Double($0 % 3 - 1) * 0.45) }
+                try? SortSound.render(timeline, plinks: plinks).write(to: URL(fileURLWithPath: String(command.dropFirst(11))))
+            } else {
+                sorter.run(onDisplay: display?.uuid)
+            }
+            return
+        }
         let parts = command.split(separator: "-").map(String.init)
         switch (parts.first, parts.count > 1 ? parts[1] : nil) {
         case ("focus", let d?): if let dir = Direction(rawValue: d) { tiler.perform(.focus(dir)) }
@@ -424,23 +442,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Float or tile the focused window.
         case ("float", _): tiler.toggleFloating()
         case ("dump", _): dumpState()
-        // sort, sort@<display id> (only that display's windows), sort-demo@<display id> (made-up
-        // windows, nothing moves), sort-undo, sort-sound:<wav path>.
-        case ("sort", let what):
-            let bits = command.split(separator: "@").map(String.init)
-            let display = bits.count > 1 ? UInt32(bits[1]).flatMap { id in Display.current().first { $0.id == id } } : nil
-            if what?.hasPrefix("demo") == true {
-                if let display { sorter.demo(on: display) }
-            } else if what?.hasPrefix("undo") == true {
-                tiler.undoSort()
-            } else if what?.hasPrefix("sound:") == true {
-                let path = String(command.drop(while: { $0 != ":" }).dropFirst())
-                let timeline = Timeline(cards: 12, still: false)
-                let plinks = (0..<12).map { (timeline.arrival($0), Double($0 % 3 - 1) * 0.45) }
-                try? SortSound.render(timeline, plinks: plinks).write(to: URL(fileURLWithPath: path))
-            } else {
-                sorter.run(onDisplay: display?.uuid)
-            }
         case ("copy", "diagnostics"?): copyDiagnostics()
         case ("workspaces", let n?): if let n = Int(n) { tiler.setSpaceCount(n) }
         default: log.error("unknown command \(command, privacy: .public)")

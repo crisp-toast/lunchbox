@@ -643,7 +643,9 @@ private final class Stage {
                 let start = from.insetBy(dx: from.width * lift / 2, dy: from.height * lift / 2)
                 rect = arc(from: start, to: target, e: glide(p), sizeE: glide(min(1, p * 1.15)))
                 shrink = glide(p)
-                opacity = smooth(0.02, 0.35, t)
+                // A picture of the window takes its place at once; an icon card rises out of the
+                // color once the color has covered the window, rather than flashing over it.
+                opacity = card.layer.picture ? smooth(0.02, 0.3, t) : smooth(0.3, 0.6, t)
             } else {
                 // Out of sight before: it appears at its spot.
                 let grow = CGFloat(0.6 + 0.4 * glide(p))
@@ -702,7 +704,8 @@ private final class CardLayer: CALayer {
     private let lights = [CALayer(), CALayer(), CALayer()]
     private let icon = CALayer()
     private let title = CATextLayer()
-    private let picture: Bool
+    /// It shows a picture of the window (Screen Recording is allowed), not its app's icon.
+    let picture: Bool
     private let accent: NSColor?
 
     init(card: SortShow.Card, scale: CGFloat, accent: NSColor?) {

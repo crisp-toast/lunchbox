@@ -3663,6 +3663,9 @@ final class Tiler {
         let trips: [SortTrip]
         /// Each of the plan's Workspaces, by display.
         let layouts: [[String: Layout]]
+        /// The Workspace each of the plan's goes into: the same one, except for a test sort on one
+        /// display, where the one with the window used last goes into the Workspace you're in.
+        let workspace: [Int]
         /// Every tiled window is already where the sort would put it.
         let changesNothing: Bool
         /// Only this display's windows (a UUID), for tests: then nothing else changes, not even
@@ -3742,9 +3745,12 @@ final class Tiler {
             return SortTrip(id: id, pid: w.pid, title: w.title ?? "", from: w.hidden ? nil : w.target ?? w.frame,
                             space: to[id]?.space, to: to[id]?.frame, display: d)
         }
+        let workspace = plan.workspaces.indices.map { s in
+            display == nil ? s : ((s - plan.landing + currentSpace) % spaceCount + spaceCount) % spaceCount
+        }
         // Already sorted: each window in the Workspace the sort gives it, and nothing to hide.
-        let changesNothing = plan.hidden.isEmpty && found.allSatisfy { id, _ in place(of: id)?.space == to[id]?.space }
-        return PreparedSort(plan: plan, trips: trips, layouts: layouts, changesNothing: changesNothing, scope: display)
+        let changesNothing = plan.hidden.isEmpty && found.allSatisfy { id, _ in place(of: id)?.space == to[id].map { workspace[$0.space] } }
+        return PreparedSort(plan: plan, trips: trips, layouts: layouts, workspace: workspace, changesNothing: changesNothing, scope: display)
     }
 
     /// What a sort would do now, for setup's question: the plan and each window's app icon. Nil
@@ -3802,7 +3808,9 @@ final class Tiler {
             }
         }
         // Whatever stays (a placeholder waiting for its window) joins the sorted windows.
-        for (s, byDisplay) in sort.layouts.enumerated() where s < spaces.count {
+        for (k, byDisplay) in sort.layouts.enumerated() {
+            let s = sort.workspace[k]
+            guard s < spaces.count else { continue }
             for (uuid, sortedLayout) in byDisplay {
                 var layout = sortedLayout
                 let width = activeDisplays.first { $0.uuid == uuid }?.visible.width ?? 1600
