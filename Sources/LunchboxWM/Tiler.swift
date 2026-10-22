@@ -3721,16 +3721,15 @@ final class Tiler {
             }
             return WindowSort.Item(id: id, bundleID: w.handle.app.bundleID, category: categories[w.pid] ?? nil)
         }
-        let plan = WindowSort.plan(items, limit: min(3, spaceCount))
+        let plan = WindowSort.plan(items, limit: min(3, spaceCount), fit: sortFit(on: display))
         let home = Dictionary(found.map { ($0.id, $0.uuid) }, uniquingKeysWith: { a, _ in a })
         var layouts: [[String: Layout]] = Array(repeating: [:], count: plan.workspaces.count)
         for (s, workspace) in plan.workspaces.enumerated() {
-            for id in workspace.windows {
-                guard let uuid = home[id], let d = activeDisplays.first(where: { $0.uuid == uuid }) else { continue }
-                var layout = layouts[s][uuid] ?? Layout()
-                layout.insert(id, near: layout.windows.last, maxColumns: Layout.maxColumns(forWidth: d.visible.width),
-                              limits: limits, room: room(on: d))
-                layouts[s][uuid] = layout
+            for d in activeDisplays {
+                let ids = workspace.windows.filter { home[$0] == d.uuid }
+                guard !ids.isEmpty else { continue }
+                layouts[s][d.uuid] = WindowSort.layout(ids, maxColumns: Layout.maxColumns(forWidth: d.visible.width),
+                                                       limits: limits, room: room(on: d))
             }
         }
         var to: [CGWindowID: (space: Int, frame: CGRect)] = [:]
@@ -3751,6 +3750,12 @@ final class Tiler {
         // Already sorted: each window in the Workspace the sort gives it, and nothing to hide.
         let changesNothing = plan.hidden.isEmpty && found.allSatisfy { id, _ in place(of: id)?.space == to[id].map { workspace[$0.space] } }
         return PreparedSort(plan: plan, trips: trips, layouts: layouts, workspace: workspace, changesNothing: changesNothing, scope: display)
+    }
+
+    /// How many windows a sorted Workspace holds: two to a column on the narrowest display sorted.
+    private func sortFit(on display: String? = nil) -> Int {
+        let widths = activeDisplays.filter { display == nil || $0.uuid == display }.map(\.visible.width)
+        return WindowSort.fit(forWidth: widths.min() ?? Display.current().first(where: \.isMain)?.visible.width ?? 1600)
     }
 
     /// What a sort would do now, for setup's question: the plan and each window's app icon. Nil
@@ -3786,7 +3791,8 @@ final class Tiler {
                 items.append(WindowSort.Item(id: WindowID(number), bundleID: app.bundleIdentifier, category: category))
                 icons[WindowID(number)] = icon(pid)
             }
-            plan = WindowSort.plan(items, limit: min(3, spaceCount))
+            plan = WindowSort.plan(items, limit: min(3, spaceCount),
+                                   fit: WindowSort.fit(forWidth: Display.current().first(where: \.isMain)?.visible.width ?? 1600))
         }
         guard plan.workspaces.count > 1 || !plan.hidden.isEmpty else { return nil }
         return (plan, icons)

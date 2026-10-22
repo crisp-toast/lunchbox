@@ -92,12 +92,11 @@ final class WindowSorter {
             return CGFloat(seed >> 33) / CGFloat(1 << 31)
         }
         let items = apps.enumerated().map { WindowSort.Item(id: WindowID($0.offset + 1), bundleID: $0.element.0, category: nil) }
-        let plan = WindowSort.plan(items)
         let v = display.visible
+        let plan = WindowSort.plan(items, fit: WindowSort.fit(forWidth: v.width))
         var to: [WindowID: (Int, CGRect)] = [:]
         for (s, w) in plan.workspaces.enumerated() {
-            var layout = Layout()
-            for id in w.windows { layout.insert(id, near: layout.windows.last, maxColumns: Layout.maxColumns(forWidth: v.width)) }
+            let layout = WindowSort.layout(w.windows, maxColumns: Layout.maxColumns(forWidth: v.width))
             for (id, frame) in layout.frames(in: v, gap: Tiler.gap) { to[id] = (s, frame) }
         }
         let cards = items.map { item -> SortShow.Card in

@@ -18,10 +18,11 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
   Whenever you change Workspace, however you got there, "Workspace 2" shows at the top of the
   screen for a moment, with a dot for each Workspace.
 - **Sort My Windows** sorts a messy desktop into Workspaces by kind: your work, the web, and chat and
-  music, in that order, using only as many Workspaces as it takes (up to three). A few windows stay
-  together, small kinds share a Workspace while they fit a calm one (four windows), a big kind spills
-  into the next free Workspace, and a Workspace holds up to six; past that, the least recently used
-  are hidden, still open, for Summon. A short show covers the screen in color while the windows move,
+  music, in that order, using only as many Workspaces as it takes (up to three). A Workspace holds
+  only as many windows as fit two to a column (four, a 2×2, on most displays; six on an ultrawide),
+  each an even share: a few windows stay together, small kinds share a Workspace while they fit, and a
+  big kind spills into the next free Workspace; past that, the least recently used are hidden, still
+  open, for Summon. A short show covers the screen in color while the windows move,
   flies each window to its Workspace so you see where everything went, then opens onto the Workspace
   with the window you used last; a soft chord and bells play with it when macOS plays interface
   sounds, and with Reduce Motion nothing flies. Undo (on the note afterwards, and in the menu for ten
