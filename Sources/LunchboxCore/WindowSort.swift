@@ -4,9 +4,10 @@ import CoreGraphics
 /// Sorting a messy desktop into Workspaces by kind: setup's "Organize your open windows?" and
 /// Sort My Windows in the menu. Three kinds, always in this order: your work, the web, chat and
 /// music. Only as many Workspaces as it takes, each holding only as many windows as fit two to a
-/// column (`fit`: four on most displays, a 2×2), so none gets squeezed: a few windows stay
-/// together, small kinds join up while they fit, and a big kind spills into a Workspace that's
-/// free. Anything past that (the least recently used) is hidden, still open: Summon finds it.
+/// column (`fit`: four on most displays, a 2×2), so none gets squeezed while a Workspace is free:
+/// a few windows stay together, small kinds join up while they fit, and a big kind spills into a
+/// Workspace that's free. With every Workspace taken, they share a third row; anything past that
+/// (the least recently used) is hidden, still open: Summon finds it, and Undo brings it back.
 public enum WindowSort {
     public enum Group: Int, CaseIterable, Sendable {
         case work, web, talk
@@ -94,9 +95,12 @@ public enum WindowSort {
         return .work
     }
 
-    /// Where `items` (most recently used first) go: at most `limit` Workspaces of `fit` windows each.
+    /// Where `items` (most recently used first) go: at most `limit` Workspaces of `fit` windows each
+    /// while there's a Workspace free; when every one is taken, a kind's Workspaces share a third
+    /// row (half as many again), and only past that are the least recently used hidden.
     public static func plan(_ items: [Item], limit: Int = 3, fit: Int = 4) -> Plan {
-        let fit = max(1, fit)
+        let fit = max(1, fit), limit = max(1, limit)
+        let crowded = fit + max(1, fit / 2)
         guard !items.isEmpty else { return Plan(workspaces: [], hidden: [], landing: 0) }
         let rank = Dictionary(items.enumerated().map { ($1.id, $0) }, uniquingKeysWith: min)
         func byUse(_ ids: [WindowID]) -> [WindowID] { ids.sorted { rank[$0]! < rank[$1]! } }
@@ -108,31 +112,51 @@ public enum WindowSort {
             let ids = items.filter { group(of: $0) == g }.map(\.id)
             return ids.isEmpty ? nil : Workspace(groups: [g], windows: ids)
         }
-        // The two smallest join up while together they still fit one Workspace.
-        while workspaces.count > 1 {
-            let bySize = workspaces.indices.sorted { workspaces[$0].windows.count < workspaces[$1].windows.count }
-            let (a, b) = (bySize[0], bySize[1])
-            guard workspaces[a].windows.count + workspaces[b].windows.count <= fit || workspaces.count > limit else { break }
-            let (keep, gone) = (min(a, b), max(a, b))
-            workspaces[keep].groups += workspaces[gone].groups
-            workspaces[keep].windows = byUse(workspaces[keep].windows + workspaces[gone].windows)
-            workspaces.remove(at: gone)
-        }
-        // A kind with more than a Workspace holds spills into the next one, while there's one free.
-        var i = 0
-        while i < workspaces.count, workspaces.count < limit {
-            if workspaces[i].windows.count > fit {
-                let rest = Array(workspaces[i].windows[fit...])
-                workspaces[i].windows = Array(workspaces[i].windows.prefix(fit))
-                workspaces.insert(Workspace(groups: workspaces[i].groups, windows: rest), at: i + 1)
+        // Small kinds join up while together they still fit, and a kind with more than fits spills
+        // into the next Workspace while one is free; again until nothing changes, since what spills
+        // can share with a small kind.
+        for _ in 0..<12 {
+            let before = workspaces
+            while workspaces.count > 1 {
+                let bySize = workspaces.indices.sorted { workspaces[$0].windows.count < workspaces[$1].windows.count }
+                let (a, b) = (bySize[0], bySize[1])
+                guard workspaces[a].windows.count + workspaces[b].windows.count <= fit || workspaces.count > limit else { break }
+                let (keep, gone) = (min(a, b), max(a, b))
+                workspaces[keep].groups += workspaces[gone].groups
+                workspaces[keep].windows = byUse(workspaces[keep].windows + workspaces[gone].windows)
+                workspaces.remove(at: gone)
             }
-            i += 1
+            var i = 0
+            while i < workspaces.count, workspaces.count < limit {
+                if workspaces[i].windows.count > fit {
+                    let rest = Array(workspaces[i].windows[fit...])
+                    workspaces[i].windows = Array(workspaces[i].windows.prefix(fit))
+                    workspaces.insert(Workspace(groups: workspaces[i].groups, windows: rest), at: i + 1)
+                }
+                i += 1
+            }
+            if workspaces == before { break }
         }
-        // Past that, the least recently used are hidden.
+        // Every Workspace taken and still more: a kind's Workspaces take a third row, shared
+        // evenly (the ones used last in the first); past that, the least recently used are hidden.
         var hidden: [WindowID] = []
-        for i in workspaces.indices where workspaces[i].windows.count > fit {
-            hidden += workspaces[i].windows[fit...]
-            workspaces[i].windows = Array(workspaces[i].windows.prefix(fit))
+        var start = 0
+        while start < workspaces.count {
+            var end = start + 1
+            while end < workspaces.count, workspaces[end].groups == workspaces[start].groups { end += 1 }
+            let all = (start..<end).flatMap { workspaces[$0].windows }
+            let count = end - start
+            if all.count > fit * count {
+                let shown = min(all.count, crowded * count)
+                var next = 0
+                for (k, w) in (start..<end).enumerated() {
+                    let n = shown / count + (k < shown % count ? 1 : 0)
+                    workspaces[w].windows = Array(all[next..<next + n])
+                    next += n
+                }
+                hidden += all[shown...]
+            }
+            start = end
         }
         let landing = workspaces.firstIndex { $0.windows.contains(items[0].id) } ?? 0
         return Plan(workspaces: workspaces, hidden: byUse(hidden), landing: landing)

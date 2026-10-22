@@ -21,8 +21,9 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
   music, in that order, using only as many Workspaces as it takes (up to three). A Workspace holds
   only as many windows as fit two to a column (four, a 2×2, on most displays; six on an ultrawide),
   each an even share: a few windows stay together, small kinds share a Workspace while they fit, and a
-  big kind spills into the next free Workspace; past that, the least recently used are hidden, still
-  open, for Summon. A short show covers the screen in color while the windows move,
+  big kind spills into the next free Workspace. With all three taken, they share a third row (six on
+  most displays); only past that are the least recently used hidden, still open, for Summon (30
+  windows: three Workspaces of six, twelve hidden). A short show covers the screen in color while the windows move,
   flies each window to its Workspace so you see where everything went, then opens onto the Workspace
   with the window you used last; a soft chord and bells play with it when macOS plays interface
   sounds, and with Reduce Motion nothing flies. Undo (on the note afterwards, and in the menu for ten
