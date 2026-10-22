@@ -44,6 +44,27 @@ extension AXUIElement {
     }
 
     func string(_ attribute: String) -> String? { value(attribute) as? String }
+
+    /// Several attributes in one round trip to the app (each `value(_:)` is a round trip of its
+    /// own, a wait while the app is busy). Nil for any it doesn't have.
+    func values(_ attributes: [String]) -> [CFTypeRef?] {
+        var values: CFArray?
+        guard AXUIElementCopyMultipleAttributeValues(self, attributes as CFArray, AXCopyMultipleAttributeOptions(rawValue: 0), &values) == .success,
+              let array = values as? [CFTypeRef], array.count == attributes.count else { return attributes.map { _ in nil } }
+        return array.map { v in
+            // One the app doesn't have comes back as an AXValue holding an error.
+            if CFGetTypeID(v) == AXValueGetTypeID(), AXValueGetType(v as! AXValue) == .axError { return nil }
+            return v
+        }
+    }
+
+    /// A frame from position and size values (as `values(_:)` returns them).
+    static func frame(position: CFTypeRef?, size: CFTypeRef?) -> CGRect? {
+        guard let position, let size, CFGetTypeID(position) == AXValueGetTypeID(), CFGetTypeID(size) == AXValueGetTypeID() else { return nil }
+        var point = CGPoint.zero, extent = CGSize.zero
+        guard AXValueGetValue(position as! AXValue, .cgPoint, &point), AXValueGetValue(size as! AXValue, .cgSize, &extent) else { return nil }
+        return CGRect(origin: point, size: extent)
+    }
     func bool(_ attribute: String) -> Bool { (value(attribute) as? Bool) ?? false }
 
     func element(_ attribute: String) -> AXUIElement? {

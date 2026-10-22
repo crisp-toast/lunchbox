@@ -62,6 +62,13 @@ public struct QuitMemory: Sendable {
         return q.spots.first { Self.close($0.frame, frame) } ?? q.spots.first
     }
 
+    /// Every spot `app`'s next windows go back to, if it quit within the hour: `spot(for:)` picks
+    /// one of these for a window by where it opened.
+    public func spots(for app: String, now: Double) -> [Spot] {
+        guard let q = quits[app], now - q.at < Self.lifetime else { return [] }
+        return q.spots
+    }
+
     /// Takes that spot, so the app's next window gets another one. `preferring`: the old window
     /// whose spot this one was already headed for (it may have moved since).
     public mutating func take(for app: String, frame: CGRect, now: Double, preferring old: WindowID? = nil) -> Spot? {
@@ -80,7 +87,7 @@ public struct QuitMemory: Sendable {
         return layout
     }
 
-    static func close(_ a: CGRect, _ b: CGRect) -> Bool {
+    public static func close(_ a: CGRect, _ b: CGRect) -> Bool {
         abs(a.minX - b.minX) <= 4 && abs(a.minY - b.minY) <= 4 && abs(a.width - b.width) <= 4 && abs(a.height - b.height) <= 4
     }
 }

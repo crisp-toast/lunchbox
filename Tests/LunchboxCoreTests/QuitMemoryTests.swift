@@ -29,6 +29,17 @@ import Testing
         #expect(memory.spot(for: claude, frame: left, now: 201) == nil)
     }
 
+    @Test func everySpotIsListedForANewWindowToPickFrom() {
+        // The window used last first, so a restart that opens one window brings back that one.
+        var memory = QuitMemory()
+        memory.closed(claude, spot: spot(1, space: 0, frame: left), at: 100)
+        memory.closed(claude, spot: spot(2, space: 0, frame: right, usedLast: true), at: 100.2)
+        memory.quit(claude, at: 100.5)
+        #expect(memory.spots(for: claude, now: 110).map(\.window) == [2, 1])
+        #expect(memory.spots(for: claude, now: 100.5 + 3601).isEmpty)
+        #expect(QuitMemory.close(right, right.offsetBy(dx: 3, dy: -3)) && !QuitMemory.close(right, left))
+    }
+
     @Test func onlyForAnHour() {
         var memory = QuitMemory()
         memory.closed(claude, spot: spot(1, space: 0, frame: left), at: 100)

@@ -1110,15 +1110,17 @@ final class Tiler {
         // full look below, which waits on its app (busy drawing the window) and behind any scan
         // of its windows: that wait is what showed a new window where its app put it first.
         // Anything else (a dialog, a panel at its own size, a disk image's window) goes the usual way.
-        let quick = quickTiles(forNewWindowOf: app)
-        if !quick.isEmpty {
+        if let quick = quickTile(forNewWindowOf: app) {
             let finder = app.bundleID == "com.apple.finder"
             Self.arrivalQueue.async {
-                guard element.subrole == kAXStandardWindowSubrole as String, element.isResizable,
-                      !element.bool(kAXModalAttribute), let id = element.windowID, let frame = element.frame,
-                      !(finder && (element.string(kAXTitleAttribute).map(DiskImages.isMounted(named:)) ?? false)) else { return }
-                let tile = quick.first(where: \.held)?.tile ?? quick.first { $0.display.contains(frame.center) }?.tile
-                guard let tile, !frame.isClose(to: tile, tolerance: 1) else { return }
+                // What it is and where its app put it, in one round trip; then whether it can be sized.
+                let v = element.values([kAXSubroleAttribute, kAXPositionAttribute, kAXSizeAttribute, kAXModalAttribute]
+                                       + (finder ? [kAXTitleAttribute] : []))
+                guard (v[0] as? String) == kAXStandardWindowSubrole as String, (v[3] as? Bool) != true,
+                      let frame = AXUIElement.frame(position: v[1], size: v[2]),
+                      !(finder && ((v[4] as? String).map(DiskImages.isMounted(named:)) ?? false)),
+                      element.isResizable, let id = element.windowID,
+                      let tile = quick.tile(for: frame), !frame.isClose(to: tile, tolerance: 1) else { return }
                 WindowHandle.queue(for: id).async { _ = element.place(in: tile) }
             }
         }
@@ -1153,21 +1155,54 @@ final class Tiler {
     /// waits behind other work for its app.
     private static let arrivalQueue = DispatchQueue(label: "com.sentientdonut.lunchbox.arrival", qos: .userInteractive, attributes: .concurrent)
 
-    /// Where the next window of `app` goes, worked out before it's read: the tile a placeholder
-    /// holds for it, or on each display the tile it would get (as `plannedFrame` works it out).
-    /// Empty when it's not that simple: an app left alone or floating, hidden, with tab groups,
-    /// in a burst of new windows, restarting into its old spots, or a mouse drag under way.
-    private func quickTiles(forNewWindowOf app: AppHandle) -> [(display: CGRect, tile: CGRect, held: Bool)] {
+    /// Where a new window will tile, decided before anything about it is read; `tile(for:)`
+    /// picks by where its app put it.
+    private enum QuickTile {
+        /// The tile a placeholder holds for it.
+        case held(CGRect)
+        /// Its app restarted: the old spots' tiles, each with where that window was.
+        case restart([(was: CGRect, tile: CGRect)])
+        /// The tile it gets on each display, by the display.
+        case byDisplay([(display: CGRect, tile: CGRect)])
+
+        func tile(for frame: CGRect) -> CGRect? {
+            switch self {
+            case .held(let tile): return tile
+            // As `QuitMemory.spot(for:)` picks: the spot it opened at, else the first.
+            case .restart(let spots): return (spots.first { QuitMemory.close($0.was, frame) } ?? spots.first)?.tile
+            case .byDisplay(let tiles): return tiles.first { $0.display.contains(frame.center) }?.tile
+            }
+        }
+    }
+
+    /// Where the next window of `app` goes, worked out before it's read, as `plannedFrame` would:
+    /// the tile a placeholder holds for it, its old spot if its app restarted, or the tile it gets
+    /// on each display. Nil when it's not that simple: an app left alone or floating, hidden,
+    /// with tab groups, in a burst of new windows, restarting into another Workspace, or a mouse
+    /// drag under way.
+    private func quickTile(forNewWindowOf app: AppHandle) -> QuickTile? {
         guard initialScanDone, enabled, NSEvent.pressedMouseButtons & 1 == 0,
-              !windows.values.contains(where: { $0.pid == app.pid && $0.tabs >= 2 }) else { return [] }
-        if let held = heldTile(forNewWindowOf: app) { return [(.infinite, held, true)] }
+              !windows.values.contains(where: { $0.pid == app.pid && $0.tabs >= 2 }) else { return nil }
+        if let held = heldTile(forNewWindowOf: app) { return .held(held) }
         let now = CACurrentMediaTime()
         guard !leftAloneApps.contains(app.bundleID ?? ""), !Self.floatingApps.contains(app.bundleID ?? ""),
-              NSRunningApplication(processIdentifier: app.pid)?.isHidden != true, !isBursting(app.pid),
-              quitMemory.spot(for: app.bundleID ?? "", frame: .zero, now: now) == nil else { return [] }
+              NSRunningApplication(processIdentifier: app.pid)?.isHidden != true, !isBursting(app.pid) else { return nil }
         let probe = CGWindowID(UInt32.max - 1)
+        // Restarted within the hour: its windows go back to their old spots, here in view.
+        let spots = quitMemory.spots(for: app.bundleID ?? "", now: now)
+        if !spots.isEmpty {
+            var tiles: [(was: CGRect, tile: CGRect)] = []
+            for spot in spots {
+                guard spot.space == currentSpace, let d = activeDisplays.first(where: { $0.uuid == spot.display }) else { return nil }
+                var layout = spaces[currentSpace][d.uuid] ?? Layout()
+                guard layout.restore(probe, from: QuitMemory.layout(of: spot, as: probe)),
+                      let tile = layout.frames(in: d.visible, gap: Self.gap, limits: limits)[probe] else { return nil }
+                tiles.append((spot.frame, tile))
+            }
+            return .restart(tiles)
+        }
         let recent = prePlaced.filter { now - $0.value.at < 1.5 && place(of: $0.key) == nil }
-        return activeDisplays.compactMap { d in
+        let tiles: [(display: CGRect, tile: CGRect)] = activeDisplays.compactMap { d in
             var layout = spaces[currentSpace][d.uuid] ?? Layout()
             let maxColumns = Layout.maxColumns(forWidth: d.visible.width)
             for (id, _) in recent.filter({ $0.value.display == d.uuid }).sorted(by: { $0.value.at < $1.value.at }) {
@@ -1176,8 +1211,9 @@ final class Tiler {
             let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
             layout.insert(probe, near: near, maxColumns: maxColumns, limits: limits, room: room(on: d))
             guard let tile = layout.frames(in: d.visible, gap: Self.gap, limits: limits)[probe] else { return nil }
-            return (d.frame, tile, false)
+            return (d.frame, tile)
         }
+        return tiles.isEmpty ? nil : .byDisplay(tiles)
     }
 
     /// The tile a placeholder holds in the Workspace you're in for the next window of `app`, if any.
