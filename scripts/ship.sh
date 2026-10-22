@@ -25,9 +25,16 @@ printf '<h2>What’s new in Lunchbox %s</h2>\n<p>%s</p>\n' "$VERSION" "$escaped"
 
 RELEASE_NOTES="$notes" CRITICAL="$CRITICAL" bash scripts/release.sh "$VERSION"
 CI=1 npx -y wrangler@4 pages deploy --project-name lunchbox --branch main
-# The download and the feed are live: check before calling it shipped.
-curl -fsS "https://lunchboxwm.com/appcast.xml" | grep -q "<sparkle:shortVersionString>$VERSION<" \
-  || { echo "The live update feed doesn't list $VERSION yet. Check the deploy."; exit 1; }
+# The download and the feed are live: check before calling it shipped. A deploy takes a few
+# seconds to reach every edge, so wait, and check with a throwaway query: asking for the plain
+# address too early can leave a "not found" cached there for the copies about to update.
+live() { curl -fsS -o "${2:-/dev/null}" "https://lunchboxwm.com/$1?check=$RANDOM$RANDOM"; }
+for try in $(seq 1 24); do
+  sleep 5
+  live "download/LunchboxWM-$VERSION.dmg" && live appcast.xml /tmp/lunchbox-appcast-check.xml \
+    && grep -q "<sparkle:shortVersionString>$VERSION<" /tmp/lunchbox-appcast-check.xml && break
+  [[ $try == 24 ]] && { echo "After 2 minutes the live site still doesn't serve $VERSION. Check the deploy."; exit 1; }
+done
 
 git add site/appcast.xml
 # GIT_TRAILER: an extra last paragraph for the release commit (a Co-Authored-By line, say).
