@@ -29,10 +29,11 @@ CI=1 npx -y wrangler@4 pages deploy --project-name lunchbox --branch main
 # seconds to reach every edge, so wait, and check with a throwaway query: asking for the plain
 # address too early can leave a "not found" cached there for the copies about to update.
 live() { curl -fsS -o "${2:-/dev/null}" "https://lunchboxwm.com/$1?check=$RANDOM$RANDOM"; }
+feed="$(mktemp)"
 for try in $(seq 1 24); do
   sleep 5
-  live "download/LunchboxWM-$VERSION.dmg" && live appcast.xml /tmp/lunchbox-appcast-check.xml \
-    && grep -q "<sparkle:shortVersionString>$VERSION<" /tmp/lunchbox-appcast-check.xml && break
+  live "download/LunchboxWM-$VERSION.dmg" && live appcast.xml "$feed" \
+    && grep -q "<sparkle:shortVersionString>$VERSION<" "$feed" && break
   [[ $try == 24 ]] && { echo "After 2 minutes the live site still doesn't serve $VERSION. Check the deploy."; exit 1; }
 done
 
