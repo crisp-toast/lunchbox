@@ -41,6 +41,9 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
+        // Which version this is, first thing, in full strength (a click copies it, for support).
+        menu.addItem(versionLine())
+        menu.addItem(.separator())
         // Without a license nothing tiles, so the tiling and window items would do nothing: the
         // menu offers the license instead, plus help, settings and Quit.
         let unlicensed = licensing.map { $0.license == nil } ?? false
@@ -137,7 +140,6 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         }
         automatic.toolTip = "Looks for a new version about once an hour. Lunchbox always asks before installing one."
         options.addItem(automatic)
-        options.addItem(action("Check for Updates…") { [weak self] in self?.onCheckForUpdates?() })
         let diagnostics = action("Copy Diagnostics") { [weak self] in self?.onCopyDiagnostics?() }
         diagnostics.toolTip = "Copies a summary for support to paste into an email: versions, displays, and which apps' windows are in each Workspace. No window titles, files or license key."
         options.addItem(diagnostics)
@@ -148,6 +150,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         settings.submenu = options
         menu.addItem(settings)
         menu.addItem(.separator())
+        menu.addItem(action("Check for Updates…") { [weak self] in self?.onCheckForUpdates?() })
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Lunchbox", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
@@ -156,6 +160,22 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         let rows = TimeBackWords.breakdown(week)
         return (TimeBackWords.howCounted + (rows.isEmpty ? [] : ["", "This week:"] + rows)
             + ["", "Counted on this Mac only."]).joined(separator: "\n")
+    }
+
+    /// "Lunchbox 1.3" in bold, the same on every build (the build number is in its tooltip).
+    /// Clicking it copies the version, which also keeps it from being drawn dimmed like a note.
+    private func versionLine() -> NSMenuItem {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let version = info["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info["CFBundleVersion"] as? String ?? "?"
+        let entry = action("") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString("Lunchbox \(version) (build \(build))", forType: .string)
+        }
+        entry.attributedTitle = NSAttributedString(string: "Lunchbox \(version)",
+                                                   attributes: [.font: NSFont.boldSystemFont(ofSize: NSFont.systemFontSize)])
+        entry.toolTip = "Version \(version) (build \(build)). Click to copy it."
+        return entry
     }
 
     /// A small grey note in a menu.

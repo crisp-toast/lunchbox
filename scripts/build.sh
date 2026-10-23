@@ -16,6 +16,9 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 # The same build number a release of this commit gets, so Sparkle never takes a newer development
 # build for an older one and "updates" it to the last release.
 plutil -replace CFBundleVersion -string "$(git rev-list --count HEAD)" "$APP/Contents/Info.plist"
+# The version of the last release it's built on (the menu says so), not Info.plist's placeholder.
+released="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null | sed 's/^v//')"
+[[ -n "$released" ]] && plutil -replace CFBundleShortVersionString -string "$released" "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 mkdir -p "$APP/Contents/Library/LaunchAgents"
 cp Resources/com.sentientdonut.lunchbox.agent.plist "$APP/Contents/Library/LaunchAgents/"
