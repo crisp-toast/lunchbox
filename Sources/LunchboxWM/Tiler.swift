@@ -110,6 +110,7 @@ final class Tiler {
     private var userFloating = Set<CGWindowID>()
     private(set) var focusedID: CGWindowID? {
         didSet {
+            if focusedID != oldValue { focusedSince = Date.timeIntervalSinceReferenceDate }
             guard let id = focusedID, recentlyFocused.first != id else { return }
             recentlyFocused.removeAll { $0 == id }
             recentlyFocused.insert(id, at: 0)
@@ -117,6 +118,14 @@ final class Tiler {
     }
     /// Windows by when they last had focus, the latest first: the order Summon lists them in.
     private var recentlyFocused: [CGWindowID] = []
+    /// How long each window has had focus lately while you were at the Mac, and which you go back
+    /// and forth between, for Sort My Windows (`noteUse`). In memory only.
+    private var usage = WindowUsage()
+    /// When the focused window got focus (wall-clock seconds, so a night asleep counts as time).
+    private var focusedSince = Date.timeIntervalSinceReferenceDate
+    /// The last window that kept focus a moment, and when `noteUse` last ran.
+    private var settledFocus: CGWindowID?
+    private var lastUseCheck: TimeInterval?
     private var lastFocused: [Int: CGWindowID] = [:]
     private var savedPlacement: [CGWindowID: (space: Int, display: String)] = [:]
     /// Each layout as it was when LunchboxWM last ran (or was paused), by "space|display".
@@ -264,7 +273,10 @@ final class Tiler {
             },
             NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { [weak self] _ in self?.mouseUp() },
         ].compactMap { $0 }
-        let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in self?.checkForGhosts() }
+        let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
+            self?.checkForGhosts()
+            self?.noteUse()
+        }
         timer.tolerance = 0.5
         RunLoop.main.add(timer, forMode: .common)
         ghostTimer = timer
@@ -921,6 +933,29 @@ final class Tiler {
         return NSWorkspace.shared.frontmostApplication?.processIdentifier == w.pid && Self.secondsSinceInput() < 2
     }
 
+    /// Every couple of seconds: the window in focus gets the time, while you're at the Mac (any
+    /// input in the last two minutes, so reading a long page counts but a night away doesn't);
+    /// and once it's kept focus a couple of seconds, going to it counts as a switch from the
+    /// window before, so passing through on the way somewhere else doesn't.
+    private func noteUse() {
+        let now = Date.timeIntervalSinceReferenceDate
+        defer { lastUseCheck = now }
+        guard let id = focusedID, let last = lastUseCheck, Self.secondsSincePresence() < 120 else { return }
+        usage.used(id, for: min(now - last, now - focusedSince, 5), at: now)
+        if id != settledFocus, now - focusedSince >= 2 {
+            if let from = settledFocus { usage.switched(from: from, to: id, at: now) }
+            settledFocus = id
+        }
+    }
+
+    /// Seconds since you last did anything at all: typed, clicked, scrolled or moved the pointer,
+    /// at the Mac or from afar (Screen Sharing's input counts only in the hardware's own record).
+    static func secondsSincePresence() -> Double {
+        [CGEventType.keyDown, .leftMouseDown, .rightMouseDown, .scrollWheel, .mouseMoved].flatMap { type in
+            [CGEventSourceStateID.combinedSessionState, .hidSystemState].map { CGEventSource.secondsSinceLastEventType($0, eventType: type) }
+        }.min() ?? .infinity
+    }
+
     /// Seconds since your last key press or click.
     static func secondsSinceInput() -> Double {
         min(CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown),
@@ -1410,6 +1445,8 @@ final class Tiler {
         WindowHandle.forget(id)
         if focusedID == id { focusedID = nil }
         recentlyFocused.removeAll { $0 == id }
+        usage.forget(id)
+        if settledFocus == id { settledFocus = nil }
         adopted.remove(id)
         offDisplay.remove(id)
         centeredDialogs.remove(id)
@@ -3447,10 +3484,17 @@ final class Tiler {
         }
     }
 
+    /// A window a sort just put where it is: like one that just arrived, it may turn out not to fit
+    /// there (it takes more than LunchboxWM knew), and then moves to where it does.
+    private func justSorted(_ id: CGWindowID) -> Bool {
+        guard let placed = sortPlaced else { return false }
+        return placed.ids.contains(id) && CACurrentMediaTime() - placed.at < 4
+    }
+
     /// A window's minimum height was just discovered (only squeezing a window shows it), and
     /// its column can't hold everything in it any more. The window that arrived there last, if
-    /// it's only just arrived, moves to a column that fits it, or to one of its own; windows that
-    /// have been in place a while are never shuffled.
+    /// it's only just arrived (or a sort just put it there), moves to a column that fits it, or to
+    /// one of its own; windows that have been in place a while are never shuffled.
     private func reconsiderColumn(of id: CGWindowID) {
         guard let (s, uuid) = place(of: id), var layout = spaces[s][uuid], layout.spotlight == nil,
               let display = activeDisplays.first(where: { $0.uuid == uuid }) else { return }
@@ -3462,7 +3506,7 @@ final class Tiler {
         var moved: Set<CGWindowID> = []
         for _ in 0..<2 {
             guard let (c, _) = layout.position(of: id), overfull(layout.columns[c].windows), layout.columns[c].windows.count > 1,
-                  let newest = layout.columns[c].windows.filter({ !moved.contains($0) && windows[$0].map { now - $0.seenAt < 4 } == true })
+                  let newest = layout.columns[c].windows.filter({ !moved.contains($0) && (windows[$0].map { now - $0.seenAt < 4 } == true || justSorted($0)) })
                     .max(by: { windows[$0]!.seenAt < windows[$1]!.seenAt }) else { break }
             layout.remove(newest)
             layout.insert(newest, near: layout.windows.last, maxColumns: Layout.maxColumns(forWidth: display.visible.width),
@@ -3472,7 +3516,7 @@ final class Tiler {
         }
         // A window that just arrived turned out narrow (it keeps its own width): a column of its own,
         // if that leaves the others their room.
-        if moved.isEmpty, let w = windows[id], now - w.seenAt < 4, limits[id]?.maxWidth != nil,
+        if moved.isEmpty, let w = windows[id], now - w.seenAt < 4 || justSorted(id), limits[id]?.maxWidth != nil,
            let (c, _) = layout.position(of: id), layout.columns[c].windows.count > 1 {
             var trial = layout
             trial.remove(id)
@@ -3664,9 +3708,9 @@ final class Tiler {
         /// Each of the plan's Workspaces, by display.
         let layouts: [[String: Layout]]
         /// The Workspace each of the plan's goes into: the same one, except for a test sort on one
-        /// display, where the one with the window used last goes into the Workspace you're in.
+        /// display, where the one with the window that matters most goes into the Workspace you're in.
         let workspace: [Int]
-        /// Every tiled window is already where the sort would put it.
+        /// Every tiled window is already where the sort would put it, laid out as it would be.
         let changesNothing: Bool
         /// Only this display's windows (a UUID), for tests: then nothing else changes, not even
         /// the Workspace you're in or which window has focus.
@@ -3677,6 +3721,8 @@ final class Tiler {
     private var beforeSort: (spaces: [[String: Layout]], stashed: [CGWindowID: CFTimeInterval], space: Int, at: CFTimeInterval, scope: String?)?
     /// The window to give focus once the show is over.
     private var focusAfterSort: CGWindowID?
+    /// The windows the last sort moved, and when (`justSorted`).
+    private var sortPlaced: (ids: Set<CGWindowID>, at: CFTimeInterval)?
     /// How long Undo Sort stays in the menu: after that, too much has moved since.
     static let sortUndoSeconds: CFTimeInterval = 600
 
@@ -3686,7 +3732,9 @@ final class Tiler {
     }
 
     /// The tiled windows a sort takes, with their display, the most recently used first: the
-    /// order you last used them in, then front to back. Only on `display`, when given.
+    /// order you've used them in since Lunchbox started, then for the rest, the order macOS keeps
+    /// their apps in for ⌘-Tab (it goes back further: `AppOrder`), then front to back. Only on
+    /// `display`, when given.
     private func sortable(on display: String? = nil) -> [(id: CGWindowID, uuid: String)] {
         var found: [(id: CGWindowID, uuid: String)] = []
         var seen = Set<CGWindowID>()
@@ -3701,17 +3749,22 @@ final class Tiler {
         let front = Dictionary(list.enumerated().compactMap { i, info in (info[kCGWindowNumber as String] as? Int).map { (CGWindowID($0), i) } },
                                uniquingKeysWith: min)
         let recency = Dictionary(recentlyFocused.enumerated().map { ($1, $0) }, uniquingKeysWith: min)
-        func rank(_ id: CGWindowID) -> (Int, Int) { (id == focusedID ? -1 : recency[id] ?? .max, front[id] ?? .max) }
+        let apps = Dictionary(AppOrder.frontToBack().enumerated().map { ($1, $0) }, uniquingKeysWith: min)
+        func rank(_ id: CGWindowID) -> (Int, Int, Int) {
+            (id == focusedID ? -1 : recency[id] ?? .max, windows[id].flatMap { apps[$0.pid] } ?? .max, front[id] ?? .max)
+        }
         return found.sorted { rank($0.id) < rank($1.id) }
     }
 
-    /// Works out a sort of the tiled windows into Workspaces by kind (`WindowSort`), without
-    /// moving anything. Nil when tiling is off or nothing is tiled. Only on `display` (a UUID)
-    /// when given: for tests on a display nobody watches.
+    /// Works out a sort of the tiled windows into Workspaces by kind (`WindowSort`), going by how
+    /// you've used them lately, without moving anything. Nil when tiling is off or nothing is
+    /// tiled. Only on `display` (a UUID) when given: for tests on a display nobody watches.
     func prepareSort(onDisplay display: String? = nil) -> PreparedSort? {
         guard enabled else { return nil }
         let found = sortable(on: display)
         guard !found.isEmpty else { return nil }
+        noteUse() // up to this moment
+        let now = Date.timeIntervalSinceReferenceDate
         var categories: [pid_t: String?] = [:]
         let items = found.map { id, _ -> WindowSort.Item in
             let w = windows[id]!
@@ -3719,16 +3772,31 @@ final class Tiler {
                 categories[w.pid] = NSRunningApplication(processIdentifier: w.pid)?.bundleURL
                     .flatMap { Bundle(url: $0)?.object(forInfoDictionaryKey: "LSApplicationCategoryType") as? String }
             }
-            return WindowSort.Item(id: id, bundleID: w.handle.app.bundleID, category: categories[w.pid] ?? nil)
+            return WindowSort.Item(id: id, bundleID: w.handle.app.bundleID, category: categories[w.pid] ?? nil,
+                                   title: w.title, use: usage.seconds(id, at: now))
         }
-        let plan = WindowSort.plan(items, limit: min(3, spaceCount), fit: sortFit(on: display))
         let home = Dictionary(found.map { ($0.id, $0.uuid) }, uniquingKeysWith: { a, _ in a })
+        // Windows on the same display that can't all be on it at once, going by the sizes they're
+        // known to take, don't share a Workspace.
+        func fits(_ ids: [WindowID]) -> Bool {
+            Dictionary(grouping: ids) { home[$0] }.allSatisfy { uuid, group in
+                guard let d = activeDisplays.first(where: { $0.uuid == uuid }) else { return true }
+                let r = room(on: d)
+                return WindowSort.canShare(group.map { CGSize(width: limits[$0]?.minWidth ?? 0, height: limits[$0]?.minHeight ?? 0) },
+                                           area: r.area, gap: r.gap,
+                                           columns: WindowSort.mostColumns(maxColumns: Layout.maxColumns(forWidth: d.visible.width),
+                                                                           width: r.area.width))
+            }
+        }
+        let plan = WindowSort.plan(items, together: usage.together(at: now), limit: min(3, spaceCount), fit: sortFit(on: display),
+                                   fits: fits)
         var layouts: [[String: Layout]] = Array(repeating: [:], count: plan.workspaces.count)
         for (s, workspace) in plan.workspaces.enumerated() {
             for d in activeDisplays {
                 let ids = workspace.windows.filter { home[$0] == d.uuid }
                 guard !ids.isEmpty else { continue }
                 layouts[s][d.uuid] = WindowSort.layout(ids, maxColumns: Layout.maxColumns(forWidth: d.visible.width),
+                                                       weights: plan.weights, comforts: plan.comforts,
                                                        limits: limits, room: room(on: d))
             }
         }
@@ -3747,8 +3815,15 @@ final class Tiler {
         let workspace = plan.workspaces.indices.map { s in
             display == nil ? s : ((s - plan.landing + currentSpace) % spaceCount + spaceCount) % spaceCount
         }
-        // Already sorted: each window in the Workspace the sort gives it, and nothing to hide.
+        // Already sorted: each window in the Workspace the sort gives it, laid out as it would be
+        // (after an hour in one of them, the same Workspaces can deserve a new layout), and
+        // nothing to hide.
         let changesNothing = plan.hidden.isEmpty && found.allSatisfy { id, _ in place(of: id)?.space == to[id].map { workspace[$0.space] } }
+            && layouts.indices.allSatisfy { s in
+                layouts[s].allSatisfy { uuid, layout in
+                    WindowSort.sameArrangement(workspace[s] < spaces.count ? spaces[workspace[s]][uuid]?.withoutPlaceholders() : nil, layout)
+                }
+            }
         return PreparedSort(plan: plan, trips: trips, layouts: layouts, workspace: workspace, changesNothing: changesNothing, scope: display)
     }
 
@@ -3788,7 +3863,9 @@ final class Tiler {
                       let app = NSRunningApplication(processIdentifier: pid), app.activationPolicy == .regular,
                       !Self.floatingApps.contains(app.bundleIdentifier ?? "") else { continue }
                 let category = app.bundleURL.flatMap { Bundle(url: $0)?.object(forInfoDictionaryKey: "LSApplicationCategoryType") as? String }
-                items.append(WindowSort.Item(id: WindowID(number), bundleID: app.bundleIdentifier, category: category))
+                // Titles come only with Screen Recording allowed; they help tell projects apart.
+                items.append(WindowSort.Item(id: WindowID(number), bundleID: app.bundleIdentifier, category: category,
+                                             title: info[kCGWindowName as String] as? String))
                 icons[WindowID(number)] = icon(pid)
             }
             plan = WindowSort.plan(items, limit: min(3, spaceCount),
@@ -3799,8 +3876,8 @@ final class Tiler {
     }
 
     /// Makes a sort so, with everything out of sight (the show covers the screen): the windows go
-    /// to their Workspaces, the least recently used past what fits are hidden, and you're in the
-    /// Workspace with the window used last. Undo Sort puts it all back.
+    /// to their Workspaces, the ones used least lately past what fits are hidden, and you're in the
+    /// Workspace with the window that matters most. Undo Sort puts it all back.
     func applySort(_ sort: PreparedSort) {
         guard enabled else { return }
         beforeSort = (spaces, stashed, currentSpace, CACurrentMediaTime(), sort.scope)
@@ -3827,6 +3904,7 @@ final class Tiler {
             }
         }
         let now = CACurrentMediaTime()
+        sortPlaced = (sorted, now)
         for id in sort.plan.hidden {
             stashed[id] = now
             if let w = windows[id] { park(w) }
@@ -3841,7 +3919,7 @@ final class Tiler {
         onChange?()
     }
 
-    /// After the show: the window used last gets focus, in the Workspace it went to.
+    /// After the show: the window that matters most gets focus, in the Workspace it went to.
     func focusSorted() {
         guard enabled, let id = focusAfterSort else { return }
         focusAfterSort = nil

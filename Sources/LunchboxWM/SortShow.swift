@@ -108,12 +108,19 @@ final class WindowSorter {
             seed = seed &* 6364136223846793005 &+ 1442695040888963407
             return CGFloat(seed >> 33) / CGFloat(1 << 31)
         }
-        let items = apps.enumerated().map { WindowSort.Item(id: WindowID($0.offset + 1), bundleID: $0.element.0, category: nil) }
+        // As if you'd spent the last while in Xcode, with Safari and Notes beside it.
+        let use: [Double] = [1800, 400, 250, 60, 120]
+        let items = apps.enumerated().map {
+            WindowSort.Item(id: WindowID($0.offset + 1), bundleID: $0.element.0, category: nil, title: $0.element.1,
+                            use: $0.offset < use.count ? use[$0.offset] : 10)
+        }
         let v = display.visible
         let plan = WindowSort.plan(items, fit: WindowSort.fit(forWidth: v.width))
         var to: [WindowID: (Int, CGRect)] = [:]
         for (s, w) in plan.workspaces.enumerated() {
-            let layout = WindowSort.layout(w.windows, maxColumns: Layout.maxColumns(forWidth: v.width))
+            let layout = WindowSort.layout(w.windows, maxColumns: Layout.maxColumns(forWidth: v.width), weights: plan.weights,
+                                           comforts: plan.comforts,
+                                           room: (CGSize(width: v.width - 2 * Tiler.gap, height: v.height - 2 * Tiler.gap), Tiler.gap))
             for (id, frame) in layout.frames(in: v, gap: Tiler.gap) { to[id] = (s, frame) }
         }
         let cards = items.map { item -> SortShow.Card in

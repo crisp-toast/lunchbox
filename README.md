@@ -19,14 +19,34 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
   screen for a moment, with a dot for each Workspace.
 - **Sort My Windows** sorts a messy desktop into Workspaces by kind: your work, the web, and chat and
   music, in that order, using only as many Workspaces as it takes (up to three). A Workspace holds
-  only as many windows as fit two to a column (four, a 2×2, on most displays; six on an ultrawide),
-  each an even share: a few windows stay together, small kinds share a Workspace while they fit, and a
-  big kind spills into the next free Workspace. With all three taken, they share a third row (six on
-  most displays); only past that do the least recently used go out of the way, still open, parked
+  only as many windows as fit two to a column (four, a 2×2, on most displays; six on an ultrawide):
+  a few windows stay together, small kinds share a Workspace while they fit, and a big kind spills
+  into the next free Workspace. With all three taken, they share a third row (six on most displays);
+  only past that do the ones you've used least lately go out of the way, still open, parked
   off screen like Hide: Summon, the Dock or ⌘-Tab brings one back (80 windows: three Workspaces of
-  six, 62 out of the way, and setup says so before you agree). A short show covers the screen in color while the windows move,
+  six, 62 out of the way, and setup says so before you agree).
+  It goes by how you work, not just what the windows are:
+  - **What matters most** is mostly how long each window has been in front lately while you were at
+    the Mac (fading by half every half hour), partly how recently you used it: Lunchbox's own record,
+    then for windows from before it started, the order macOS keeps apps in for ⌘-Tab. So after an
+    hour in Xcode and a glance at Messages, you land in your work with Xcode first, not in chat.
+  - **What belongs together stays together.** A browser window you keep going back and forth with
+    from your work (the docs beside your code, the page you're building) stays beside it. A kind too
+    big for one Workspace splits by task: windows you go between, an app's windows, and windows whose
+    titles name the same project (Lunchbox in Xcode, Terminal and VS Code in one Workspace, Delta
+    Binder's in the next).
+  - **The room goes where it's used.** Each Workspace's layout is worked out, not just evened out:
+    every way of putting its windows in columns and stacks is tried, with each split nudged a step at a
+    time, the window that matters most top left. The window you've been in gets the big tile when one
+    clearly stands out; chat, music, terminals and notes take a narrow column so a browser or editor
+    gets the width (three chats on a desktop display get a tall column each); bigger windows sit above
+    smaller ones in a stack; and minimum sizes are kept. It never squeezes a window that's easy to use
+    at an even share below that to grow another, and windows used about as much, or a crowded
+    Workspace, stay even. Apps for making music (Logic, GarageBand, DAWs) count as your work.
+  How long windows were in front is kept in memory only, and goes when the window closes.
+  A short show covers the screen in color while the windows move,
   flies each window to its Workspace so you see where everything went, then opens onto the Workspace
-  with the window you used last; a soft chord and bells play with it when macOS plays interface
+  with the window that matters most; a soft chord and bells play with it when macOS plays interface
   sounds, and with Reduce Motion nothing flies. Undo (on the note afterwards, which stays until you
   close it, and in the menu for ten minutes) puts everything back. Setup asks once at the end, only
   when there's a mess worth sorting; otherwise it's in the menu. It never runs on its own.
