@@ -104,13 +104,40 @@ let laptops = [
         #expect(frame.height == screen.height - 2 * gap)
     }
 
-    @Test func focusLeavesRoomForTheShelf() throws {
+    @Test func focusIsBigAndLeavesRoomForTheShelf() throws {
+        for screen in laptops {
+            var l = layout([[1], [2], [3]])
+            l.toggleSpotlight(1)
+            let frames = l.frames(in: screen, gap: gap)
+            let center = try #require(frames[1]), card = try #require(frames[2])
+            #expect(card.maxX < center.minX)
+            #expect(card.width >= 160)
+            #expect(center.height == screen.height - 2 * gap)
+            #expect(center.width > screen.width * 0.65)
+            #expect(abs(center.midX - screen.midX) <= 1)
+        }
+    }
+
+    @Test func focusShrinksFromWhereItIs() throws {
         let screen = laptops[0]
         var l = layout([[1], [2]])
         l.toggleSpotlight(1)
-        let frames = l.frames(in: screen, gap: gap)
-        let center = try #require(frames[1]), card = try #require(frames[2])
-        #expect(card.maxX < center.minX)
+        let before = try #require(l.frames(in: screen, gap: gap)[1])
+        do { let r = l.resize(1, by: -0.05, in: screen, gap: gap, limits: [:]); #expect(r) }
+        let after = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(after.width < before.width && after.width > before.width * 0.85)
+        #expect(after.height < before.height && after.height > before.height * 0.85)
+        do { let r = l.resize(1, toward: .right, by: 0.05, in: screen, gap: gap); #expect(r) }
+        let wider = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(wider.width > after.width && wider.height == after.height)
+    }
+
+    @Test func focusOnABigDisplayIsUnchanged() throws {
+        var l = layout([[1], [2]])
+        l.toggleSpotlight(1)
+        let center = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(abs(center.width - (screen.width - 2 * gap) * Layout.defaultSingleScale) <= 1)
+        #expect(abs(center.width / center.height - Layout.singleAspect) < 0.01)
     }
 
     @Test func aBigDisplayKeepsSixtyPercent() {

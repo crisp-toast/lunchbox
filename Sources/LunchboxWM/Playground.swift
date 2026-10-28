@@ -247,9 +247,9 @@ final class Playground: NSView {
         case .move(let direction):
             if let id = focused { _ = layout.move(id, direction) }
         case .grow:
-            if let id = focused { layout.resize(id, by: 0.08, loneScale: loneScale) }
+            if let id = focused { layout.resize(id, by: 0.08, from: startingShape(layout)) }
         case .shrink:
-            if let id = focused { layout.resize(id, by: -0.08, loneScale: loneScale) }
+            if let id = focused { layout.resize(id, by: -0.08, from: startingShape(layout)) }
         case .resizeAlong(let direction):
             if let id = focused {
                 layout.resize(id, toward: direction, by: 0.05, in: usable, gap: Self.gap, loneScale: loneScale)
@@ -468,6 +468,11 @@ final class Playground: NSView {
     private var loneScale: Double {
         let screen = window?.screen ?? NSScreen.main
         return screen.map { Layout.loneScale(in: $0.visibleFrame.insetBy(dx: Tiler.gap, dy: Tiler.gap)) } ?? Layout.defaultSingleScale
+    }
+
+    /// Where a lone or focused window here starts growing or shrinking from: the shape it shows at.
+    private func startingShape(_ layout: Layout) -> (scale: Double, height: Double?) {
+        layout.defaultShape(in: usable.insetBy(dx: Self.gap, dy: Self.gap), loneScale: loneScale)
     }
 
     private func visibleFrames() -> [WindowID: CGRect] { frames(for: workspaces[current]) }

@@ -71,6 +71,9 @@ public struct Layout: Equatable, Sendable {
     /// whole screen). A screen with less than `comfortableRoom` of it to spare fills instead.
     public static let comfortableSize = CGSize(width: 1440, height: 900)
     public static let comfortableRoom = 1.25
+    /// On such a screen, Focus's window comes as big as leaves this much room for the shelf
+    /// beside it (and as much on the other side, so it stays centered).
+    public static let focusShelfRoom: CGFloat = 216
     public static let singleScaleRange = 0.2...1.0
     public static let singleHeightRange = 0.15...1.0
     public static let minFraction = 0.12
@@ -414,7 +417,7 @@ public struct Layout: Equatable, Sendable {
         if windowCount == 1 || spotlight == id {
             let usable = rect.insetBy(dx: gap, dy: gap)
             guard usable.width > 0, usable.height > 0 else { return false }
-            let now = centeredFrame(id, in: usable, lone: windowCount == 1 ? loneScale ?? Self.loneScale(in: usable) : nil)
+            let now = centeredFrame(id, in: usable, lone: loneScale)
             var scale = Double(now.width / usable.width), height = Double(now.height / usable.height)
             if horizontal {
                 scale = min(Self.singleScaleRange.upperBound, max(Self.singleScaleRange.lowerBound, scale + delta))
@@ -446,8 +449,8 @@ public struct Layout: Equatable, Sendable {
                                 limits: [WindowID: SizeLimits]) -> Bool {
         guard let (c, r) = position(of: id) else { return false }
         if windowCount == 1 || spotlight == id {
-            let lone = Self.loneScale(in: rect.insetBy(dx: gap, dy: gap))
-            return visibly(id, delta, in: rect, gap: gap, limits: limits) { $0.resize(id, by: $1, loneScale: lone) }
+            let shape = defaultShape(in: rect.insetBy(dx: gap, dy: gap))
+            return visibly(id, delta, in: rect, gap: gap, limits: limits) { $0.resize(id, by: $1, from: shape) }
         }
         var changed = false
         if columns.count > 1 {
@@ -516,17 +519,17 @@ public struct Layout: Equatable, Sendable {
     /// Gives a window more (positive `delta`) or less space. A lone window grows
     /// or shrinks around the screen center; a tiled window changes both its
     /// column's width and its height within the stack, where it has neighbors.
-    /// `loneScale` (see `loneScale(in:)`) lets a lone window start from the size it shows at,
-    /// which depends on the screen.
+    /// `shape` (see `defaultShape`) lets a lone or spotlighted window start from the size it shows
+    /// at, which depends on the screen.
     @discardableResult
-    public mutating func resize(_ id: WindowID, by delta: Double, loneScale: Double? = nil) -> Bool {
+    public mutating func resize(_ id: WindowID, by delta: Double, from shape: (scale: Double, height: Double?)? = nil) -> Bool {
         guard let (c, r) = position(of: id) else { return false }
         if windowCount == 1 || spotlight == id {
             // Another window's shape doesn't carry over: start from the default.
             if singleOwner != id {
                 resetSingle()
                 singleOwner = id
-                if windowCount == 1, let loneScale { singleScale = loneScale }
+                if let shape { (singleScale, singleHeight) = shape }
             }
             var next = min(Self.singleScaleRange.upperBound, max(Self.singleScaleRange.lowerBound, singleScale + delta))
             if let h = singleHeight {
@@ -645,11 +648,11 @@ public struct Layout: Equatable, Sendable {
         )
         var result: [WindowID: CGRect] = [:]
         if windowCount == 1, let id = windows.first {
-            result[id] = Self.fit(id, in: centeredFrame(id, in: usable, lone: loneScale ?? Self.loneScale(in: usable)), limits: limits, within: usable)
+            result[id] = Self.fit(id, in: centeredFrame(id, in: usable, lone: loneScale), limits: limits, within: usable)
             return result
         }
         if let spot = spotlight, contains(spot) {
-            let center = Self.fit(spot, in: centeredFrame(spot, in: usable), limits: limits, within: usable)
+            let center = Self.fit(spot, in: centeredFrame(spot, in: usable, lone: loneScale), limits: limits, within: usable)
             result[spot] = center
             let others = shelved
             for (id, frame) in zip(others, Self.shelfFrames(count: others.count, beside: center, in: usable, gap: gap)) {
@@ -701,11 +704,23 @@ public struct Layout: Equatable, Sendable {
         return CGRect(x: x, y: y, width: size.width, height: size.height)
     }
 
-    /// Where a lone or spotlighted window sits: the shape the user gave it, else
-    /// the default 16:10 (for a lone window, `loneScale` of the screen).
+    /// Where a lone or spotlighted window sits: the shape the user gave it, else `defaultShape`.
     func centeredFrame(_ id: WindowID, in usable: CGRect, lone: Double? = nil) -> CGRect {
         if singleOwner == id { return Self.singleFrame(in: usable, scale: singleScale, height: singleHeight) }
-        return Self.singleFrame(in: usable, scale: lone ?? Self.defaultSingleScale)
+        let shape = defaultShape(in: usable, loneScale: lone)
+        return Self.singleFrame(in: usable, scale: shape.scale, height: shape.height)
+    }
+
+    /// The shape a lone or spotlighted window takes until the user gives it one: its width as a
+    /// fraction of `usable`, and its height (nil: 16:10). Alone, `loneScale` of the screen. In
+    /// Focus, 16:10 at `defaultSingleScale` on a big display; on one a lone window fills (a
+    /// laptop's), the full height and as wide as leaves the shelf `focusShelfRoom`, so focusing a
+    /// window never makes it small. `loneScale` stands in for the screen's own (the Playground).
+    public func defaultShape(in usable: CGRect, loneScale: Double? = nil) -> (scale: Double, height: Double?) {
+        let lone = loneScale ?? Self.loneScale(in: usable)
+        if windowCount == 1 { return (lone, nil) }
+        guard lone >= 1, usable.width > 0 else { return (Self.defaultSingleScale, nil) }
+        return (max(Self.defaultSingleScale, 1 - Double(2 * Self.focusShelfRoom / usable.width)), 1)
     }
 
     /// A lone window's default width, as a fraction of the usable width: `defaultSingleScale`,
