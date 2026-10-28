@@ -247,12 +247,12 @@ final class Playground: NSView {
         case .move(let direction):
             if let id = focused { _ = layout.move(id, direction) }
         case .grow:
-            if let id = focused { layout.resize(id, by: 0.08) }
+            if let id = focused { layout.resize(id, by: 0.08, loneScale: loneScale) }
         case .shrink:
-            if let id = focused { layout.resize(id, by: -0.08) }
+            if let id = focused { layout.resize(id, by: -0.08, loneScale: loneScale) }
         case .resizeAlong(let direction):
             if let id = focused {
-                layout.resize(id, toward: direction, by: 0.05, in: usable, gap: Self.gap)
+                layout.resize(id, toward: direction, by: 0.05, in: usable, gap: Self.gap, loneScale: loneScale)
             }
         case .resizeMode:
             break // shown by setResizing above: the line and the orange outline
@@ -460,7 +460,14 @@ final class Playground: NSView {
     }
 
     private func frames(for layout: Layout) -> [WindowID: CGRect] {
-        layout.frames(in: usable, gap: Self.gap)
+        layout.frames(in: usable, gap: Self.gap, loneScale: loneScale)
+    }
+
+    /// A lone window here takes the share of the screen it would on the real one (filling a
+    /// laptop's), not what this small picture of it would get.
+    private var loneScale: Double {
+        let screen = window?.screen ?? NSScreen.main
+        return screen.map { Layout.loneScale(in: $0.visibleFrame.insetBy(dx: Tiler.gap, dy: Tiler.gap)) } ?? Layout.defaultSingleScale
     }
 
     private func visibleFrames() -> [WindowID: CGRect] { frames(for: workspaces[current]) }

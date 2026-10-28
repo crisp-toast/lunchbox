@@ -787,7 +787,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
   // by the time they press.
   const BEATS = [
     { t: 0, keys: [], cap: "An empty Workspace on a real Mac." },
-    { t: 0.93, keys: [], cap: "Open a window. It sits centered at 16:10." },
+    { t: 0.93, keys: [], cap: "Open a window. It sits centered at 16:10, or fills a laptop's screen." },
     { t: 2.7, keys: [], cap: "Open another and they share the screen." },
     { t: 4.52, keys: [], cap: "A third goes beneath the second." },
     { t: 6.62, keys: ["⌘", "←"], cap: "Move focus with ⌘ and an arrow." },
@@ -983,7 +983,7 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
       { win: { A: R.single }, focus: "A", keys: ["↩"], cap: "↩ opens it, already tiled and focused." },
     ]},
     { title: "It tiles itself", hint: "just open windows", steps: [
-      { win: { A: R.single }, focus: "A", keys: [], cap: "One window sits centered at a calm 16:10. Never stretched edge to edge." },
+      { win: { A: R.single }, focus: "A", keys: [], cap: "One window sits centered at a calm 16:10. On a laptop, it gets the whole screen." },
       { win: { A: R.halfL, B: R.halfR }, focus: "B", keys: [], cap: "Open a second and they share the screen." },
       { win: { A: R.halfL, B: R.gTR, C: R.gBR }, focus: "C", keys: [], cap: "A third goes beneath the second. The first keeps its half." },
       { win: { A: R.gTL, D: R.gBL, B: R.gTR, C: R.gBR }, focus: "D", keys: [], cap: "A fourth goes beneath the first: a 2×2 grid, and nothing crossed the screen." },

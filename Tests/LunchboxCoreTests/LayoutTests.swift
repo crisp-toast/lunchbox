@@ -59,6 +59,65 @@ func layout(_ columns: [[WindowID]]) -> Layout {
     }
 }
 
+// Usable areas (below the menu bar) of screens too small for a centered window to be worth it.
+let laptops = [
+    CGRect(x: 0, y: 33, width: 1470, height: 923),  // 13" MacBook Air
+    CGRect(x: 0, y: 38, width: 1512, height: 944),  // 14" MacBook Pro
+    CGRect(x: 0, y: 38, width: 1728, height: 1079), // 16" MacBook Pro
+    CGRect(x: 0, y: 25, width: 1920, height: 1055), // a 1080p display
+]
+
+@Suite struct SingleWindowOnALaptop {
+    @Test func fillsTheScreen() throws {
+        for screen in laptops {
+            let frame = try #require(layout([[1]]).frames(in: screen, gap: gap)[1])
+            #expect(frame == screen.insetBy(dx: gap, dy: gap))
+        }
+    }
+
+    @Test func aMidSizeScreenStillGetsAComfortableWindow() throws {
+        let screen = CGRect(x: 0, y: 25, width: 2304, height: 1271) // a 4K display at 2304×1296
+        let frame = try #require(layout([[1]]).frames(in: screen, gap: gap)[1])
+        #expect(frame.width == Layout.comfortableSize.width)
+        #expect(frame.height == Layout.comfortableSize.height)
+        #expect(abs(frame.midX - screen.midX) <= 1)
+    }
+
+    @Test func shrinksFromFullAndGrowsBack() throws {
+        let screen = laptops[1]
+        var l = layout([[1]])
+        do { let r = l.resize(1, by: 0.08, in: screen, gap: gap, limits: [:]); #expect(!r) } // already full
+        do { let r = l.resize(1, by: -0.08, in: screen, gap: gap, limits: [:]); #expect(r) }
+        let smaller = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(smaller.width < screen.width - 2 * gap && smaller.width > screen.width * 0.8)
+        #expect(abs(smaller.midX - screen.midX) <= 1)
+        do { let r = l.resize(1, by: 0.08, in: screen, gap: gap, limits: [:]); #expect(r) }
+        #expect(l.frames(in: screen, gap: gap)[1] == screen.insetBy(dx: gap, dy: gap))
+    }
+
+    @Test func oneSideShrinksFromFull() throws {
+        let screen = laptops[0]
+        var l = layout([[1]])
+        do { let r = l.resize(1, toward: .left, by: 0.05, in: screen, gap: gap); #expect(r) }
+        let frame = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(frame.width < screen.width - 2 * gap)
+        #expect(frame.height == screen.height - 2 * gap)
+    }
+
+    @Test func focusLeavesRoomForTheShelf() throws {
+        let screen = laptops[0]
+        var l = layout([[1], [2]])
+        l.toggleSpotlight(1)
+        let frames = l.frames(in: screen, gap: gap)
+        let center = try #require(frames[1]), card = try #require(frames[2])
+        #expect(card.maxX < center.minX)
+    }
+
+    @Test func aBigDisplayKeepsSixtyPercent() {
+        #expect(abs(Layout.loneScale(in: screen.insetBy(dx: gap, dy: gap)) - Layout.defaultSingleScale) < 0.0001)
+    }
+}
+
 @Suite struct Tiling {
     @Test func twoWindowsSplitTheScreen() throws {
         let frames = layout([[1], [2]]).frames(in: screen, gap: gap)

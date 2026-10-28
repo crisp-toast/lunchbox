@@ -2,7 +2,9 @@
 
 A small, fast tiling window manager for macOS that lives in the menu bar.
 
-- One window on a screen sits centered at a comfortable 16:10 size. Two tile side by side; a third
+- One window on a big display sits centered at a comfortable 16:10 size (never smaller than
+  1440×900); on a laptop's screen, or any without room to spare around that, it fills the screen
+  (⌘⇧− makes it smaller, still centered). Two tile side by side; a third
   goes beneath the second, so the first keeps its half; a fourth goes beneath the first, making a
   2×2 grid without any window crossing the screen. Ultrawide displays give each new window a column
   of its own (up to four), and any window can be moved into more columns by hand.
@@ -162,7 +164,7 @@ Apps you open often rise to the top.
 - Opening an app that isn't running yet (or is running with no windows), or a **New … window**,
   makes room right away, so a slow launch never looks like nothing happened: the windows here glide
   aside and a frosted **placeholder** with the app's icon, gently pulsing, holds the exact spot and
-  size the window will get (alone, or in Focus, it's centered at 16:10). The app's first new window lands right in it and nothing else moves; any more windows
+  size the window will get (alone, or in Focus, it's centered at 16:10, or alone on a laptop, the whole screen). The app's first new window lands right in it and nothing else moves; any more windows
   it opens tile as usual. If the app shows something that doesn't tile instead (Xcode's welcome
   window, a template chooser, a dialog), brings back a window it already had, or closes what it
   showed, the placeholder goes at once. If no window comes within about 8 seconds (a little longer

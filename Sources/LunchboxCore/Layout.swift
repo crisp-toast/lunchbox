@@ -34,7 +34,7 @@ public struct Column: Equatable, Sendable {
 ///
 /// Windows live in columns that sit side by side; a column can hold a stack of
 /// windows. A display with a single window shows it centered at a comfortable
-/// size instead of filling the screen.
+/// size instead of filling the screen, or fills a screen too small for that (a laptop's).
 public struct Layout: Equatable, Sendable {
     public var columns: [Column]
     /// Width of a lone window as a fraction of the usable screen width, once
@@ -67,6 +67,10 @@ public struct Layout: Equatable, Sendable {
 
     public static let defaultSingleScale = 0.6
     public static let singleAspect = 1.6 // 16:10
+    /// The smallest a lone window comes by default: the size apps are made for (a 15" laptop's
+    /// whole screen). A screen with less than `comfortableRoom` of it to spare fills instead.
+    public static let comfortableSize = CGSize(width: 1440, height: 900)
+    public static let comfortableRoom = 1.25
     public static let singleScaleRange = 0.2...1.0
     public static let singleHeightRange = 0.15...1.0
     public static let minFraction = 0.12
@@ -362,11 +366,13 @@ public struct Layout: Equatable, Sendable {
     }
 
     @discardableResult
-    public mutating func resize(_ id: WindowID, toward direction: Direction, by step: Double, in rect: CGRect, gap: CGFloat) -> Bool {
+    public mutating func resize(_ id: WindowID, toward direction: Direction, by step: Double, in rect: CGRect, gap: CGFloat,
+                                loneScale: Double? = nil) -> Bool {
         guard let (c, r) = position(of: id) else { return false }
         let horizontal = direction == .left || direction == .right
         if windowCount == 1 || spotlight == id {
-            return resize(id, by: direction == .right || direction == .up ? step : -step, horizontal: horizontal, in: rect, gap: gap)
+            return resize(id, by: direction == .right || direction == .up ? step : -step, horizontal: horizontal, in: rect, gap: gap,
+                          loneScale: loneScale)
         }
         let forward = direction == .right || direction == .down
         func push(_ shares: inout [Double], at i: Int) -> Bool {
@@ -400,13 +406,15 @@ public struct Layout: Equatable, Sendable {
     /// a negative `delta` makes it smaller. A tiled window's column gets wider or narrower, or its
     /// share of its stack taller or shorter; a centered window (alone, or in Focus) changes that
     /// side only and stays centered. `rect` is the display's usable area, to keep the other side.
+    /// `loneScale` as for `frames`.
     @discardableResult
-    public mutating func resize(_ id: WindowID, by delta: Double, horizontal: Bool, in rect: CGRect, gap: CGFloat) -> Bool {
+    public mutating func resize(_ id: WindowID, by delta: Double, horizontal: Bool, in rect: CGRect, gap: CGFloat,
+                                loneScale: Double? = nil) -> Bool {
         guard let (c, r) = position(of: id) else { return false }
         if windowCount == 1 || spotlight == id {
             let usable = rect.insetBy(dx: gap, dy: gap)
             guard usable.width > 0, usable.height > 0 else { return false }
-            let now = centeredFrame(id, in: usable)
+            let now = centeredFrame(id, in: usable, lone: windowCount == 1 ? loneScale ?? Self.loneScale(in: usable) : nil)
             var scale = Double(now.width / usable.width), height = Double(now.height / usable.height)
             if horizontal {
                 scale = min(Self.singleScaleRange.upperBound, max(Self.singleScaleRange.lowerBound, scale + delta))
@@ -438,7 +446,8 @@ public struct Layout: Equatable, Sendable {
                                 limits: [WindowID: SizeLimits]) -> Bool {
         guard let (c, r) = position(of: id) else { return false }
         if windowCount == 1 || spotlight == id {
-            return visibly(id, delta, in: rect, gap: gap, limits: limits) { $0.resize(id, by: $1) }
+            let lone = Self.loneScale(in: rect.insetBy(dx: gap, dy: gap))
+            return visibly(id, delta, in: rect, gap: gap, limits: limits) { $0.resize(id, by: $1, loneScale: lone) }
         }
         var changed = false
         if columns.count > 1 {
@@ -507,14 +516,17 @@ public struct Layout: Equatable, Sendable {
     /// Gives a window more (positive `delta`) or less space. A lone window grows
     /// or shrinks around the screen center; a tiled window changes both its
     /// column's width and its height within the stack, where it has neighbors.
+    /// `loneScale` (see `loneScale(in:)`) lets a lone window start from the size it shows at,
+    /// which depends on the screen.
     @discardableResult
-    public mutating func resize(_ id: WindowID, by delta: Double) -> Bool {
+    public mutating func resize(_ id: WindowID, by delta: Double, loneScale: Double? = nil) -> Bool {
         guard let (c, r) = position(of: id) else { return false }
         if windowCount == 1 || spotlight == id {
             // Another window's shape doesn't carry over: start from the default.
             if singleOwner != id {
                 resetSingle()
                 singleOwner = id
+                if windowCount == 1, let loneScale { singleScale = loneScale }
             }
             var next = min(Self.singleScaleRange.upperBound, max(Self.singleScaleRange.lowerBound, singleScale + delta))
             if let h = singleHeight {
@@ -623,14 +635,17 @@ public struct Layout: Equatable, Sendable {
     /// - limits: windows that can't fill a tile (see `SizeLimits`). Each sits at the size it
     ///   takes, centered in its slot, and its column (or its share of a stack) is sized to fit
     ///   it, so a narrow window doesn't leave half the screen empty.
-    public func frames(in rect: CGRect, gap: CGFloat, limits: [WindowID: SizeLimits] = [:]) -> [WindowID: CGRect] {
+    /// - loneScale: a lone window's default width, for a picture of a screen of another size (the
+    ///   Playground); otherwise `loneScale(in:)` of this one.
+    public func frames(in rect: CGRect, gap: CGFloat, limits: [WindowID: SizeLimits] = [:],
+                       loneScale: Double? = nil) -> [WindowID: CGRect] {
         let usable = CGRect(
             x: (rect.minX + gap).rounded(), y: (rect.minY + gap).rounded(),
             width: (rect.width - 2 * gap).rounded(), height: (rect.height - 2 * gap).rounded()
         )
         var result: [WindowID: CGRect] = [:]
         if windowCount == 1, let id = windows.first {
-            result[id] = Self.fit(id, in: centeredFrame(id, in: usable), limits: limits, within: usable)
+            result[id] = Self.fit(id, in: centeredFrame(id, in: usable, lone: loneScale ?? Self.loneScale(in: usable)), limits: limits, within: usable)
             return result
         }
         if let spot = spotlight, contains(spot) {
@@ -687,10 +702,23 @@ public struct Layout: Equatable, Sendable {
     }
 
     /// Where a lone or spotlighted window sits: the shape the user gave it, else
-    /// the default 16:10.
-    func centeredFrame(_ id: WindowID, in usable: CGRect) -> CGRect {
+    /// the default 16:10 (for a lone window, `loneScale` of the screen).
+    func centeredFrame(_ id: WindowID, in usable: CGRect, lone: Double? = nil) -> CGRect {
         if singleOwner == id { return Self.singleFrame(in: usable, scale: singleScale, height: singleHeight) }
-        return Self.singleFrame(in: usable, scale: Self.defaultSingleScale)
+        return Self.singleFrame(in: usable, scale: lone ?? Self.defaultSingleScale)
+    }
+
+    /// A lone window's default width, as a fraction of the usable width: `defaultSingleScale`,
+    /// but never smaller than `comfortableSize`, and the whole screen (1) on one without room to
+    /// spare around that, like a laptop's or a 1080p display, where a smaller window only wastes
+    /// space. A big display (the 5K's 2560×1440) keeps the window centered at 60%.
+    public static func loneScale(in usable: CGRect) -> Double {
+        guard usable.width > 0, usable.height > 0 else { return defaultSingleScale }
+        if usable.width < comfortableSize.width * comfortableRoom || usable.height < comfortableSize.height * comfortableRoom { return 1 }
+        let width = max(Double(usable.width) * defaultSingleScale, Double(comfortableSize.width))
+        // Still 16:10 and on the screen.
+        let fits = Double(usable.height) * singleAspect
+        return min(1, min(width, fits) / Double(usable.width))
     }
 
     /// A lone (or spotlighted) window, centered. By default 16:10 at `scale` of

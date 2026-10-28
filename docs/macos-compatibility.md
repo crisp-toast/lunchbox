@@ -32,7 +32,7 @@ version it was found on.
 | Screen Recording prompt and Settings link | ✓ | ✓ | ✓ |
 | Open at Login (SMAppService agent; "Background Items Added") | ✓ | ✓ | ✓ ("App Background Activity") |
 | Opening the app by hand hands off to the agent | ✓ | ✓ | ✓ |
-| Basic tiling: lone window centered 16:10, columns and stacks, 8 pt gaps | ✓ | ✓ | ✓ |
+| Basic tiling: lone window centered 16:10 (full screen on a laptop), columns and stacks, 8 pt gaps | ✓ | ✓ | ✓ |
 | Focus and move shortcuts (left ⌘), Halo | ✓ | ✓ | ✓ |
 | Three Workspaces, windows parked off the corner | ✓ | ✓ | ✓ (a 1 pt sliver shows, below) |
 | Focus and the Shelf; a card click ends Focus | ✓ with live previews | ✓ (previews denied, so app icons) | ✓ with live previews |
