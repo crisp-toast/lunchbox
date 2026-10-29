@@ -155,3 +155,55 @@ import Testing
         #expect(OffDisplayMove.decide(dragged: false, inputAgo: 0.1, appInFront: false) == .backToTile)
     }
 }
+
+/// A laptop's lid closed and opened again, the displays asleep, the lock screen: windows keep
+/// their tiles through it, whatever their apps say, until the Mac has been back in use a moment.
+@Suite struct BackFromSleep {
+    @Test func awakeAndUnlockedNothingHolds() {
+        #expect(!SleepWatch().holding(at: 100, locked: false))
+    }
+
+    @Test func holdsWhileAsleepAndForAMomentAfterWaking() {
+        var watch = SleepWatch()
+        watch.willSleep()
+        #expect(watch.holding(at: 10, locked: false))
+        // Asleep for hours: the clock it's given doesn't matter until it wakes.
+        #expect(watch.holding(at: 10_000, locked: false))
+        watch.didWake(at: 20)
+        #expect(!watch.asleep)
+        #expect(watch.holding(at: 20 + SleepWatch.settle - 0.5, locked: false))
+        #expect(!watch.holding(at: 20 + SleepWatch.settle + 0.5, locked: false))
+    }
+
+    @Test func holdsWhileTheDisplaysSleep() {
+        var watch = SleepWatch()
+        watch.displaysDidSleep()
+        #expect(watch.asleep)
+        watch.displaysDidWake(at: 5)
+        #expect(watch.holding(at: 6, locked: false))
+        #expect(!watch.holding(at: 5 + SleepWatch.settle + 1, locked: false))
+    }
+
+    @Test func holdsWhileLockedAndForAMomentAfterUnlocking() {
+        var watch = SleepWatch()
+        #expect(watch.holding(at: 50, locked: true))
+        watch.didUnlock(at: 60)
+        #expect(watch.holding(at: 61, locked: false))
+        #expect(!watch.holding(at: 60 + SleepWatch.settle + 1, locked: false))
+    }
+
+    @Test func theLockScreenIsOnlyAskedAboutWhenNothingElseHolds() {
+        var watch = SleepWatch()
+        watch.willSleep()
+        var asked = false
+        _ = watch.holding(at: 1, locked: { asked = true; return false }())
+        #expect(!asked)
+    }
+
+    @Test func aLaterWakeKeepsTheLaterSettle() {
+        var watch = SleepWatch()
+        watch.didUnlock(at: 100)
+        watch.displaysDidWake(at: 90) // reported late: doesn't shorten the moment
+        #expect(watch.holding(at: 100 + SleepWatch.settle - 0.5, locked: false))
+    }
+}

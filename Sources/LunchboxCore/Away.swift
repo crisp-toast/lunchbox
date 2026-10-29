@@ -92,6 +92,37 @@ public struct CoverWatch: Sendable {
     }
 }
 
+/// Sleep (a laptop's lid closed), sleeping displays and the lock screen take every window out of
+/// view, and on the way back apps answer slowly, oddly or not at all. None of that means a window
+/// closed or left its Workspace: until the Mac has been back in use for `settle`, windows keep
+/// their tiles whatever their apps say, and only then is anything missing looked at again.
+public struct SleepWatch: Sendable {
+    /// How long after waking or unlocking before a window going missing counts again.
+    public static let settle = 4.0
+    private var macAsleep = false
+    private var displaysAsleep = false
+    private var settledAt = 0.0
+
+    public init() {}
+
+    /// The Mac or its displays are asleep.
+    public var asleep: Bool { macAsleep || displaysAsleep }
+
+    public mutating func willSleep() { macAsleep = true }
+    public mutating func displaysDidSleep() { displaysAsleep = true }
+    public mutating func didWake(at time: Double) { macAsleep = false; settling(from: time) }
+    public mutating func displaysDidWake(at time: Double) { displaysAsleep = false; settling(from: time) }
+    public mutating func didUnlock(at time: Double) { settling(from: time) }
+
+    private mutating func settling(from time: Double) { settledAt = max(settledAt, time + Self.settle) }
+
+    /// Windows keep their tiles whatever their apps say. `locked`: the screen is locked right now
+    /// (asked only when nothing else already says to hold).
+    public func holding(at time: Double, locked: @autoclosure () -> Bool) -> Bool {
+        asleep || time < settledAt || locked()
+    }
+}
+
 /// A tiled window that went onto a display LunchboxWM doesn't tile (Use All Displays off): a
 /// dummy plug agents test on, or a screen you keep for windows you'd rather not tile.
 public enum OffDisplayMove: Equatable, Sendable {

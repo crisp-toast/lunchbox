@@ -152,6 +152,10 @@ final class Tiler {
     /// Mission Control, App Exposé and Show Desktop: windows out of sight keep their tiles.
     private let overview = DockOverview()
     private var cover = CoverWatch()
+    /// Asleep, locked or just back: windows keep their tiles whatever their apps say.
+    private var sleepWatch = SleepWatch()
+    /// It held through sleep or the lock screen: once things settle, every app is asked again.
+    private var heldForSleep = false
     /// Where tiled windows that went out of view without closing were, so they come back there.
     private var away = AwayMemory()
     var onChange: (() -> Void)?
@@ -208,6 +212,8 @@ final class Tiler {
         guard !enabled else { return }
         enabled = true
         initialScanDone = false
+        sleepWatch = SleepWatch()
+        heldForSleep = false
         // Windows put back after LunchboxWM starts again count as time back; after a pause, they
         // only undo the pause.
         countsRestores = !startedBefore
@@ -252,6 +258,22 @@ final class Tiler {
         on(NSWorkspace.didUnhideApplicationNotification) { [weak self] n in self?.rescan(n, after: [0.03, 0.2, 0.6, 1.5]) }
         on(NSWorkspace.activeSpaceDidChangeNotification) { [weak self] _ in self?.scanAll(after: [0.03, 0.8, 1.6]) }
         on(NSApplication.didChangeScreenParametersNotification, .default) { [weak self] _ in self?.displaysMayHaveChanged() }
+        // A laptop's lid closed, the displays asleep, the lock screen: every Workspace stays as it
+        // is until the Mac has been back in use a moment (`SleepWatch`).
+        on(NSWorkspace.willSleepNotification) { [weak self] _ in self?.sleepWatch.willSleep(); self?.heldForSleep = true }
+        on(NSWorkspace.screensDidSleepNotification) { [weak self] _ in self?.sleepWatch.displaysDidSleep(); self?.heldForSleep = true }
+        on(NSWorkspace.didWakeNotification) { [weak self] _ in
+            self?.sleepWatch.didWake(at: CACurrentMediaTime())
+            self?.displaysMayHaveChanged()
+        }
+        on(NSWorkspace.screensDidWakeNotification) { [weak self] _ in
+            self?.sleepWatch.displaysDidWake(at: CACurrentMediaTime())
+            self?.displaysMayHaveChanged()
+        }
+        on(Notification.Name("com.apple.screenIsUnlocked"), DistributedNotificationCenter.default()) { [weak self] _ in
+            self?.sleepWatch.didUnlock(at: CACurrentMediaTime())
+            self?.heldForSleep = true
+        }
         // Showing or hiding the Dock changes the usable area of the screen.
         on(Notification.Name("com.apple.dock.prefchanged"), DistributedNotificationCenter.default()) { [weak self] _ in
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self?.displaysChanged() }
@@ -447,10 +469,10 @@ final class Tiler {
         }
     }
 
-    /// Runs on the app's queue.
-    private static func readWindows(of app: AppHandle) -> [WindowInfo] {
-        let all = app.element.elements(kAXWindowsAttribute)
-        return all.compactMap { readWindow($0, app: app) }
+    /// Runs on the app's queue. Nil when the app didn't answer (busy, or still waking up after
+    /// sleep): that says nothing about its windows.
+    private static func readWindows(of app: AppHandle) -> [WindowInfo]? {
+        app.element.answeredElements(kAXWindowsAttribute)?.compactMap { readWindow($0, app: app) }
     }
 
     /// Runs on the app's queue.
@@ -504,7 +526,7 @@ final class Tiler {
         for app in apps.values {
             group.enter()
             app.queue.async {
-                let infos = Self.readWindows(of: app)
+                let infos = Self.readWindows(of: app) ?? []
                 lock.lock(); results.append((app, infos)); lock.unlock()
                 group.leave()
             }
@@ -530,8 +552,9 @@ final class Tiler {
         }
     }
 
-    private func apply(_ infos: [WindowInfo], for app: AppHandle) {
-        guard enabled, apps[app.pid] === app else { return }
+    private func apply(_ infos: [WindowInfo]?, for app: AppHandle) {
+        // An app that didn't answer has told us nothing: its windows stay as they are.
+        guard enabled, apps[app.pid] === app, let infos else { return }
         let onScreen = onScreenWindowIDs()
         let shown = shownSpaces()
         let seen = Set(infos.map(\.id))
@@ -547,6 +570,9 @@ final class Tiler {
             // A closed window says so and is forgotten right then; a tiled one that only
             // went missing gets a moment to show up again (one away, longer).
             if place(of: w.id) != nil || away[w.id] != nil {
+                // Asleep, locked or just back: apps list their windows oddly then. Every app is
+                // asked again once things settle (`checkForGhosts`).
+                if holding { continue }
                 let since = unlistedSince[w.id] ?? now
                 unlistedSince[w.id] = since
                 let wait = away[w.id] != nil ? 6.0 : 1.5
@@ -555,7 +581,12 @@ final class Tiler {
                     continue
                 }
             }
-            forget(w.id)
+            // It never said it closed, so it may turn up again (an app slow to answer after
+            // sleep): then it goes back to its own Workspace and spot, not the one you're in.
+            if let (space, uuid) = place(of: w.id), let layout = spaces[space][uuid] {
+                away.left(w.id, space: space, display: uuid, layout: layout, why: .outOfView, at: now)
+            }
+            forget(w.id, keepAway: true)
             changed = true
         }
         // Whatever window answers a Summon open belongs in the layout, even one its app
@@ -669,6 +700,9 @@ final class Tiler {
             && (onScreen.contains(info.id) || window.hidden
                 || (spot != nil && isOutOfView(info.id, shown: shown)))
         let placed = spot != nil
+        // Asleep, locked or just back: apps answer slowly or oddly then, so a window that seems
+        // out of view or not to tile keeps its tile until things settle (`SleepWatch`).
+        if !wantsTile, placed, holding { return false }
         // Mission Control, App Exposé or Show Desktop: the window is covered, not gone. It keeps
         // its tile, and the windows around it stay where they are.
         if tiles, !wantsTile, placed, initialScanDone, !window.hidden, screenCovered(onScreen: onScreen, shown: shown) {
@@ -725,9 +759,11 @@ final class Tiler {
             // Out of view without closing: the green button (the window leaves for a Space of its
             // own, first vanishing for a moment on the way), its app hidden (windows parked in
             // other Workspaces too), or out of sight with nothing said. Remember exactly where it
-            // was, and whether it was in Focus, so it comes back to the same spot.
+            // was, and whether it was in Focus, so it comes back to the same spot. A window parked
+            // in another Workspace that leaves its tile for any reason (its app read oddly after
+            // sleep, macOS moving it) goes back to that Workspace too, never the one you're in.
             let why: AwayMemory.Why? = info.fullScreen ? .fullScreen : appHidden ? .appHidden
-                : !onScreen.contains(info.id) && !window.hidden && !info.minimized ? .outOfView : nil
+                : window.hidden || (!onScreen.contains(info.id) && !info.minimized) ? .outOfView : nil
             if let spot, let why, let layout = spaces[spot.space][spot.display] {
                 away.left(info.id, space: spot.space, display: spot.display, layout: layout, why: why, at: CACurrentMediaTime())
             }
@@ -1425,7 +1461,8 @@ final class Tiler {
     private var offScreenSince: [CGWindowID: CFTimeInterval] = [:]
 
     /// - appQuit: it closed because its app quit, which says nothing about the window.
-    private func forget(_ id: CGWindowID, appQuit: Bool = false) {
+    /// - keepAway: it only went missing: if it turns up again, it goes back to its spot (`away`).
+    private func forget(_ id: CGWindowID, appQuit: Bool = false, keepAway: Bool = false) {
         // Where it was, in case its app is quitting (`QuitMemory`): a restart brings the next window back there.
         if enabled, let w = windows[id], let app = w.handle.app.bundleID, !Placeholder.isPlaceholder(id),
            let (space, uuid) = place(of: id), let layout = spaces[space][uuid]?.withoutPlaceholders() {
@@ -1435,7 +1472,7 @@ final class Tiler {
         }
         requested.remove(id)
         placedForYou[id] = nil
-        away.forget(id)
+        if !keepAway { away.forget(id) }
         unlistedSince[id] = nil
         offScreenSince[id] = nil
         removeFromLayouts(id)
@@ -1703,12 +1740,28 @@ final class Tiler {
     }
     private var wasCovered = false
 
+    /// Asleep, locked or just back (`SleepWatch`): windows keep their tiles whatever their apps say.
+    private var holding: Bool { sleepWatch.holding(at: CACurrentMediaTime(), locked: screenLocked()) }
+
     /// Some apps keep a closed window around instead of destroying it (Chess
     /// does), so it never says it's gone and would hold its tile forever. Any
     /// tiled window here that's no longer on screen gets its app asked again,
     /// which drops it.
     private func checkForGhosts() {
         guard enabled else { return }
+        // Asleep, locked or just back: nothing has gone anywhere. Once things settle, every app
+        // is asked again, and a window still missing gets its usual moment to show up.
+        if holding {
+            heldForSleep = true
+            return
+        }
+        if heldForSleep {
+            heldForSleep = false
+            unlistedSince = [:]
+            offScreenSince = [:]
+            scanAll()
+            return
+        }
         let onScreen = onScreenWindowIDs()
         // Under Mission Control, App Exposé or Show Desktop, windows out of sight are still there.
         if screenCovered(onScreen: onScreen) { return }
@@ -2256,7 +2309,9 @@ final class Tiler {
     }
 
     private func displaysChanged() {
-        guard enabled else { return }
+        // Asleep, displays come and go (a laptop's with its lid closed): they're looked at once
+        // it's awake (`SleepWatch`).
+        guard enabled, !sleepWatch.asleep else { return }
         displays = Display.current()
         welcomeBackDisplays(counting: true)
         mergeInactiveDisplays()

@@ -342,6 +342,12 @@ The Buy buttons go nowhere yet: set `CHECKOUT_URL` at the top of the page's scri
 - **Displays coming and going:** when a display is unplugged, its windows move to another display.
   When it comes back, they return to their spots on it. Changes wait a second to settle, so a display
   blinking off as the Mac wakes doesn't shuffle anything.
+- **Sleep and the lock screen:** close a laptop's lid and open it again (or let the displays sleep,
+  or lock the screen) and every Workspace is as you left it. While the Mac is away, and for a few
+  seconds after it's back in use, windows keep their tiles whatever their apps say (apps answer
+  slowly or not at all as they wake up); then every app is asked again. An app that doesn't answer
+  never loses its windows' tiles for it, and a window that went missing without closing goes back
+  to its own Workspace and spot when it turns up, never the one you're in.
 - **macOS 27:** a parked window that macOS pulls back into view is parked again.
 - **Native tabs** share one tile. **Dialogs** float, centered. **Windows that can't fill a tile** tile at their own size. **Full screen** windows keep their spot.
 - **Mission Control, App Exposé and Show Desktop** take windows out of sight without moving

@@ -21,6 +21,11 @@ func shownSpaces() -> Set<Int> {
     return Set(displays.compactMap { ($0["Current Space"] as? [String: Any])?["ManagedSpaceID"] as? Int })
 }
 
+/// Whether the screen is locked: the login window is up over the desktop.
+func screenLocked() -> Bool {
+    (CGSessionCopyCurrentDictionary() as? [String: Any])?["CGSSessionScreenIsLocked"] as? Bool ?? false
+}
+
 /// The Spaces a window is on. None once it's gone.
 func windowSpaces(of id: CGWindowID) -> [Int] {
     CGSCopySpacesForWindows(CGSMainConnectionID(), 0x7, [NSNumber(value: id)] as CFArray)?.takeRetainedValue() as? [Int] ?? []
@@ -74,6 +79,17 @@ extension AXUIElement {
 
     func elements(_ attribute: String) -> [AXUIElement] {
         (value(attribute) as? [AXUIElement]) ?? []
+    }
+
+    /// Like `elements(_:)`, but nil when the app didn't answer (busy, hung, or still waking up
+    /// after sleep), as opposed to having none.
+    func answeredElements(_ attribute: String) -> [AXUIElement]? {
+        var value: CFTypeRef?
+        switch AXUIElementCopyAttributeValue(self, attribute as CFString, &value) {
+        case .success: return (value as? [AXUIElement]) ?? []
+        case .noValue, .attributeUnsupported: return []
+        default: return nil
+        }
     }
 
     var windowID: CGWindowID? {
