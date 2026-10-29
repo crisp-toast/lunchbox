@@ -13,6 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.onboarding.playgroundPerform(action)
             return
         }
+        // During Sort My Windows' show, a Workspace's keys pick the Workspace to start in.
+        if case .switchSpace(let index) = action, self.sorter.choose(workspace: index) { return }
         switch action {
         case .launcher: self.launcher.toggle()
         case .help: self.help.toggle()
@@ -388,7 +390,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         // sort, sort@<display id> (only that display's windows), sort-demo@<display id> (made-up
-        // windows, nothing moves), sort-undo, sort-sound:<wav path>.
+        // windows, nothing moves), sort-pick (the Workspace lit up) or sort-pick:<n> (the show's nth,
+        // from 1), sort-undo, sort-sound:<wav path> (and <path>-opening.wav beside it).
         // fresh-app:<bundle id>@<display id>: Start Fresh on one app's windows, no question asked,
         // its note on that display; fresh-question and fresh-cancel: setup's question, for screenshots.
         if command.hasPrefix("fresh-app:") {
@@ -406,10 +409,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if let display { sorter.demo(on: display) }
             } else if command == "sort-undo" {
                 tiler.undoSort()
+            } else if command == "sort-pick" || command.hasPrefix("sort-pick:") {
+                sorter.pick(Int(command.dropFirst(10)).map { $0 - 1 })
             } else if command.hasPrefix("sort-sound:") {
                 let timeline = Timeline(cards: 12, still: false)
                 let plinks = (0..<12).map { (timeline.arrival($0), Double($0 % 3 - 1) * 0.45) }
-                try? SortSound.render(timeline, plinks: plinks).write(to: URL(fileURLWithPath: String(command.dropFirst(11))))
+                let sound = SortSound.render(timeline, plinks: plinks)
+                let url = URL(fileURLWithPath: String(command.dropFirst(11)))
+                try? sound.sorting.write(to: url)
+                try? sound.opening.write(to: url.deletingLastPathComponent()
+                    .appendingPathComponent(url.deletingPathExtension().lastPathComponent + "-opening.wav"))
             } else {
                 sorter.run(onDisplay: display?.uuid)
             }

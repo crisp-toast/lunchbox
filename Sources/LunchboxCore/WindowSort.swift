@@ -347,10 +347,11 @@ public enum WindowSort {
                 i += 1
             }
         }
-        // A few windows stay together, if they can.
+        // A few windows stay together, if they can, named for the kinds they are.
         guard ordered.count > fit else {
             var few = [Workspace(groups: [.work], windows: ordered)]
             untangle(&few)
+            for i in few.indices { few[i].groups = Group.allCases.filter { g in few[i].windows.contains { kinds[$0] == g } } }
             return finished(few, hidden: [])
         }
 

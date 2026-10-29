@@ -21,8 +21,11 @@ import Testing
     @Test func aFewWindowsStayTogether() {
         let plan = WindowSort.plan([item(1, xcode), item(2, safari), item(3, slack), item(4, music)])
         #expect(plan.workspaces.map(\.windows) == [[1, 2, 3, 4]])
+        #expect(plan.workspaces.map(\.groups) == [[.work, .web, .talk]])
         #expect(plan.hidden.isEmpty)
         #expect(plan.landing == 0)
+        // Named for what they are: a browser and a chat aren't "Your work".
+        #expect(WindowSort.plan([item(1, safari), item(2, slack)]).workspaces.map(\.title) == ["The web · Chat & music"])
     }
 
     @Test func aMessSortsIntoThreeKindsInOrder() {

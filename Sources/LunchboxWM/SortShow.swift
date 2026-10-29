@@ -3,11 +3,14 @@ import QuartzCore
 import UniformTypeIdentifiers
 import LunchboxCore
 
-/// Sort My Windows, start to finish: works the sort out, plays the show over it, then offers
-/// Undo. Only ever runs when asked: setup's last step ("Organize your open windows?") or the menu.
+/// Sort My Windows, start to finish: works the sort out, plays the show over it, goes to the
+/// Workspace you pick, then offers Undo. Only ever runs when asked: setup's last step ("Organize
+/// your open windows?") or the menu.
 final class WindowSorter {
     private let tiler: Tiler
     private var show: SortShow?
+    /// The Workspace each of the show's goes into (`Tiler.PreparedSort.workspace`).
+    private var workspaces: [Int] = []
     private let summary = SortSummary()
     /// A command's keys as keycaps ("⌘1"), from the shortcuts in use.
     var keycaps: ((Command) -> String?)?
@@ -20,6 +23,22 @@ final class WindowSorter {
     }
 
     var isRunning: Bool { show != nil }
+
+    /// A Workspace's keys, pressed during the show (Workspace `index`, from 0): you go there.
+    /// False when there's no show; while there is one, no other Workspace key does anything.
+    func choose(workspace index: Int) -> Bool {
+        guard let show else { return false }
+        if let k = workspaces.firstIndex(of: index) { show.choose(k) }
+        return true
+    }
+
+    #if DEBUG || LUNCHBOX_DEV
+    /// The show's Workspace `k` (from 0), or the one lit up when nil, as if clicked: for tests.
+    func pick(_ k: Int?) {
+        guard let show else { return }
+        if let k { show.choose(k) } else { show.chooseHighlighted() }
+    }
+    #endif
 
     /// Undo Sort from the menu: the note goes too.
     func undo() {
@@ -64,17 +83,23 @@ final class WindowSorter {
             return SortShow.Card(id: trip.id, icon: icons[trip.pid]!, title: trip.title, from: trip.from,
                                  space: trip.space, to: trip.to, display: trip.display)
         }
-        play(cards: cards, plan: sort.plan, undoable: true, quiet: sort.scope != nil) { [weak tiler] in tiler?.applySort(sort) }
+        play(cards: cards, plan: sort.plan, workspaces: sort.workspace, undoable: true, quiet: sort.scope != nil,
+             covered: { [weak tiler] in tiler?.applySort(sort) }, chose: { [weak tiler] k in tiler?.enterSorted(k, of: sort) })
     }
 
+    /// - workspaces: the Workspace each of the plan's goes into.
     /// - quiet: for tests on a display nobody watches: no sound, and Lunchbox doesn't come forward.
-    private func play(cards: [SortShow.Card], plan: WindowSort.Plan, undoable: Bool, quiet: Bool, covered: @escaping () -> Void) {
+    /// - covered: the windows go to their Workspaces, out of sight; `chose`: you go to one.
+    private func play(cards: [SortShow.Card], plan: WindowSort.Plan, workspaces: [Int], undoable: Bool, quiet: Bool,
+                      covered: @escaping () -> Void, chose: @escaping (Int) -> Void) {
         let spaces = plan.workspaces.enumerated().map { i, w in
-            SortShow.Space(title: w.title, key: keycaps?(.goTo(i)), accent: SortShow.accent(for: w.groups.first ?? .work))
+            SortShow.Space(title: w.title, key: keycaps?(.goTo(workspaces[i])), accent: SortShow.accent(for: w.groups.first ?? .work))
         }
         let show = SortShow(cards: cards, spaces: spaces, landing: plan.landing, summonKey: keycaps?(.summon), quiet: quiet)
         self.show = show
+        self.workspaces = workspaces
         show.onCovered = covered
+        show.onChoose = chose
         show.onFinished = { [weak self] in
             guard let self else { return }
             self.show = nil
@@ -132,17 +157,20 @@ final class WindowSorter {
             return SortShow.Card(id: CGWindowID(item.id), icon: icon, title: title, from: from, space: to[item.id]?.0,
                                  to: to[item.id]?.1, display: display)
         }
-        play(cards: cards, plan: plan, undoable: false, quiet: true) {}
+        play(cards: cards, plan: plan, workspaces: Array(plan.workspaces.indices), undoable: false, quiet: true,
+             covered: {}, chose: { _ in })
     }
     #endif
 }
 
 // MARK: - The show
 
-/// The color wash, the windows flying to their Workspaces, and the Workspace you're in opening
-/// up onto the real windows. The real windows move once the wash covers them (`onCovered`); the
-/// cards stand in for them, since macOS can't shrink another app's window. Click or Esc skips to
-/// the end. With Reduce Motion, nothing flies: the Workspaces fade in with their windows in place.
+/// The color wash, the windows flying to their Workspaces, then the Workspaces waiting for you to
+/// pick the one to start in, which opens up onto the real windows. The real windows move once the
+/// wash covers them (`onCovered`), and you go to the Workspace you pick (`onChoose`), still out of
+/// sight; the cards stand in for them, since macOS can't shrink another app's window. Click or Esc
+/// skips straight to the Workspaces. With only one there's nothing to pick: it opens by itself.
+/// With Reduce Motion, nothing flies: the Workspaces fade in with their windows in place.
 final class SortShow {
     struct Card {
         let id: CGWindowID
@@ -166,22 +194,30 @@ final class SortShow {
 
     /// The wash covers the windows: move them now.
     var onCovered: (() -> Void)?
+    /// You picked Workspace `k` (the plan's): go there now, while the wash still covers it.
+    var onChoose: ((Int) -> Void)?
     var onFinished: (() -> Void)?
 
     private var cards: [Card]
     private let spaces: [Space]
-    private let landing: Int
     private var timeline: Timeline
     private var stages: [Stage] = []
     private var sound: NSSound?
+    /// The chord opening up with the Workspace you pick.
+    private var openingSound: NSSound?
     private var timer: Timer?
     private var started: CFTimeInterval = 0
     private var playing = false
     private var covered = false
     private var landed = Set<Int>()
     private var soundFade: CFTimeInterval?
+    /// The Workspace you picked, once you have.
+    private var chosen: Int?
+    /// The one Return goes to: first the one with the window that matters most, then the one under
+    /// the pointer or moved to with the arrows.
+    private var highlighted: Int
     private let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-    /// No sound, and Lunchbox doesn't come forward (so there's no Esc either).
+    /// No sound, and Lunchbox doesn't come forward (so there are no keys either).
     private let quiet: Bool
     /// Summon's keys, for where windows past what fits went.
     private let summonKey: String?
@@ -194,10 +230,11 @@ final class SortShow {
         }
     }
 
+    /// - landing: the Workspace lit up first, the one with the window that matters most.
     init(cards: [Card], spaces: [Space], landing: Int, summonKey: String?, quiet: Bool) {
         self.cards = cards
         self.spaces = spaces
-        self.landing = landing
+        highlighted = spaces.indices.contains(landing) ? landing : 0
         self.summonKey = summonKey
         self.quiet = quiet
         timeline = Timeline(cards: cards.count, still: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
@@ -224,9 +261,12 @@ final class SortShow {
                 return (timeline.arrival(i), pan)
             }
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                let data = SortSound.render(timeline, plinks: plinks)
+                let sound = SortSound.render(timeline, plinks: plinks)
                 DispatchQueue.main.async {
-                    if let self, !self.playing { self.sound = NSSound(data: data) }
+                    if let self, !self.playing {
+                        self.sound = NSSound(data: sound.sorting)
+                        self.openingSound = NSSound(data: sound.opening)
+                    }
                     group.leave()
                 }
             }
@@ -242,9 +282,12 @@ final class SortShow {
         playing = true
         let displays = Dictionary(cards.map { ($0.display.uuid, $0.display) }, uniquingKeysWith: { a, _ in a })
         let main = displays.values.first(where: \.isMain)?.uuid ?? displays.keys.sorted().first
+        let input = Stage.Input(click: { [weak self] space in self?.clicked(space) },
+                                hover: { [weak self] space in self?.hovered(space) },
+                                key: { [weak self] key in self?.pressed(key) })
         stages = displays.values.compactMap { d in
             Stage(display: d, cards: cards.indices.filter { cards[$0].display.uuid == d.uuid }, all: cards, spaces: spaces,
-                  landing: landing, summonKey: summonKey, headline: d.uuid == main, still: still) { [weak self] in self?.skip() }
+                  summonKey: summonKey, headline: d.uuid == main, still: still, input: input)
         }
         guard !stages.isEmpty else { finish(); return }
         if quiet {
@@ -264,30 +307,81 @@ final class SortShow {
         self.timer = timer
     }
 
-    /// Straight to the end: the Workspace you're in opens up now.
+    /// Straight to the Workspaces, every window in its place (with only one, it opens).
     func skip() {
         let t = CACurrentMediaTime() - started
-        guard playing, t < timeline.finale else { return }
+        guard playing, chosen == nil else { return }
+        if spaces.count == 1 { choose(0); return }
+        guard t < timeline.settled else { return }
         timeline.skip(at: t)
-        soundFade = CACurrentMediaTime()
+        soundFade = soundFade ?? CACurrentMediaTime()
+    }
+
+    /// You go to Workspace `k` (the plan's): it opens up onto the real windows.
+    func choose(_ k: Int) {
+        guard playing, chosen == nil, spaces.indices.contains(k) else { return }
+        chosen = k
+        highlighted = k
+        timeline.choose(at: CACurrentMediaTime() - started)
+        // The windows go to their Workspaces before you go to one.
+        if !covered { covered = true; onCovered?() }
+        onChoose?(k)
+        soundFade = soundFade ?? CACurrentMediaTime()
+        if let openingSound {
+            openingSound.volume = 0.55
+            openingSound.play()
+        }
+    }
+
+    func chooseHighlighted() { choose(highlighted) }
+
+    /// Every window is in, and there's more than one Workspace to pick from.
+    private var waiting: Bool { chosen == nil && spaces.count > 1 && CACurrentMediaTime() - started >= timeline.settled }
+
+    /// A click on Workspace `space` (nil off them): while the windows fly, any click skips.
+    private func clicked(_ space: Int?) {
+        if waiting {
+            if let space { choose(space) }
+        } else {
+            skip()
+        }
+    }
+
+    private func hovered(_ space: Int?) {
+        if waiting, let space { highlighted = space }
+    }
+
+    /// Its number goes to a Workspace at any time; the arrows light up the one beside, and Return,
+    /// Space or Esc goes to the one lit up (while the windows fly, they skip).
+    private func pressed(_ key: ShowPanel.Key) {
+        switch key {
+        case .number(let n): choose(n - 1)
+        case .left, .right:
+            if waiting { highlighted = min(spaces.count - 1, max(0, highlighted + (key == .left ? -1 : 1))) }
+        case .escape, .enter:
+            if waiting { choose(highlighted) } else { skip() }
+        }
     }
 
     private func render() {
         let t = CACurrentMediaTime() - started
-        if !covered, t >= timeline.cover || timeline.skipped {
+        if !covered, t >= timeline.cover {
             covered = true
             onCovered?()
         }
-        // Each window's landing: its Workspace takes it with a little pulse, and counts it.
+        // Only one Workspace: there's nothing to pick, so it opens by itself.
+        if chosen == nil, spaces.count == 1, t >= timeline.opensAlone { choose(0) }
+        // Each window's landing: its Workspace takes it with a little pulse, and counts it (after a
+        // skip, all the rest at once).
         if !still {
-            for i in cards.indices where !landed.contains(i) && t >= timeline.arrival(i) && t < timeline.finale {
+            for i in cards.indices where !landed.contains(i) && (t >= timeline.arrival(i) || t >= timeline.settled) && t < timeline.finale {
                 landed.insert(i)
                 for stage in stages { stage.landed(i) }
             }
         }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        for stage in stages { stage.render(t, timeline: timeline) }
+        for stage in stages { stage.render(t, timeline: timeline, highlighted: highlighted, chosen: chosen) }
         CATransaction.commit()
         if let fade = soundFade, let sound {
             let left = 1 - (CACurrentMediaTime() - fade) / 0.45
@@ -302,6 +396,7 @@ final class SortShow {
         if !covered { covered = true; onCovered?() }
         for stage in stages { stage.panel.orderOut(nil) }
         stages = []
+        NSCursor.arrow.set()
         onFinished?()
         onFinished = nil
     }
@@ -314,10 +409,16 @@ struct Timeline {
     let flyStart: Double
     let stagger: Double
     let flight: Double
-    /// The Workspace you're in starts opening up onto the real windows.
-    private(set) var finale: Double
+    /// Every window is in its Workspace: from here the show waits for you to pick one.
+    private(set) var settled: Double
+    /// With only one Workspace there's nothing to pick: it opens by itself then.
+    let opensAlone: Double
+    /// The Workspace you picked starts opening up onto the real windows: not until you pick.
+    private(set) var finale = Timeline.notYet
     let still: Bool
-    private(set) var skipped = false
+
+    /// As good as never (thirty years), so the times after it work out as usual.
+    static let notYet = 1e9
 
     init(cards: Int, still: Bool) {
         self.still = still
@@ -326,29 +427,41 @@ struct Timeline {
             flyStart = 0.35
             stagger = 0
             flight = 0.4
-            finale = 2.8
+            settled = 0.7
+            opensAlone = 2.8
         } else {
             cover = 0.55
             flyStart = 0.7
             stagger = cards <= 1 ? 0 : min(0.085, 1.5 / Double(cards - 1))
             flight = 0.95
-            finale = max(2.9, flyStart + Double(max(0, cards - 1)) * stagger + flight * 0.5 + 1.15)
+            let last = flyStart + Double(max(0, cards - 1)) * stagger
+            settled = last + flight
+            opensAlone = max(2.9, last + flight * 0.5 + 1.15)
         }
     }
 
     func start(_ i: Int) -> Double { flyStart + Double(i) * stagger }
     /// When card `i` reaches its Workspace, near enough to count (its glide eases out after).
     func arrival(_ i: Int) -> Double { start(i) + flight * 0.5 }
-    /// How long the Workspace you're in takes to open to the whole screen.
-    var opening: Double { still ? 0 : skipped ? 0.5 : 0.75 }
+    /// How long the Workspace you picked takes to open to the whole screen.
+    var opening: Double { still ? 0 : 0.75 }
+    /// From the pick to the end of the show.
+    var afterPick: Double { still ? 0.5 : 1.15 }
     /// The wash going away, showing the real windows.
-    var washOut: (Double, Double) { still ? (finale, finale + 0.5) : skipped ? (finale + 0.3, finale + 0.6) : (finale + 0.5, finale + 1.0) }
-    /// The cards in the Workspace you're in dissolving onto the real windows.
-    var cardsOut: (Double, Double) { still ? washOut : skipped ? (finale + 0.45, finale + 0.68) : (finale + 0.72, finale + 1.08) }
-    var end: Double { still ? finale + 0.5 : skipped ? finale + 0.7 : finale + 1.15 }
+    var washOut: (Double, Double) { still ? (finale, finale + 0.5) : (finale + 0.5, finale + 1.0) }
+    /// The cards in the Workspace you picked dissolving onto the real windows.
+    var cardsOut: (Double, Double) { still ? washOut : (finale + 0.72, finale + 1.08) }
+    var end: Double { finale + afterPick }
 
+    /// Straight to the Workspaces at `t`: every window still flying is in at once.
     mutating func skip(at t: Double) {
-        skipped = true
+        settled = min(settled, t)
+    }
+
+    /// A Workspace picked at `t`: it starts opening now.
+    mutating func choose(at t: Double) {
+        guard finale == Self.notYet else { return }
+        skip(at: t)
         finale = t
     }
 }
@@ -356,6 +469,14 @@ struct Timeline {
 // MARK: - One display's part
 
 private final class Stage {
+    /// What happens on this display's part: a click, or the pointer, on a Workspace (nil off
+    /// them), and keys.
+    struct Input {
+        let click: (Int?) -> Void
+        let hover: (Int?) -> Void
+        let key: (ShowPanel.Key) -> Void
+    }
+
     let panel: ShowPanel
     private let display: Display
     private let root = CALayer()
@@ -370,12 +491,15 @@ private final class Stage {
     private var tray: Label?
     private var trayHidden = 0
     private let spaces: [SortShow.Space]
-    private let landing: Int
     private let summonKey: String?
     private let headline: Bool
     private let visible: CGRect
     private let scale: CGFloat
     private var allLanded = false
+    /// How lit up each Workspace is, from 0 to 1: the one Return goes to, while you pick.
+    private var lit: [Int: Double] = [:]
+    /// Waiting for a pick as of the last frame: the pointer turns into a hand over a Workspace.
+    private var waiting = false
 
     /// A Workspace in miniature: the box, the empty spots its windows go to, and its name.
     private struct Box {
@@ -386,22 +510,21 @@ private final class Stage {
         let detail: Label
     }
 
-    init?(display: Display, cards indices: [Int], all: [SortShow.Card], spaces: [SortShow.Space], landing: Int,
-          summonKey: String?, headline: Bool, still: Bool, skip: @escaping () -> Void) {
+    init?(display: Display, cards indices: [Int], all: [SortShow.Card], spaces: [SortShow.Space],
+          summonKey: String?, headline: Bool, still: Bool, input: Input) {
         guard let screen = NSScreen.screens.first(where: {
             ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == display.id
         }) else { return nil }
         self.display = display
         self.spaces = spaces
-        self.landing = landing
         self.summonKey = summonKey
         self.headline = headline
         scale = screen.backingScaleFactor
         let size = display.frame.size
         visible = display.visible.offsetBy(dx: -display.frame.minX, dy: -display.frame.minY)
 
-        panel = ShowPanel(frame: screen.frame, skip: skip)
-        let content = NSView(frame: NSRect(origin: .zero, size: size))
+        panel = ShowPanel(frame: screen.frame)
+        let content = ShowView(frame: NSRect(origin: .zero, size: size))
         blur.frame = content.bounds
         blur.autoresizingMask = [.width, .height]
         blur.material = .fullScreenUI
@@ -414,6 +537,8 @@ private final class Stage {
         host.wantsLayer = true
         content.addSubview(host)
         panel.contentView = content
+        // The pointer over a Workspace lights it up, even before Lunchbox is in front.
+        content.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeAlways, .inVisibleRect], owner: panel, userInfo: nil))
         root.frame = CGRect(origin: .zero, size: size)
         root.isGeometryFlipped = true // top-left, like window frames, for everything in it
         host.layer?.addSublayer(root)
@@ -444,10 +569,10 @@ private final class Stage {
         if headline {
             let n = spaces.count
             let header = label(still ? Self.sorted(n) : "Sorting \(all.count) windows", size: 26, weight: .semibold, alpha: 0.96)
-            let hint = label("Click anywhere or press Esc to skip", size: 13, weight: .regular, alpha: 0.6)
+            let hint = label(Self.skipLine, size: 14, weight: .regular, alpha: 0.7)
             let top = (boxes.values.map(\.rect.minY).min() ?? size.height * 0.3) - 96
             header.frame = CGRect(x: 0, y: top, width: size.width, height: 34)
-            hint.frame = CGRect(x: 0, y: top + 40, width: size.width, height: 18)
+            hint.frame = CGRect(x: 0, y: top + 40, width: size.width, height: 20)
             root.addSublayer(header)
             root.addSublayer(hint)
             self.header = header
@@ -461,7 +586,18 @@ private final class Stage {
             tray = line
             updateTray()
         }
+        panel.onClick = { [weak self] point in input.click(self?.space(at: point)) }
+        panel.onHover = { [weak self] point in
+            guard let self else { return }
+            let space = self.waiting ? self.space(at: point) : nil
+            (space == nil ? NSCursor.arrow : NSCursor.pointingHand).set()
+            input.hover(space)
+        }
+        panel.onKey = input.key
     }
+
+    static let skipLine = "Click anywhere or press Esc to skip"
+    static let pickLine = "Click a Workspace to start there, or press its number"
 
     static func sorted(_ n: Int) -> String { n == 1 ? "Sorted into 1 Workspace" : "Sorted into \(n) Workspaces" }
 
@@ -606,9 +742,23 @@ private final class Stage {
         box.frame.add(glow, forKey: "glow")
     }
 
-    func render(_ t: Double, timeline: Timeline) {
+    /// The Workspace at `point` (top-left coordinates): its miniature, or its name and count under it.
+    private func space(at point: CGPoint) -> Int? {
+        boxes.first { _, box in
+            CGRect(x: box.rect.minX, y: box.rect.minY, width: box.rect.width, height: box.detail.frame.maxY - box.rect.minY)
+                .insetBy(dx: -8, dy: -8).contains(point)
+        }?.key
+    }
+
+    private static let edge = NSColor.white.withAlphaComponent(0.3)
+    private static let fill = NSColor.white.withAlphaComponent(0.08)
+
+    /// - highlighted: the Workspace Return goes to; chosen: the one you picked, once you have.
+    func render(_ t: Double, timeline: Timeline, highlighted: Int, chosen: Int?) {
         let finale = timeline.finale
         let still = timeline.still
+        let picking = spaces.count > 1 && t >= timeline.settled
+        waiting = picking && chosen == nil
         let washGone = smooth(timeline.washOut.0, timeline.washOut.1, t)
         let washUp = min(smooth(0, timeline.cover, t), 1 - washGone)
         wash.opacity = Float(washUp * 0.94)
@@ -621,31 +771,47 @@ private final class Stage {
             blob.layer.transform = CATransform3DMakeScale(breathe, breathe, 1)
         }
 
-        // Everything but the Workspace you're in goes, dropping a little.
+        // Once you pick, everything but that Workspace goes, dropping a little.
         let away = still ? washGone : smooth(finale, finale + 0.35, t)
         let drop = CGFloat(still ? 0 : 24 * away)
         let open = still ? 0 : ease(clamp((t - finale) / timeline.opening))
         let inTime = smooth(0.3, still ? 0.7 : 0.75, t)
+        // How far into picking: the line under the header changes, and the other Workspaces step back.
+        let pickIn = picking ? smooth(timeline.settled, timeline.settled + 0.35, t) : 0
         header?.opacity = Float(inTime * (1 - away))
-        hint?.opacity = Float(inTime * (1 - away) * (timeline.skipped ? 0 : 1))
+        if let hint {
+            hint.text = picking ? Self.pickLine : Self.skipLine
+            let shown = spaces.count == 1 ? 1 : picking ? pickIn : 1 - smooth(timeline.settled - 0.25, timeline.settled, t)
+            hint.opacity = Float(inTime * (1 - away) * shown)
+        }
         tray?.opacity = Float(smooth(timeline.flyStart, timeline.flyStart + 0.3, t) * (1 - away))
-        if let header, !allLanded, !still, t >= timeline.arrival(max(0, cards.count - 1)) || timeline.skipped {
+        if let header, !allLanded, !still, t >= timeline.arrival(max(0, cards.count - 1)) || t >= timeline.settled {
             allLanded = true
             header.text = Self.sorted(spaces.count)
         }
 
-        // The Workspace you're in grows from its miniature to the whole screen.
-        var landingRect: CGRect?
+        // The Workspace you pick grows from its miniature to the whole screen. Until then, the one
+        // Return goes to lights up in its color.
+        var shown: [Int: CGRect] = [:], back: [Int: Double] = [:]
         for (s, box) in boxes {
-            let opening = s == landing && !still
+            let opening = s == chosen && !still
             let rect = opening ? lerp(box.rect, visible, open) : box.rect.offsetBy(dx: 0, dy: drop)
-            if opening { landingRect = rect }
+            shown[s] = rect
+            let target: Double = picking && s == highlighted ? 1 : 0
+            let glow = still ? target : (lit[s] ?? 0) + (target - (lit[s] ?? 0)) * 0.22
+            lit[s] = glow
+            let g = CGFloat(glow * pickIn)
             box.frame.frame = rect
             box.frame.cornerRadius = opening ? 14 * CGFloat(1 - open) : 14
             box.frame.opacity = Float(inTime * (opening ? 1 - smooth(finale, finale + 0.5, t) : 1 - away))
+            box.frame.borderWidth = 1.5 + 1.5 * g
+            box.frame.borderColor = (Self.edge.blended(withFraction: g, of: spaces[s].accent) ?? Self.edge).cgColor
+            box.frame.backgroundColor = (Self.fill.blended(withFraction: 0.16 * g, of: spaces[s].accent) ?? Self.fill).cgColor
             box.slots.opacity = Float(inTime * (1 - (still ? washGone : smooth(finale, finale + 0.25, t))))
-            box.label.opacity = Float(inTime * (1 - away))
-            box.detail.opacity = Float(inTime * (1 - away))
+            // The others step back a little.
+            back[s] = 1 - 0.3 * pickIn * (1 - glow)
+            box.label.opacity = Float(inTime * (1 - away) * (1 - 0.35 * pickIn * (1 - glow)))
+            box.detail.opacity = box.label.opacity
             let down = CATransform3DMakeTranslation(0, drop, 0)
             box.label.transform = down
             box.detail.transform = down
@@ -653,15 +819,15 @@ private final class Stage {
 
         for card in cards {
             var target = card.to
-            if let space = card.space, space == landing, let landingRect, let box = boxes[space] {
-                // In the Workspace that opens, it rides along to its real tile.
-                target = remap(card.to, from: box.rect, to: landingRect)
+            if let space = card.space, let box = boxes[space], let rect = shown[space] {
+                // It rides along with its Workspace: to its real tile in the one that opens.
+                target = remap(card.to, from: box.rect, to: rect)
             } else if !still {
                 target = target.offsetBy(dx: 0, dy: drop)
             }
             let rect: CGRect, shrink: Double
             var opacity: Double
-            let p = still || t >= finale ? 1 : clamp((t - timeline.start(card.index)) / timeline.flight)
+            let p = still || t >= timeline.settled ? 1 : clamp((t - timeline.start(card.index)) / timeline.flight)
             if still {
                 rect = target
                 shrink = 1
@@ -684,11 +850,12 @@ private final class Stage {
             }
             if card.space == nil {
                 opacity *= (1 - smooth(0.7, 1, p)) * (1 - away)
-            } else if card.space == landing, !still {
+            } else if card.space == chosen, !still {
                 opacity *= 1 - smooth(timeline.cardsOut.0, timeline.cardsOut.1, t)
             } else {
                 opacity *= 1 - away
             }
+            opacity *= card.space.flatMap { back[$0] } ?? 1
             card.layer.opacity = Float(opacity)
             // In flight over everything; landed over the ones still waiting.
             card.layer.zPosition = still || p >= 1 ? 1 : p > 0 ? 2 : 0
@@ -816,13 +983,21 @@ private final class CardLayer: CALayer {
     }
 }
 
-/// The show's window on one display: covers it all, above everything, and skips to the end
-/// when clicked or on Esc.
+/// The show's window on one display: covers it all, above everything, and passes on clicks, where
+/// the pointer is, and keys.
 private final class ShowPanel: NSPanel {
-    private let skip: () -> Void
+    enum Key: Equatable {
+        case escape, enter, left, right
+        /// 1 to 9, along the top row or the keypad.
+        case number(Int)
+    }
 
-    init(frame: NSRect, skip: @escaping () -> Void) {
-        self.skip = skip
+    /// A click, and the pointer moving, at a point in the show's top-left coordinates.
+    var onClick: ((CGPoint) -> Void)?
+    var onHover: ((CGPoint) -> Void)?
+    var onKey: ((Key) -> Void)?
+
+    init(frame: NSRect) {
         super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         isOpaque = false
         backgroundColor = .clear
@@ -831,18 +1006,39 @@ private final class ShowPanel: NSPanel {
         isReleasedWhenClosed = false
         hidesOnDeactivate = false
         collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
-        acceptsMouseMovedEvents = false
+        acceptsMouseMovedEvents = true
     }
 
     override var canBecomeKey: Bool { true }
 
-    override func mouseDown(with event: NSEvent) { skip() }
-
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { skip() } // Esc
+    private func point(_ event: NSEvent) -> CGPoint {
+        CGPoint(x: event.locationInWindow.x, y: frame.height - event.locationInWindow.y)
     }
 
-    override func cancelOperation(_ sender: Any?) { skip() }
+    override func mouseDown(with event: NSEvent) { onClick?(point(event)) }
+
+    override func mouseMoved(with event: NSEvent) { onHover?(point(event)) }
+
+    override func keyDown(with event: NSEvent) {
+        switch event.keyCode {
+        case 53: onKey?(.escape)
+        case 36, 76, 49: onKey?(.enter) // Return, Enter, Space
+        case 123: onKey?(.left)
+        case 124: onKey?(.right)
+        default:
+            if let n = event.charactersIgnoringModifiers.flatMap({ Int($0) }), (1...9).contains(n) { onKey?(.number(n)) }
+        }
+    }
+
+    override func cancelOperation(_ sender: Any?) { onKey?(.escape) }
+}
+
+/// The show's content: takes every click itself, the first one too, so a Workspace picks on the
+/// first click even when Lunchbox couldn't come forward.
+private final class ShowView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { super.hitTest(point) == nil ? nil : self }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 // MARK: - Afterwards

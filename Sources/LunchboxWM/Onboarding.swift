@@ -3,7 +3,7 @@ import ServiceManagement
 import LunchboxCore
 
 /// First-run setup: welcome, Accessibility, a short hands-on practice, a few preferences, and,
-/// when there's a mess worth it, whether to sort the windows already open. Also reachable from
+/// with two or more windows open, sorting them (Sort My Windows) to finish. Also reachable from
 /// the menu.
 final class Onboarding: NSObject, NSWindowDelegate {
     enum Step: Int, CaseIterable {
@@ -16,7 +16,8 @@ final class Onboarding: NSObject, NSWindowDelegate {
     var onKeymapChange: ((Keymap) -> Void)?
     /// The welcome window went away: finished, or closed.
     var onClose: (() -> Void)?
-    /// What sorting the open windows would do; nil when it wouldn't help (then setup doesn't ask).
+    /// What sorting the open windows would do; nil when there's nothing to sort (then setup ends
+    /// on the step before).
     var sortPreview: (() -> (plan: WindowSort.Plan, icons: [WindowID: NSImage])?)?
     /// Whether Lunchbox can tile yet (it's licensed), for the sort step's note.
     var canTile: (() -> Bool)?
@@ -33,7 +34,7 @@ final class Onboarding: NSObject, NSWindowDelegate {
     private let back = NSButton(title: "Back", target: nil, action: nil)
     private let next = NSButton(title: "Continue", target: nil, action: nil)
     private let notNow = NSButton(title: "Not Now", target: nil, action: nil)
-    /// Setup ends by asking about sorting the open windows (there are enough to be worth it).
+    /// Setup ends by sorting the open windows (there are two or more).
     private var offersSort = false
     private var step: Step = .welcome
     private var trustTimer: Timer?
@@ -497,8 +498,10 @@ final class Onboarding: NSObject, NSWindowDelegate {
         content.setCustomSpacing(22, after: views[views.count - 2])
         let summon = Keymap.keycaps(for: tap.keymap.binding(for: .summon), workspaceKeys: tap.spaceKeys).joined(separator: " ")
         let shown = total - plan.hidden.count
-        let body = plan.hidden.isEmpty
-            ? "You have \(total) windows open. Lunchbox can sort them by kind into \(into), so each one starts out calm, and show you where everything went. Nothing closes, and Undo puts it all back."
+        let body = n == 1 && plan.hidden.isEmpty
+            ? "You have \(total) windows open. Lunchbox can arrange them side by side in one Workspace, each with the room it's at home in, and show you how. Nothing closes, and Undo puts it all back."
+            : plan.hidden.isEmpty
+            ? "You have \(total) windows open. Lunchbox can sort them by kind into \(into), so each one starts out calm, and show you where everything went. Then pick the Workspace to start in. Nothing closes, and Undo puts it all back."
             : "You have \(total) windows open. Lunchbox can sort the \(shown) you've used most recently by kind into \(into), and show you where everything went. The other \(plan.hidden.count) stay open, out of the way: Summon (\(summon)) finds any of them. Nothing closes, and Undo puts it all back."
         return page(top: symbol("rectangle.3.group"), title: "Organize your open windows?", body: body, content: content)
     }

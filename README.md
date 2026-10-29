@@ -46,12 +46,16 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
     at an even share below that to grow another, and windows used about as much, or a crowded
     Workspace, stay even. Apps for making music (Logic, GarageBand, DAWs) count as your work.
   How long windows were in front is kept in memory only, and goes when the window closes.
-  A short show covers the screen in color while the windows move,
-  flies each window to its Workspace so you see where everything went, then opens onto the Workspace
-  with the window that matters most; a soft chord and bells play with it when macOS plays interface
-  sounds, and with Reduce Motion nothing flies. Undo (on the note afterwards, which stays until you
-  close it, and in the menu for ten minutes) puts everything back. Setup asks once at the end, only
-  when there's a mess worth sorting; otherwise it's in the menu. It never runs on its own.
+  A short show covers the screen in color while the windows move and
+  flies each window to its Workspace so you see where everything went. Then it waits for you to pick
+  the Workspace to start in: click one, press its number or its Workspace key (⌘1), or use ← → and
+  Return (the one with the window that matters most is lit up first). It opens onto that Workspace's
+  real windows; with only one Workspace there's nothing to pick, and it opens by itself. A soft chord
+  and bells play with it when macOS plays interface sounds, and the chord opens up again with the
+  Workspace you pick; with Reduce Motion nothing flies. Click or Esc skips straight to picking. Undo
+  (on the note afterwards, which stays until you close it, and in the menu for ten minutes) puts
+  everything back. Setup ends with it whenever two or more windows are open (Not Now skips it);
+  otherwise it's in the menu. It never runs on its own.
 - **Start Fresh**, the other choice on that setup step, closes every window instead, each as if you
   clicked its red button: apps still ask before closing anything unsaved, nothing is forced, no app
   quits, and windows with no close button are left alone. It asks first (Return cancels), says how
@@ -270,8 +274,10 @@ resume tiling one app's windows, for agents testing it on a dummy-plug display),
 onboarding's practice screen), `timeback-add:<action>:<count>[:<days ago>]`, `copy-diagnostics`,
 `float` (float or tile the focused window), `sort` (Sort My Windows), `sort@<display id>` (only that
 display's windows, without switching Workspace, taking focus or playing sound), `sort-demo@<display id>`
-(the show with made-up windows of apps on the Mac, moving nothing), `sort-undo`, `sort-sound:<wav path>`
-(writes the show's sound), `fresh-app:<bundle id>@<display id>` (Start Fresh on one app's windows,
+(the show with made-up windows of apps on the Mac, moving nothing), `sort-pick` (goes to the Workspace
+lit up at the end of the show) and `sort-pick:<n>` (the show's nth, from 1; a test sort on one display
+stays in the Workspace you're in), `sort-undo`, `sort-sound:<wav path>` (writes the show's sound, and
+the part played when you pick a Workspace to `<name>-opening.wav` beside it), `fresh-app:<bundle id>@<display id>` (Start Fresh on one app's windows,
 no question asked, its note on that display), `fresh-question` and `fresh-cancel` (setup's Start
 Fresh question, for screenshots), and `dump`, which writes the current state (Summon's results with
 file paths among it) to `~/Library/Application Support/LunchboxWM/state.json`.

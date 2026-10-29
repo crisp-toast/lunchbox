@@ -3888,9 +3888,9 @@ final class Tiler {
         return WindowSort.fit(forWidth: widths.min() ?? Display.current().first(where: \.isMain)?.visible.width ?? 1600)
     }
 
-    /// What a sort would do now, for setup's question: the plan and each window's app icon. Nil
-    /// when it wouldn't change anything worth asking about (a few windows, already sorted). Before
-    /// tiling starts (no license yet), it goes by the windows on screen.
+    /// What a sort would do now, for setup's last step: the plan and each window's app icon. Nil
+    /// when there's nothing to sort (fewer than two windows) or it would change nothing (already
+    /// sorted). Before tiling starts (no license yet), it goes by the windows on screen.
     func previewSort() -> (plan: WindowSort.Plan, icons: [WindowID: NSImage])? {
         var icons: [WindowID: NSImage] = [:]
         var appIcons: [pid_t: NSImage] = [:]
@@ -3926,13 +3926,14 @@ final class Tiler {
             plan = WindowSort.plan(items, limit: min(3, spaceCount),
                                    fit: WindowSort.fit(forWidth: Display.current().first(where: \.isMain)?.visible.width ?? 1600))
         }
-        guard plan.workspaces.count > 1 || !plan.hidden.isEmpty else { return nil }
+        guard plan.workspaces.reduce(plan.hidden.count, { $0 + $1.windows.count }) >= 2 else { return nil }
         return (plan, icons)
     }
 
     /// Makes a sort so, with everything out of sight (the show covers the screen): the windows go
     /// to their Workspaces, the ones used least lately past what fits are hidden, and you're in the
-    /// Workspace with the window that matters most. Undo Sort puts it all back.
+    /// Workspace with the window that matters most until you pick one (`enterSorted`). Undo Sort
+    /// puts it all back.
     func applySort(_ sort: PreparedSort) {
         guard enabled else { return }
         beforeSort = (spaces, stashed, currentSpace, CACurrentMediaTime(), sort.scope)
@@ -3974,7 +3975,22 @@ final class Tiler {
         onChange?()
     }
 
-    /// After the show: the window that matters most gets focus, in the Workspace it went to.
+    /// The Workspace you picked at the end of the show (the plan's `k`th): you go there while the
+    /// show still covers the screen, and its window that matters most gets focus once it's over.
+    /// A test sort on one display stays in the Workspace you're in.
+    func enterSorted(_ k: Int, of sort: PreparedSort) {
+        guard enabled, sort.scope == nil, sort.plan.workspaces.indices.contains(k), sort.workspace[k] < spaceCount else { return }
+        focusAfterSort = sort.plan.workspaces[k].windows.first
+        guard sort.workspace[k] != currentSpace else { return }
+        quietFocus(for: 1.5)
+        currentSpace = sort.workspace[k]
+        relayout(animated: false)
+        persist()
+        log.notice("went to Workspace \(self.currentSpace + 1) after the sort")
+        onChange?()
+    }
+
+    /// After the show: the window that matters most gets focus, in the Workspace you picked.
     func focusSorted() {
         guard enabled, let id = focusAfterSort else { return }
         focusAfterSort = nil
