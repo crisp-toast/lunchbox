@@ -4,10 +4,18 @@ import AppKit
 /// so macOS tints it for light and dark menu bars). The box is a rounded square like the icon's
 /// squircle, and inside it are the three compartments in the icon's layout: a tall one on the left,
 /// two stacked on the right. Every edge lands on the 2x pixel grid.
-/// While tiling is paused the compartments are drawn hollow.
+/// While tiling is paused the compartments are drawn hollow. While an update is out (`badge`), a
+/// round gap is cut at the top right for the orange dot the menu bar item lays over it: the glyph
+/// stays a template, so macOS still tints it, and only the dot is in color.
 enum MenuBarGlyph {
-    static func image(paused: Bool) -> NSImage {
-        let image = NSImage(size: NSSize(width: 16, height: 16), flipped: true) { _ in
+    static let size: CGFloat = 16
+    /// The orange dot, in the glyph's points from its top left.
+    static let badge = NSRect(x: 10.5, y: 0, width: 5.5, height: 5.5)
+    /// The clear ring around the dot.
+    static let badgeGap: CGFloat = 1.25
+
+    static func image(paused: Bool, badge: Bool = false) -> NSImage {
+        let image = NSImage(size: NSSize(width: size, height: size), flipped: true) { _ in
             NSColor.black.setStroke()
             NSColor.black.setFill()
             // The box.
@@ -27,10 +35,14 @@ enum MenuBarGlyph {
                     NSBezierPath(roundedRect: rect, xRadius: 1, yRadius: 1).fill()
                 }
             }
+            if badge, let context = NSGraphicsContext.current?.cgContext {
+                context.setBlendMode(.clear)
+                context.fillEllipse(in: Self.badge.insetBy(dx: -badgeGap, dy: -badgeGap))
+            }
             return true
         }
         image.isTemplate = true
-        image.accessibilityDescription = paused ? "Lunchbox (paused)" : "Lunchbox"
+        image.accessibilityDescription = (paused ? "Lunchbox (paused)" : "Lunchbox") + (badge ? ", update available" : "")
         return image
     }
 }

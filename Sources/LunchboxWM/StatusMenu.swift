@@ -15,7 +15,16 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     var onEnterLicense: (() -> Void)?
     var onBuy: (() -> Void)?
     var onCheckForUpdates: (() -> Void)?
-    var updater: Updater?
+    var updater: Updater? { didSet { refresh() } }
+    /// The orange dot on the icon while an update is out (`Updater.available`).
+    private let updateDot: NSView = {
+        let dot = NSView(frame: MenuBarGlyph.badge)
+        dot.wantsLayer = true
+        dot.layer?.backgroundColor = NSColor.systemOrange.cgColor
+        dot.layer?.cornerRadius = MenuBarGlyph.badge.width / 2
+        dot.isHidden = true
+        return dot
+    }()
     var onCopyDiagnostics: (() -> Void)?
     var onSort: (() -> Void)?
     var onUndoSort: (() -> Void)?
@@ -34,9 +43,20 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
     func refresh() {
         guard let button = item.button else { return }
-        button.image = MenuBarGlyph.image(paused: !tiler.enabled)
+        let update = updater?.available
+        button.image = MenuBarGlyph.image(paused: !tiler.enabled, badge: update != nil)
         button.imagePosition = .imageLeading
         button.title = tiler.enabled ? " \(tiler.currentSpace + 1)" : ""
+        button.toolTip = update.map { "Lunchbox \($0) is available. Choose Update in the menu to download it." }
+        if updateDot.superview !== button { button.addSubview(updateDot) }
+        updateDot.isHidden = update == nil
+        guard update != nil, let cell = button.cell else { return }
+        // Over the gap cut in the glyph, wherever the button draws it.
+        button.layoutSubtreeIfNeeded()
+        let glyph = cell.imageRect(forBounds: button.bounds)
+        let dot = MenuBarGlyph.badge
+        let y = button.isFlipped ? glyph.minY + dot.minY : glyph.maxY - dot.maxY
+        updateDot.frame = NSRect(x: glyph.minX + dot.minX, y: y, width: dot.width, height: dot.height)
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -150,7 +170,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         settings.submenu = options
         menu.addItem(settings)
         menu.addItem(.separator())
-        menu.addItem(action("Check for Updates…") { [weak self] in self?.onCheckForUpdates?() })
+        let update = updater?.available.map { "Update to Lunchbox \($0)…" } ?? "Check for Updates…"
+        menu.addItem(action(update) { [weak self] in self?.onCheckForUpdates?() })
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Lunchbox", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }

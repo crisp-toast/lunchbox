@@ -74,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.onBuy = { NSWorkspace.shared.open(Licensing.buyURL) }
         menu.onCheckForUpdates = { [weak self] in self?.updater.checkNow() }
         menu.updater = updater
+        updater.onChange = { [weak self] in self?.menu.refresh() }
         menu.onCopyDiagnostics = { [weak self] in self?.copyDiagnostics() }
         licensing.onChange = { [weak self] in self?.licenseChanged() }
         // Activated mid-setup (the thank-you page's link): the welcome window comes back to the front.
