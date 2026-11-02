@@ -36,3 +36,21 @@ import Testing
                                     settling: false, openingNewWindow: true) == .leaveIt)
     }
 }
+
+@Suite struct MenuBarApps {
+    @Test func aMenuBarAppIsWatchedUntilItGetsADockIcon() {
+        // 1Password at login: in the menu bar, no Dock icon.
+        #expect(AppTracking.decide(hasDockIcon: false, isLunchbox: false, tracked: false, terminated: false) == .watch)
+        // Its main window opens and the Dock icon comes with it.
+        #expect(AppTracking.decide(hasDockIcon: true, isLunchbox: false, tracked: false, terminated: false) == .track)
+    }
+
+    @Test func goingBackToTheMenuBarKeepsItTracked() {
+        #expect(AppTracking.decide(hasDockIcon: false, isLunchbox: false, tracked: true, terminated: false) == .ignore)
+    }
+
+    @Test func lunchboxAndQuitAppsAreLeftAlone() {
+        #expect(AppTracking.decide(hasDockIcon: true, isLunchbox: true, tracked: false, terminated: false) == .ignore)
+        #expect(AppTracking.decide(hasDockIcon: false, isLunchbox: false, tracked: false, terminated: true) == .ignore)
+    }
+}

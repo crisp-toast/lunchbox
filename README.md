@@ -76,6 +76,9 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
   column it fits; it remembers that across relaunches, and relearns it when the window changes
   its own size, like switching to another device. Tidy (⌘⇧0) starts that over for the windows in
   view.
+- Menu bar apps that open a main window now and then (1Password, Bitwarden, Docker Desktop) tile
+  it like any other: they get a Dock icon only when that window opens, and LunchboxWM starts
+  watching them right then.
 - The green button's full screen just works: the rest of the Workspace stays put, and the window
   goes back to the same spot when it leaves full screen (into Focus again, if it was in Focus).
 

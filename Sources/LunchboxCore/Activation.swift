@@ -30,3 +30,19 @@ public enum ForeignFocus: Equatable, Sendable {
         return settling ? .stay : .goThere
     }
 }
+
+/// Whether LunchboxWM watches an app's windows. Only apps with a Dock icon (a regular activation
+/// policy) have windows to tile. But a menu bar app (1Password, Bitwarden, Docker Desktop) gets
+/// its Dock icon only when it opens its main window, and macOS sends no launch for that: until
+/// then it's watched, and tracked the moment it gets one.
+public enum AppTracking: Equatable, Sendable {
+    case track
+    /// No Dock icon yet.
+    case watch
+    case ignore
+
+    public static func decide(hasDockIcon: Bool, isLunchbox: Bool, tracked: Bool, terminated: Bool) -> AppTracking {
+        if isLunchbox || tracked || terminated { return .ignore }
+        return hasDockIcon ? .track : .watch
+    }
+}

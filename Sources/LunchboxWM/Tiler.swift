@@ -142,6 +142,8 @@ final class Tiler {
     private var mouseDown: CGPoint?
     private var notificationTokens: [NSObjectProtocol] = []
     private var launchWatch: NSKeyValueObservation?
+    /// Menu bar apps running without a Dock icon, watched for getting one (`AppTracking`).
+    private var policyWatches: [pid_t: NSKeyValueObservation] = [:]
     private var mouseMonitors: [Any] = []
     /// A slow safety net for windows that vanish without any event at all.
     private var ghostTimer: Timer?
@@ -236,9 +238,13 @@ final class Tiler {
         }
         // An app is listed here as soon as it starts, well before it says it has finished
         // launching (by then its first windows are often up): watch it from the start.
-        launchWatch = NSWorkspace.shared.observe(\.runningApplications, options: [.new]) { [weak self] _, change in
-            let started = change.newValue ?? []
-            DispatchQueue.main.async { for app in started { self?.track(app) } }
+        launchWatch = NSWorkspace.shared.observe(\.runningApplications, options: [.new, .old]) { [weak self] _, change in
+            let started = change.newValue ?? [], ended = change.oldValue ?? []
+            DispatchQueue.main.async {
+                // A menu bar app quitting gets no didTerminate: its watch goes here.
+                for app in ended { self?.policyWatches[app.processIdentifier] = nil }
+                for app in started { self?.track(app) }
+            }
         }
         on(NSWorkspace.didTerminateApplicationNotification) { [weak self] n in
             // When an app quits, even a helper with no windows, macOS activates whichever app
@@ -327,6 +333,7 @@ final class Tiler {
         }
         notificationTokens = []
         launchWatch = nil
+        policyWatches = [:]
         mouseMonitors.forEach { NSEvent.removeMonitor($0) }
         expected.forEach { $0.tile.dismiss(animated: false) }
         expected = []
@@ -382,7 +389,13 @@ final class Tiler {
 
     private func track(_ running: NSRunningApplication, scan: Bool = true) {
         let pid = running.processIdentifier
-        guard enabled, running.activationPolicy == .regular, pid != getpid(), apps[pid] == nil else { return }
+        guard enabled else { return }
+        switch AppTracking.decide(hasDockIcon: running.activationPolicy == .regular, isLunchbox: pid == getpid(),
+                                  tracked: apps[pid] != nil, terminated: running.isTerminated) {
+        case .ignore: return
+        case .watch: watchForDockIcon(running); return
+        case .track: policyWatches[pid] = nil
+        }
         let app = AppHandle(pid: pid, bundleID: running.bundleIdentifier)
         apps[pid] = app
         // An app LunchboxWM is holding a tile for has started: from now on it's this process.
@@ -391,6 +404,19 @@ final class Tiler {
         if scan, Self.secondsSinceInput() < 1.5 { launchedByYou[pid] = CACurrentMediaTime() }
         attachObserver(app)
         if scan { scheduleScan(app, after: [0.05, 0.15, 0.3, 0.5, 1.0, 1.5]) }
+    }
+
+    /// A menu bar app (1Password, Bitwarden, Docker Desktop) gets its Dock icon only when it opens
+    /// its main window, with no launch to say so: tracked then, its scan finding that window.
+    private func watchForDockIcon(_ running: NSRunningApplication) {
+        let pid = running.processIdentifier
+        guard pid > 0, policyWatches[pid] == nil else { return }
+        policyWatches[pid] = running.observe(\.activationPolicy) { [weak self] app, _ in
+            DispatchQueue.main.async {
+                guard let self, self.enabled, app.activationPolicy == .regular else { return }
+                self.track(app)
+            }
+        }
     }
 
     private func attachObserver(_ app: AppHandle) {
@@ -424,6 +450,7 @@ final class Tiler {
     }
 
     private func untrack(_ pid: pid_t) {
+        policyWatches[pid] = nil
         launchedByYou[pid] = nil
         lastCreated[pid] = nil
         burstSince[pid] = nil
