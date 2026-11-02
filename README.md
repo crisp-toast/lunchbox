@@ -7,7 +7,10 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
   (⌘⇧− makes it smaller, still centered). Two tile side by side; a third
   goes beneath the second, so the first keeps its half; a fourth goes beneath the first, making a
   2×2 grid without any window crossing the screen. Ultrawide displays give each new window a column
-  of its own (up to four), and any window can be moved into more columns by hand.
+  of its own (up to four), and any window can be moved into more columns by hand. Windows are never
+  left stacked with room beside them: close the window beside a stack, or move it to another
+  Workspace, and the stack opens out side by side (it closes up again if that window comes back,
+  from full screen, say).
 - Everything is driven by the **left** ⌘ key, so right ⌘ + arrows still move the text cursor.
 - Windows slide into place, in one move each. Apps that can't keep up, or stall now and then, just
   snap, so LunchboxWM never adds lag; and an app's windows move together, never one after another. An
@@ -83,7 +86,7 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Keys | What it does |
 | --- | --- |
 | Left ⌘ + ← → ↑ ↓ | Focus the next window in that direction (crosses to the other screen at the edge) |
-| Left ⌘ ⇧ + ← → | Move the window one step sideways: first it stacks with its neighbor, a second press moves it past |
+| Left ⌘ ⇧ + ← → | Move the window sideways: out of its stack into a column of its own, or past the window (or stack) beside it in one press. It never stacks |
 | Left ⌘ ⇧ + ↑ ↓ | Swap with the window above or below in a stack |
 | Left ⌘ ⇧ + plus / minus | Give the window more or less space (a lone window, or one in Focus, grows or shrinks around the center) |
 | Left ⌘ ⇧ + R | **Resize**: then the arrows (or your focus keys) push the window's edges (hold to keep going); Return or Esc when done |

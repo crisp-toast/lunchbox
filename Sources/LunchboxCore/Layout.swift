@@ -58,11 +58,19 @@ public struct Layout: Equatable, Sendable {
     /// While a placeholder that made the 2×2 grid waits for its window: the columns from
     /// before, so if the app gives up, everything goes back. Not saved, like the placeholder.
     var beforeGrid: GridUndo?
+    /// After a stack spread out side by side because a window left (`spreadOut`): the stack as it
+    /// was, so that window coming back (`restore`) finds the layout it left. Not saved.
+    var beforeSpread: SpreadUndo?
 
     struct GridUndo: Equatable, Sendable {
         var placeholder: WindowID
         var before: [Column]
         var grid: [Column]
+    }
+
+    struct SpreadUndo: Equatable, Sendable {
+        var before: [Column]
+        var spread: [Column]
     }
 
     public static let defaultSingleScale = 0.6
@@ -249,10 +257,55 @@ public struct Layout: Equatable, Sendable {
             }
         }
         guard let (c, r) = position(of: id) else { return false }
+        // A stack spread out earlier, and nothing else changed since: it remembers this one left too.
+        if let undo = beforeSpread, undo.spread == columns {
+            beforeSpread = SpreadUndo(before: Self.columns(undo.before, without: id), spread: Self.columns(undo.spread, without: id))
+        } else {
+            beforeSpread = nil
+        }
         columns[c].removeWindow(at: r)
         if columns[c].windows.isEmpty { columns.remove(at: c) }
         spotlight = nil
         if singleOwner == id { resetSingle() }
+        return true
+    }
+
+    static func columns(_ columns: [Column], without id: WindowID) -> [Column] {
+        columns.compactMap { column in
+            var column = column
+            if let r = column.windows.firstIndex(of: id) { column.removeWindow(at: r) }
+            return column.windows.isEmpty ? nil : column
+        }
+    }
+
+    /// After a window leaves: while there are fewer columns than the display takes side by side
+    /// (`maxColumns`), the tallest stack opens out, its top window a column of its own on the
+    /// left, so windows are never left stacked with room beside them (two windows each the
+    /// screen's full width). [A][B/C] without A is [B][C]; [B/C/D] alone is [B][C/D].
+    /// - room: the usable area and gap, with `limits`, so it stops before windows with a minimum
+    ///   width would no longer fit side by side.
+    /// Returns whether anything moved.
+    @discardableResult
+    public mutating func spreadOut(maxColumns: Int, limits: [WindowID: SizeLimits] = [:],
+                                   room: (area: CGSize, gap: CGFloat)? = nil) -> Bool {
+        let before = columns
+        while columns.count < max(1, maxColumns),
+              let c = columns.indices.filter({ columns[$0].windows.count > 1 })
+                .max(by: { columns[$0].windows.count < columns[$1].windows.count }) {
+            var next = columns
+            let id = next[c].windows[0]
+            next[c].removeWindow(at: 0)
+            next.insert(Column(windows: [id], weight: averageColumnWeight), at: c)
+            if let room {
+                let widths = next.map { $0.windows.compactMap { limits[$0]?.minWidth }.max() ?? 0 }
+                if widths.reduce(0, +) + room.gap * CGFloat(next.count - 1) > room.area.width { break }
+            }
+            columns = next
+        }
+        guard columns != before else { return false }
+        // Spreading again before anything came back: back to the stack from before the first time.
+        let origin = beforeSpread.flatMap { $0.spread == before ? $0.before : nil } ?? before
+        beforeSpread = SpreadUndo(before: origin, spread: columns)
         return true
     }
 
@@ -281,12 +334,19 @@ public struct Layout: Equatable, Sendable {
     /// layout (from before LunchboxWM relaunched), going by the windows already back:
     /// into the stack it shared with them, at the same place in it, or as a
     /// column of its own in the same order among theirs, with the shares it had.
-    /// Restoring every window of `saved`, in any order, gives `saved` again.
+    /// Restoring every window of `saved`, in any order, gives `saved` again, also when a stack
+    /// spread out while it was gone (`spreadOut`) and nothing else changed since.
     /// Returns false when `saved` doesn't have the window.
     @discardableResult
     public mutating func restore(_ id: WindowID, from saved: Layout) -> Bool {
         guard !contains(id), let (sc, sr) = saved.position(of: id) else { return false }
         spotlight = nil
+        if let undo = beforeSpread, undo.spread == columns {
+            let here = Set(windows)
+            let left = saved.columns.map { $0.windows.filter(here.contains) }.filter { !$0.isEmpty }
+            if left == undo.before.map(\.windows) { columns = undo.before }
+        }
+        beforeSpread = nil
         let stack = saved.columns[sc]
         if let c = columns.firstIndex(where: { column in column.windows.contains { stack.windows.contains($0) } }) {
             let above = stack.windows[..<sr], below = stack.windows[(sr + 1)...]
@@ -321,11 +381,11 @@ public struct Layout: Equatable, Sendable {
 
     /// Moves a window one step in `direction`.
     ///
-    /// Up and down swap it with its neighbor in the stack. Left and right move it
-    /// one step sideways: a window sharing a column leaves the stack and gets its
-    /// own column on that side; a window alone in its column joins the
-    /// neighboring column. Pressing again keeps it travelling, so any arrangement
-    /// can be reached with the arrow keys alone.
+    /// Up and down swap it with its neighbor in the stack. Left and right never stack it: a
+    /// window sharing a column leaves the stack and gets its own column on that side; a window
+    /// alone in its column trades places with the column beside it (a window or a whole stack),
+    /// each keeping its width. So one press takes it past its neighbor, the way Hyprland's
+    /// swapwindow does, instead of first stacking with it across the whole screen.
     public mutating func move(_ id: WindowID, _ direction: Direction) -> MoveResult {
         guard let (c, r) = position(of: id) else { return .notFound }
         spotlight = nil
@@ -345,9 +405,7 @@ public struct Layout: Equatable, Sendable {
             }
             let neighbor = direction == .left ? c - 1 : c + 1
             guard columns.indices.contains(neighbor) else { return .edge }
-            columns.remove(at: c)
-            let target = direction == .left ? neighbor : neighbor - 1
-            columns[target].insertWindow(id, at: columns[target].windows.count)
+            columns.swapAt(c, neighbor)
             return .moved
         }
     }

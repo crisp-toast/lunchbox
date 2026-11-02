@@ -1502,7 +1502,16 @@ final class Tiler {
     private func removeFromLayouts(_ id: CGWindowID) {
         guard let (space, uuid) = place(of: id), var layout = spaces[space][uuid] else { return }
         layout.remove(id)
+        spreadOut(&layout, on: uuid)
         spaces[space][uuid] = layout.isEmpty ? nil : layout
+    }
+
+    /// After a window leaves a layout: a stack left with room beside it opens out side by side
+    /// (`Layout.spreadOut`), so closing the window beside a stack never leaves two windows each
+    /// the screen's full width.
+    private func spreadOut(_ layout: inout Layout, on uuid: String) {
+        guard let d = displays.first(where: { $0.uuid == uuid }) else { return }
+        layout.spreadOut(maxColumns: Layout.maxColumns(forWidth: d.visible.width), limits: limits, room: room(on: d))
     }
 
     private func place(of id: CGWindowID) -> (space: Int, display: String)? {
@@ -2594,9 +2603,12 @@ final class Tiler {
             }
             let relativeX = Double(((windows[id]?.target?.midX ?? here.frame.midX) - here.frame.minX) / here.frame.width)
             layout.remove(id)
+            spreadOut(&layout, on: uuid)
             spaces[space][uuid] = layout.isEmpty ? nil : layout
             var destination = spaces[space][target.uuid] ?? Layout()
             destination.insert(id, entering: direction, relativeX: relativeX)
+            // Arriving from above or below stacks it; not across a screen with room beside it.
+            if direction == .up || direction == .down { spreadOut(&destination, on: target.uuid) }
             spaces[space][target.uuid] = destination
         case .notFound:
             return

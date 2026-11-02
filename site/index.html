@@ -915,7 +915,6 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     f1: [1.5, 2, 23.13, 96], f2: [26.13, 2, 23.13, 96], f3: [50.75, 2, 23.13, 96], f4: [75.38, 2, 23.13, 96],
     s1: [3, 14, 16, 15], s2: [3, 36, 16, 15], s3: [3, 58, 16, 15],
     gTL: [1.5, 2, 47.75, 47.25], gBL: [1.5, 50.75, 47.75, 47.25], gTR: [50.75, 2, 47.75, 47.25], gBR: [50.75, 50.75, 47.75, 47.25],
-    l3a: [1.5, 2, 47.75, 29.67], l3b: [1.5, 35.17, 47.75, 29.67], l3c: [1.5, 68.33, 47.75, 29.67],
   };
   // The fourth window makes a 2×2 grid: two columns of two.
   const four = { A: R.gTL, B: R.gBL, C: R.gTR, D: R.gBR };
@@ -996,10 +995,9 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     { title: "Move windows", hint: "⇧ + left ⌘ + arrows", steps: [
       { win: four, focus: "D", keys: [], cap: "Add ⇧ to carry the focused window with you." },
       { win: { A: R.c1t, B: R.c1b, D: R.c2, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "←"], cap: "Out of its stack, it gets a column of its own." },
-      { win: { A: R.l3a, B: R.l3b, D: R.l3c, C: R.halfR }, focus: "D", keys: ["⇧", "Left ⌘", "←"], cap: "On its own, it joins the stack beside it." },
-      { win: { D: R.c1, A: R.c2t, B: R.c2b, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "←"], cap: "Press again and it moves past." },
-      { win: { A: R.l3a, B: R.l3b, D: R.l3c, C: R.halfR }, focus: "D", keys: ["⇧", "Left ⌘", "→"], cap: "Any layout is a few presses away." },
-      { win: { A: R.l3a, D: R.l3b, B: R.l3c, C: R.halfR }, focus: "D", keys: ["⇧", "Left ⌘", "↑"], cap: "↑ and ↓ swap places in a stack." },
+      { win: { D: R.c1, A: R.c2t, B: R.c2b, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "←"], cap: "On its own, one press takes it past its neighbor." },
+      { win: { A: R.c1t, B: R.c1b, D: R.c2, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "→"], cap: "It never stacks, so nothing stretches across the screen." },
+      { win: { A: R.c1b, B: R.c1t, D: R.c2, C: R.c3 }, focus: "A", keys: ["⇧", "Left ⌘", "↓"], cap: "↑ and ↓ swap places in a stack." },
     ]},
     { title: "Resize & Tidy", hint: "⇧ + left ⌘ + plus, minus, 0", steps: [
       { win: four, focus: "B", keys: [], cap: "Give the focused window more room when it needs it." },

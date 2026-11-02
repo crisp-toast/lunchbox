@@ -263,6 +263,7 @@ final class Playground: NSView {
         case .close:
             if let id = focused {
                 layout.remove(id)
+                layout.spreadOut(maxColumns: Layout.maxColumns(forWidth: 2560))
                 windows[id]?.opacity = 0
                 focused = layout.windows.last
             }
@@ -270,6 +271,7 @@ final class Playground: NSView {
             // Out of sight, still open.
             if let id = focused {
                 layout.remove(id)
+                layout.spreadOut(maxColumns: Layout.maxColumns(forWidth: 2560))
                 windows[id]?.opacity = 0
                 focused = layout.windows.last
             }
@@ -297,6 +299,7 @@ final class Playground: NSView {
     private func send(to index: Int, follow: Bool, layout: inout Layout) {
         guard let id = focused, index != current else { return }
         layout.remove(id)
+        layout.spreadOut(maxColumns: Layout.maxColumns(forWidth: 2560))
         workspaces[current] = layout
         workspaces[index].insert(id, near: workspaces[index].windows.last, maxColumns: Layout.maxColumns(forWidth: 2560))
         if follow {

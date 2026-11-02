@@ -215,14 +215,10 @@ let laptops = [
 }
 
 @Suite struct Moving {
-    @Test func windowTravelsLeftThroughStackedPositions() {
+    @Test func windowTravelsLeftPastEachNeighborInOnePress() {
         var l = layout([[1], [2], [3]])
         do { let r = l.move(3, .left); #expect(r == .moved) }
-        #expect(l.columns.map(\.windows) == [[1], [2, 3]])
-        do { let r = l.move(3, .left); #expect(r == .moved) }
         #expect(l.columns.map(\.windows) == [[1], [3], [2]])
-        do { let r = l.move(3, .left); #expect(r == .moved) }
-        #expect(l.columns.map(\.windows) == [[1, 3], [2]])
         do { let r = l.move(3, .left); #expect(r == .moved) }
         #expect(l.columns.map(\.windows) == [[3], [1], [2]])
         do { let r = l.move(3, .left); #expect(r == .edge) }
@@ -231,10 +227,29 @@ let laptops = [
     @Test func rightIsTheMirrorOfLeft() {
         var l = layout([[1], [2]])
         do { let r = l.move(1, .right); #expect(r == .moved) }
-        #expect(l.columns.map(\.windows) == [[2, 1]])
-        do { let r = l.move(1, .right); #expect(r == .moved) }
         #expect(l.columns.map(\.windows) == [[2], [1]])
         do { let r = l.move(1, .right); #expect(r == .edge) }
+    }
+
+    @Test func sidewaysNeverStacks() {
+        // Beside a stack, a lone window goes past the whole stack; the stack keeps its order.
+        var l = layout([[1], [2, 3]])
+        do { let r = l.move(1, .right); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[2, 3], [1]])
+        // Out of a stack, a column of its own on that side.
+        do { let r = l.move(3, .left); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[3], [2], [1]])
+        for id: WindowID in [1, 2, 3] {
+            for d in [Direction.left, .right] { _ = l.move(id, d) }
+        }
+        #expect(l.columns.allSatisfy { $0.windows.count == 1 })
+    }
+
+    @Test func aWindowKeepsItsWidthAsItMoves() {
+        var l = Layout(columns: [Column(windows: [1], weight: 0.7), Column(windows: [2], weight: 0.3)])
+        _ = l.move(1, .right)
+        #expect(l.columns.map(\.windows) == [[2], [1]])
+        #expect(l.columns.map(\.weight) == [0.3, 0.7])
     }
 
     @Test func upAndDownSwapInTheStack() {
@@ -522,5 +537,76 @@ let laptops = [
         let grew = l.resize(1, toward: .right, by: 0.05, in: screen, gap: gap)
         #expect(grew)
         #expect(try frame(l, 1).width > before.width)
+    }
+}
+
+@Suite struct SpreadingOut {
+    @Test func closingTheWindowBesideAStackOpensItOut() {
+        var l = layout([[1], [2, 3]])
+        l.remove(1)
+        do { let r = l.spreadOut(maxColumns: Layout.maxColumns(forWidth: 2560)); #expect(r) }
+        #expect(l.columns.map(\.windows) == [[2], [3]])
+        let frames = l.frames(in: screen, gap: gap)
+        #expect(frames[2]!.height > screen.height * 0.9 && frames[3]!.height > screen.height * 0.9)
+    }
+
+    @Test func threeLeftInOneStackMakeTheUsualThree() {
+        var l = layout([[1, 2, 3]])
+        l.spreadOut(maxColumns: 2)
+        #expect(l.columns.map(\.windows) == [[1], [2, 3]])
+        var wide = layout([[1, 2, 3]])
+        wide.spreadOut(maxColumns: Layout.maxColumns(forWidth: 3440))
+        #expect(wide.columns.map(\.windows) == [[1], [2], [3]])
+    }
+
+    @Test func stacksBesideEnoughColumnsStay() {
+        var l = layout([[1, 2], [3, 4]])
+        l.remove(1)
+        do { let r = l.spreadOut(maxColumns: 2); #expect(!r) }
+        #expect(l.columns.map(\.windows) == [[2], [3, 4]])
+        var narrow = layout([[1, 2]])
+        do { let r = narrow.spreadOut(maxColumns: Layout.maxColumns(forWidth: 900)); #expect(!r) }
+    }
+
+    @Test func stopsWhereMinimumWidthsWouldNotFit() {
+        var l = layout([[1, 2]])
+        let room = (area: CGSize(width: 1500, height: 900), gap: CGFloat(8))
+        let wide: [WindowID: SizeLimits] = [1: SizeLimits(minWidth: 900), 2: SizeLimits(minWidth: 900)]
+        do { let r = l.spreadOut(maxColumns: 2, limits: wide, room: room); #expect(!r) }
+        do { let r = l.spreadOut(maxColumns: 2, limits: [1: SizeLimits(minWidth: 700)], room: room); #expect(r) }
+    }
+
+    @Test func aWindowComingBackFindsTheStackItLeft() {
+        // Full screen, say: 1 goes, the stack opens out, 1 comes back to [1][2/3].
+        let saved = Layout(columns: [Column(windows: [1], weight: 1.2), Column(windows: [2, 3], weights: [0.6, 0.4], weight: 0.8)])
+        var l = saved
+        l.remove(1)
+        l.spreadOut(maxColumns: 2)
+        #expect(l.columns.map(\.windows) == [[2], [3]])
+        do { let r = l.restore(1, from: saved); #expect(r) }
+        #expect(l.columns == saved.columns)
+    }
+
+    @Test func windowsLeavingTogetherComeBackInAnyOrder() {
+        // An app with two windows hidden: [1/4][2/3] down to [2][3] on an ultrawide, then back.
+        let saved = layout([[1, 4], [2, 3]])
+        for order in permutations([1, 4]) {
+            var l = saved
+            l.remove(1); l.spreadOut(maxColumns: 3)
+            l.remove(4); l.spreadOut(maxColumns: 3)
+            #expect(l.columns.map(\.windows) == [[2], [3]])
+            for id in order { l.restore(id, from: saved) }
+            #expect(l.columns.map(\.windows) == saved.columns.map(\.windows))
+        }
+    }
+
+    @Test func anythingElseChangingKeepsTheSpread() {
+        let saved = layout([[1], [2, 3]])
+        var l = saved
+        l.remove(1)
+        l.spreadOut(maxColumns: 2)
+        _ = l.move(3, .left)
+        l.restore(1, from: saved)
+        #expect(l.columns.allSatisfy { $0.windows.count == 1 })
     }
 }
