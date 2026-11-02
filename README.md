@@ -367,9 +367,9 @@ The Buy buttons go nowhere yet: set `CHECKOUT_URL` at the top of the page's scri
   (⌘H, Hide Others) gives up its tiles while it's hidden, and its windows come back to the same
   spots, each in its own Workspace, when it's shown again (Show All too).
 - **Updates:** Sparkle checks about once an hour and asks before installing (see docs/store.md).
-  While a newer version is out, the menu bar icon has an orange dot at its top right and the menu's
-  Check for Updates… reads "Update to Lunchbox 1.4…", until it's installed or skipped (Remind Me
-  Later keeps the dot, and so does a relaunch).
+  While a newer version is out, the menu bar icon has an orange dot at its top right, and the menu
+  opens with "● Download Update: Lunchbox 1.4…" in bold, first of all, until it's installed or
+  skipped (Remind Me Later keeps the dot, and so does a relaunch).
 
 ## Selling it
 

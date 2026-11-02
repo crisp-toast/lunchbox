@@ -47,7 +47,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         button.image = MenuBarGlyph.image(paused: !tiler.enabled, badge: update != nil)
         button.imagePosition = .imageLeading
         button.title = tiler.enabled ? " \(tiler.currentSpace + 1)" : ""
-        button.toolTip = update.map { "Lunchbox \($0) is available. Choose Update in the menu to download it." }
+        button.toolTip = update.map { "Lunchbox \($0) is available: Download Update is first in the menu." }
         if updateDot.superview !== button { button.addSubview(updateDot) }
         updateDot.isHidden = update == nil
         guard update != nil, let cell = button.cell else { return }
@@ -61,7 +61,12 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
-        // Which version this is, first thing, in full strength (a click copies it, for support).
+        // An update that's out comes first, so the orange dot on the icon leads straight to it.
+        if let version = updater?.available {
+            menu.addItem(updateLine(version))
+            menu.addItem(.separator())
+        }
+        // Which version this is, in full strength (a click copies it, for support).
         menu.addItem(versionLine())
         menu.addItem(.separator())
         // Without a license nothing tiles, so the tiling and window items would do nothing: the
@@ -170,8 +175,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         settings.submenu = options
         menu.addItem(settings)
         menu.addItem(.separator())
-        let update = updater?.available.map { "Update to Lunchbox \($0)…" } ?? "Check for Updates…"
-        menu.addItem(action(update) { [weak self] in self?.onCheckForUpdates?() })
+        menu.addItem(action("Check for Updates…") { [weak self] in self?.onCheckForUpdates?() })
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Lunchbox", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
@@ -181,6 +185,20 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         let rows = TimeBackWords.breakdown(week)
         return (TimeBackWords.howCounted + (rows.isEmpty ? [] : ["", "This week:"] + rows)
             + ["", "Counted on this Mac only."]).joined(separator: "\n")
+    }
+
+    /// "● Download Update: Lunchbox 1.4…" in bold, the dot orange like the one on the icon: first in
+    /// the menu while an update is out. It opens Sparkle's window for it, which downloads it and asks
+    /// before installing.
+    private func updateLine(_ version: String) -> NSMenuItem {
+        let entry = action("") { [weak self] in self?.onCheckForUpdates?() }
+        let bold = NSFont.boldSystemFont(ofSize: NSFont.systemFontSize)
+        let title = NSMutableAttributedString(string: "● ", attributes: [.font: bold, .foregroundColor: NSColor.systemOrange])
+        title.append(NSAttributedString(string: "Download Update: Lunchbox \(version)…", attributes: [.font: bold]))
+        entry.attributedTitle = title
+        let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        entry.toolTip = "Lunchbox \(version) is out (you have \(current)). This downloads it, then asks before installing."
+        return entry
     }
 
     /// "Lunchbox 1.3" in bold, the same on every build (the build number is in its tooltip).
