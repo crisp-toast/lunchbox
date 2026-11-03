@@ -36,6 +36,29 @@ import Testing
         }
     }
 
+    /// The LG's usable area less the gaps, as the Tiler gives it.
+    let room = (area: CGSize(width: screen.width - 2 * gap, height: screen.height - 2 * gap), gap: gap)
+
+    @Test func theThirdNeverOpensBeneathANarrowColumn() {
+        // Sorted: a browser wide, chat narrow. A new window goes beneath the browser, at a tile's
+        // usual shape, not a sliver beneath the chat.
+        var l = Layout(columns: [Column(windows: [1], weight: 0.7), Column(windows: [2], weight: 0.3)])
+        l.insert(3, near: 2, maxColumns: columns, room: room)
+        #expect(l.columns.map(\.windows) == [[1, 3], [2]])
+        // Evenly split, it's beneath the right one as always.
+        var even = layout([[1], [2]])
+        even.insert(3, near: 1, maxColumns: columns, room: room)
+        #expect(even.columns.map(\.windows) == [[1], [2, 3]])
+    }
+
+    @Test func notBeneathAWindowThatKeepsItsOwnNarrowWidth() {
+        // A phone in Simulator keeps its column narrow whatever its share.
+        let phone: [WindowID: SizeLimits] = [2: SizeLimits(maxWidth: 440)]
+        var l = layout([[1], [2]])
+        l.insert(3, near: 2, maxColumns: columns, limits: phone, room: room)
+        #expect(l.position(of: 3)?.column == l.position(of: 1)?.column)
+    }
+
     @Test func ultrawideDisplaysStillGetColumns() {
         var l = Layout()
         for id: WindowID in [1, 2, 3] { l.insert(id, near: l.windows.last, maxColumns: Layout.maxColumns(forWidth: 3440)) }

@@ -184,14 +184,30 @@ public struct Layout: Equatable, Sendable {
             }
         }
         let fewest = candidates.map { columns[$0].windows.count }.min() ?? 0
-        var target = candidates.last { columns[$0].windows.count == fewest } ?? columns.count - 1
-        // The third window always goes beneath the right one, so the first keeps its half.
-        // After that, the stack beside the focused window, when it's among the shortest.
-        if windowCount != 2, let f = focusedPos, candidates.contains(f.column), columns[f.column].windows.count == fewest {
+        let shortest = candidates.filter { columns[$0].windows.count == fewest }
+        func row(in t: Int) -> Int { focusedPos?.column == t ? focusedPos!.row + 1 : columns[t].windows.count }
+        // The room the new window would get in each of those columns, when the screen is known.
+        var areas: [Int: CGFloat] = [:]
+        if let room, shortest.count > 1 {
+            let rect = CGRect(x: 0, y: 0, width: room.area.width + 2 * room.gap, height: room.area.height + 2 * room.gap)
+            for t in shortest {
+                var trial = self
+                trial.columns[t].insertWindow(id, at: row(in: t))
+                if let f = trial.frames(in: rect, gap: room.gap, limits: limits)[id] { areas[t] = f.width * f.height }
+            }
+        }
+        let best = areas.values.max() ?? 0
+        // A new window never takes a slot clearly smaller than another it could have (beneath a
+        // column made narrow: chat, a phone in Simulator, a share you made small), so it opens at a
+        // tile's usual shape rather than a sliver.
+        func fair(_ t: Int) -> Bool { areas[t].map { $0 >= best * 0.85 } ?? true }
+        // The third window goes beneath the right one, so the first keeps its half. After that,
+        // the stack beside the focused window, when it's among the shortest.
+        var target = shortest.last(where: fair) ?? shortest.last ?? columns.count - 1
+        if windowCount != 2, let f = focusedPos, shortest.contains(f.column), fair(f.column) {
             target = f.column
         }
-        let row = (focusedPos?.column == target) ? focusedPos!.row + 1 : columns[target].windows.count
-        columns[target].insertWindow(id, at: row)
+        columns[target].insertWindow(id, at: row(in: target))
     }
 
     /// The height a stack of these windows needs: every window at least a sliver, a window with
@@ -353,14 +369,23 @@ public struct Layout: Equatable, Sendable {
             let row = columns[c].windows.lastIndex { above.contains($0) }.map { $0 + 1 }
                 ?? columns[c].windows.firstIndex { below.contains($0) }
                 ?? columns[c].windows.count
+            // Its share next to the windows it shared the stack with, as it was.
+            var here = 0.0, there = 0.0
+            for (r, other) in columns[c].windows.enumerated() {
+                guard let k = stack.windows.firstIndex(of: other) else { continue }
+                here += columns[c].weights[r]
+                there += stack.weights[k]
+            }
+            let scale = here > 0 && there > 0 ? here / there : 1
             columns[c].windows.insert(id, at: row)
-            columns[c].weights.insert(stack.weights[sr], at: row)
+            columns[c].weights.insert(stack.weights[sr] * scale, at: row)
         } else {
             // Right after the last column holding a window that was to its left.
             let index = columns.lastIndex { column in
                 column.windows.contains { saved.position(of: $0).map { $0.column < sc } ?? false }
             }.map { $0 + 1 } ?? 0
-            columns.insert(Column(windows: [id], weights: [stack.weights[sr]], weight: stack.weight), at: index)
+            columns.insert(Column(windows: [id], weights: [stack.weights[sr]], weight: stack.weight * columnScale(from: saved)),
+                           at: index)
         }
         if saved.singleOwner == id, singleOwner == nil {
             singleOwner = id
@@ -368,6 +393,22 @@ public struct Layout: Equatable, Sendable {
             singleHeight = saved.singleHeight
         }
         return true
+    }
+
+    /// How `saved`'s column widths compare with this layout's, going by the columns both have: a
+    /// column coming back from `saved` gets the width it had next to them. Shares are relative
+    /// and drift apart (a resize evens them out to add up to 1), so a column taken over as it was
+    /// saved could come back a sliver, or twice as wide as it was. 1 with nothing in common.
+    func columnScale(from saved: Layout) -> Double {
+        var here = 0.0, there = 0.0
+        var seen = Set<Int>()
+        for column in columns {
+            guard let k = column.windows.lazy.compactMap({ saved.position(of: $0)?.column }).first,
+                  seen.insert(k).inserted else { continue }
+            here += column.weight
+            there += saved.columns[k].weight
+        }
+        return here > 0 && there > 0 ? here / there : 1
     }
 
     // MARK: Moving
@@ -379,22 +420,44 @@ public struct Layout: Equatable, Sendable {
         case notFound
     }
 
-    /// Moves a window one step in `direction`.
+    /// Moves a window one step in `direction`. Any arrangement can be reached with the arrows
+    /// alone, and none of them leaves windows stacked with room beside them.
     ///
-    /// Up and down swap it with its neighbor in the stack. Left and right never stack it: a
-    /// window sharing a column leaves the stack and gets its own column on that side; a window
-    /// alone in its column trades places with the column beside it (a window or a whole stack),
-    /// each keeping its width. So one press takes it past its neighbor, the way Hyprland's
-    /// swapwindow does, instead of first stacking with it across the whole screen.
-    public mutating func move(_ id: WindowID, _ direction: Direction) -> MoveResult {
+    /// - Left and right: a window sharing a column leaves the stack and gets its own column on
+    ///   that side. A window alone in its column stacks beneath the window beside it while there
+    ///   are more columns than the display takes (`maxColumns`), so three windows moved into three
+    ///   columns stack again, and four make the 2×2 grid again. Otherwise it trades places with
+    ///   the column beside it, a window or a whole stack, each keeping its width: stacking there
+    ///   would leave room beside the stack (two windows each the screen's full width), or a third
+    ///   window in a stack beside one alone.
+    /// - Up and down: a window in a stack swaps with its neighbor there. A window alone in its
+    ///   column goes above (↑) or below (↓) the window beside it: with more columns than the
+    ///   display takes, it joins that window's column; beside a stack, it trades places with the
+    ///   stack's top (↑) or bottom (↓) window, which takes its column. [A][B/C] with A ↓ is
+    ///   [C][B/A]. The column on the left goes first.
+    public mutating func move(_ id: WindowID, _ direction: Direction, maxColumns: Int) -> MoveResult {
         guard let (c, r) = position(of: id) else { return .notFound }
         spotlight = nil
+        let crowded = columns.count > max(1, maxColumns)
         switch direction {
         case .up, .down:
-            let target = direction == .up ? r - 1 : r + 1
-            guard columns[c].windows.indices.contains(target) else { return .edge }
-            columns[c].windows.swapAt(r, target)
-            columns[c].weights.swapAt(r, target)
+            if columns[c].windows.count > 1 {
+                let target = direction == .up ? r - 1 : r + 1
+                guard columns[c].windows.indices.contains(target) else { return .edge }
+                columns[c].windows.swapAt(r, target)
+                columns[c].weights.swapAt(r, target)
+                return .moved
+            }
+            let neighbors = [c - 1, c + 1].filter(columns.indices.contains)
+            if crowded, let n = neighbors.first(where: { columns[$0].windows.count == 1 }) {
+                columns.remove(at: c)
+                let target = n > c ? n - 1 : n
+                columns[target].insertWindow(id, at: direction == .up ? 0 : columns[target].windows.count)
+                return .moved
+            }
+            guard let n = neighbors.first(where: { columns[$0].windows.count > 1 }),
+                  let other = direction == .up ? columns[n].windows.first : columns[n].windows.last else { return .edge }
+            swap(id, other)
             return .moved
         case .left, .right:
             if columns[c].windows.count > 1 {
@@ -405,7 +468,13 @@ public struct Layout: Equatable, Sendable {
             }
             let neighbor = direction == .left ? c - 1 : c + 1
             guard columns.indices.contains(neighbor) else { return .edge }
-            columns.swapAt(c, neighbor)
+            if crowded, columns[neighbor].windows.count == 1 {
+                columns.remove(at: c)
+                let target = direction == .left ? neighbor : neighbor - 1
+                columns[target].insertWindow(id, at: columns[target].windows.count)
+            } else {
+                columns.swapAt(c, neighbor)
+            }
             return .moved
         }
     }

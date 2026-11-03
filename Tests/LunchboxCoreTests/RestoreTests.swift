@@ -68,7 +68,7 @@ func permutations(_ ids: [WindowID]) -> [[WindowID]] {
         // After the relaunch 2 is still missing and the user moved 4 out on its own.
         var l = Layout()
         for id: WindowID in [1, 3, 4] { l.restore(id, from: grid) }
-        do { let r = l.move(4, .right); #expect(r == .moved) }
+        do { let r = l.move(4, .right, maxColumns: 2); #expect(r == .moved) }
         #expect(l.columns.map(\.windows) == [[1], [3], [4]])
         l.restore(2, from: grid)
         #expect(l.columns.map(\.windows) == [[1, 2], [3], [4]])
@@ -85,6 +85,22 @@ func permutations(_ ids: [WindowID]) -> [[WindowID]] {
 }
 
 @Suite struct SavingLayouts {
+    @Test func aWindowComesBackAtTheWidthItHadBesideTheOthers() throws {
+        // [1][2] evenly, then 2 quit and 1 got a neighbor whose resize evened the shares out to add
+        // up to 1. 2 coming back is as wide as 1 again, not twice as wide.
+        let saved = layout([[1], [2]])
+        var l = Layout(columns: [Column(windows: [1], weight: 0.5), Column(windows: [3], weight: 0.5)])
+        do { let r = l.restore(2, from: saved); #expect(r) }
+        let frames = l.frames(in: screen, gap: gap)
+        let one = try #require(frames[1]), two = try #require(frames[2])
+        #expect(abs(one.width - two.width) <= 1)
+        // The same in a stack.
+        var stack = Layout(columns: [Column(windows: [1], weights: [0.5], weight: 1), Column(windows: [4], weight: 1)])
+        do { let r = stack.restore(2, from: layout([[1, 2], [4]])); #expect(r) }
+        let s = stack.frames(in: screen, gap: gap)
+        #expect(abs(try #require(s[1]).height - (try #require(s[2])).height) <= 1)
+    }
+
     @Test func roundTripKeepsStacksSharesAndShape() throws {
         var saved = grid
         saved.singleOwner = 3

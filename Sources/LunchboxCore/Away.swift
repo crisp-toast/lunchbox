@@ -71,18 +71,26 @@ public struct AwayMemory: Sendable {
 
 /// Mission Control, App Exposé (which hides every other app's windows) and Show Desktop take
 /// windows out of sight without them going anywhere. When the Dock doesn't say so, it shows as
-/// several tiles in view out of sight at once, with no app hidden and nothing minimized. Those
-/// keep their tiles, for `hold` at most: two windows really closed at once by an app that keeps
-/// closed windows around (Chess does) let theirs go after that.
+/// several tiles in view out of sight at once, with no app hidden and nothing minimized, and none
+/// of the other apps' tiles left in view. Those keep their tiles, for `hold` at most: two windows
+/// really closed at once by an app that keeps closed windows around (Chess does) let theirs go
+/// after that.
+///
+/// Closing windows looks different: one app's windows go (App Exposé keeps the app in front's
+/// windows in view, so its windows going is never that), or other apps' tiles stay in view. Those
+/// let their tiles go right away, so a window opening next never lands beside an empty one.
 public struct CoverWatch: Sendable {
     public static let hold = 20.0
     private var since: Double?
 
     public init() {}
 
-    /// `gone`: tiles in view out of sight right now. True while that's the screen being covered.
-    public mutating func covered(gone: Int, at time: Double) -> Bool {
-        guard gone >= 2 else {
+    /// - gone: tiles in view out of sight right now.
+    /// - otherApps: some of them aren't the app in front's.
+    /// - stayed: tiles in view of apps not in front still in sight.
+    /// True while that's the screen being covered.
+    public mutating func covered(gone: Int, otherApps: Bool = true, stayed: Int = 0, at time: Double) -> Bool {
+        guard gone >= 2, otherApps, stayed == 0 else {
             since = nil
             return false
         }
@@ -101,6 +109,8 @@ public struct SleepWatch: Sendable {
     public static let settle = 4.0
     private var macAsleep = false
     private var displaysAsleep = false
+    /// When the Mac or its displays went to sleep.
+    private var asleepSince = 0.0
     private var settledAt = 0.0
 
     public init() {}
@@ -108,11 +118,22 @@ public struct SleepWatch: Sendable {
     /// The Mac or its displays are asleep.
     public var asleep: Bool { macAsleep || displaysAsleep }
 
-    public mutating func willSleep() { macAsleep = true }
-    public mutating func displaysDidSleep() { displaysAsleep = true }
+    public mutating func willSleep(at time: Double) { macAsleep = true; asleepSince = time }
+    public mutating func displaysDidSleep(at time: Double) { displaysAsleep = true; asleepSince = time }
     public mutating func didWake(at time: Double) { macAsleep = false; settling(from: time) }
     public mutating func displaysDidWake(at time: Double) { displaysAsleep = false; settling(from: time) }
     public mutating func didUnlock(at time: Double) { settling(from: time) }
+
+    /// Your last key press or click: one since the Mac or its displays went to sleep means
+    /// they're awake, whether or not macOS said so (it doesn't always: the displays waking for
+    /// Screen Sharing, a wake it never announced). Otherwise windows would keep their tiles,
+    /// closed or not, for as long as it took to say.
+    public mutating func input(at time: Double) {
+        guard asleep, time > asleepSince else { return }
+        macAsleep = false
+        displaysAsleep = false
+        settling(from: time)
+    }
 
     private mutating func settling(from time: Double) { settledAt = max(settledAt, time + Self.settle) }
 

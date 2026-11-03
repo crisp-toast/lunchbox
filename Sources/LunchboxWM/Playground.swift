@@ -245,7 +245,7 @@ final class Playground: NSView {
                 focused = next
             }
         case .move(let direction):
-            if let id = focused { _ = layout.move(id, direction) }
+            if let id = focused { _ = layout.move(id, direction, maxColumns: Layout.maxColumns(forWidth: 2560)) }
         case .grow:
             if let id = focused { layout.resize(id, by: 0.08, from: startingShape(layout)) }
         case .shrink:

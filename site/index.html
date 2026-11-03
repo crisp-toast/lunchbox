@@ -995,9 +995,10 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
     { title: "Move windows", hint: "⇧ + left ⌘ + arrows", steps: [
       { win: four, focus: "D", keys: [], cap: "Add ⇧ to carry the focused window with you." },
       { win: { A: R.c1t, B: R.c1b, D: R.c2, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "←"], cap: "Out of its stack, it gets a column of its own." },
-      { win: { D: R.c1, A: R.c2t, B: R.c2b, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "←"], cap: "On its own, one press takes it past its neighbor." },
-      { win: { A: R.c1t, B: R.c1b, D: R.c2, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "→"], cap: "It never stacks, so nothing stretches across the screen." },
-      { win: { A: R.c1b, B: R.c1t, D: R.c2, C: R.c3 }, focus: "A", keys: ["⇧", "Left ⌘", "↓"], cap: "↑ and ↓ swap places in a stack." },
+      { win: { D: R.c1, A: R.c2t, B: R.c2b, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "←"], cap: "On its own, one press takes it past a whole stack." },
+      { win: { A: R.c1t, B: R.c1b, D: R.c2, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "→"], cap: "Past it, never into it, so nothing gets squeezed." },
+      { win: four, focus: "D", keys: ["⇧", "Left ⌘", "→"], cap: "With a column too many, it stacks beneath its neighbor: the grid again." },
+      { win: { A: R.gTL, B: R.gBL, D: R.gTR, C: R.gBR }, focus: "D", keys: ["⇧", "Left ⌘", "↑"], cap: "↑ and ↓ swap places in a stack." },
     ]},
     { title: "Resize & Tidy", hint: "⇧ + left ⌘ + plus, minus, 0", steps: [
       { win: four, focus: "B", keys: [], cap: "Give the focused window more room when it needs it." },

@@ -10,7 +10,9 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
   of its own (up to four), and any window can be moved into more columns by hand. Windows are never
   left stacked with room beside them: close the window beside a stack, or move it to another
   Workspace, and the stack opens out side by side (it closes up again if that window comes back,
-  from full screen, say).
+  from full screen, say). A window that closes, or an app that quits, without macOS saying so
+  (Find My closing its last window) lets its tile go within a couple of seconds, so no window is
+  ever left beside an empty tile.
 - Everything is driven by the **left** ⌘ key, so right ⌘ + arrows still move the text cursor.
 - Windows slide into place, in one move each. Apps that can't keep up, or stall now and then, just
   snap, so LunchboxWM never adds lag; and an app's windows move together, never one after another. An
@@ -89,8 +91,8 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
 | Keys | What it does |
 | --- | --- |
 | Left ⌘ + ← → ↑ ↓ | Focus the next window in that direction (crosses to the other screen at the edge) |
-| Left ⌘ ⇧ + ← → | Move the window sideways: out of its stack into a column of its own, or past the window (or stack) beside it in one press. It never stacks |
-| Left ⌘ ⇧ + ↑ ↓ | Swap with the window above or below in a stack |
+| Left ⌘ ⇧ + ← → | Move the window sideways: out of its stack into a column of its own; with a column more than the screen takes, beneath the window beside it (three windows in three columns stack again, four make the 2×2 again); otherwise past the window (or stack) beside it in one press. Nothing is ever stacked with room beside it |
+| Left ⌘ ⇧ + ↑ ↓ | Swap with the window above or below in a stack. A window alone in its column goes above or below the one beside it: it trades places with the top (↑) or bottom (↓) of the stack beside it, or, with a column more than the screen takes, stacks with its neighbor |
 | Left ⌘ ⇧ + plus / minus | Give the window more or less space (a lone window, or one in Focus, grows or shrinks around the center) |
 | Left ⌘ ⇧ + R | **Resize**: then the arrows (or your focus keys) push the window's edges (hold to keep going); Return or Esc when done |
 | Left ⌘ ⇧ + F | **Focus**: the window alone in the center, the rest of the Workspace on the Shelf. Click a Shelf card to swap that window into the center. Again, ⌘ (or ⌘ ⇧) with any arrow, or a file dragged onto a Shelf card ends it, every window back in its tile |

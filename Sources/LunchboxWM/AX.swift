@@ -239,6 +239,18 @@ func onScreenWindowBounds() -> [CGWindowID: CGRect] {
     return out
 }
 
+/// Which of these windows still exist, on screen or not (minimized, hidden, on another desktop,
+/// in full screen): the window server leaves out the ones that are gone.
+func existingWindowIDs(_ ids: [CGWindowID]) -> Set<CGWindowID> {
+    guard !ids.isEmpty else { return [] }
+    var raws = ids.map { UnsafeRawPointer(bitPattern: UInt($0)) }
+    guard let array = CFArrayCreate(nil, &raws, raws.count, nil),
+          let list = CGWindowListCreateDescriptionFromArray(array) as? [[String: Any]] else { return Set(ids) }
+    // Every one of several gone at once is the window server not answering, not a closing.
+    if list.isEmpty, ids.count > 1 { return Set(ids) }
+    return Set(list.compactMap { $0[kCGWindowNumber as String] as? CGWindowID })
+}
+
 /// Every window that exists, on screen or not (minimized, hidden, on another desktop).
 func allWindowIDs() -> Set<CGWindowID> {
     let list = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] ?? []

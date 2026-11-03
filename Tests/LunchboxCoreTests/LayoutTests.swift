@@ -215,55 +215,136 @@ let laptops = [
 }
 
 @Suite struct Moving {
-    @Test func windowTravelsLeftPastEachNeighborInOnePress() {
-        var l = layout([[1], [2], [3]])
-        do { let r = l.move(3, .left); #expect(r == .moved) }
-        #expect(l.columns.map(\.windows) == [[1], [3], [2]])
-        do { let r = l.move(3, .left); #expect(r == .moved) }
-        #expect(l.columns.map(\.windows) == [[3], [1], [2]])
-        do { let r = l.move(3, .left); #expect(r == .edge) }
-    }
+    /// A desktop display: two columns side by side.
+    let two = Layout.maxColumns(forWidth: 2560)
 
-    @Test func rightIsTheMirrorOfLeft() {
+    @Test func twoSideBySideTradePlacesInsteadOfStacking() {
         var l = layout([[1], [2]])
-        do { let r = l.move(1, .right); #expect(r == .moved) }
+        do { let r = l.move(1, .right, maxColumns: two); #expect(r == .moved) }
         #expect(l.columns.map(\.windows) == [[2], [1]])
-        do { let r = l.move(1, .right); #expect(r == .edge) }
+        do { let r = l.move(1, .right, maxColumns: two); #expect(r == .edge) }
+        do { let r = l.move(1, .left, maxColumns: two); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[1], [2]])
     }
 
-    @Test func sidewaysNeverStacks() {
-        // Beside a stack, a lone window goes past the whole stack; the stack keeps its order.
+    @Test func besideAStackALoneWindowGoesPastTheWholeStack() {
+        // Stacking it would leave three windows in one column the screen's full width.
         var l = layout([[1], [2, 3]])
-        do { let r = l.move(1, .right); #expect(r == .moved) }
+        do { let r = l.move(1, .right, maxColumns: two); #expect(r == .moved) }
         #expect(l.columns.map(\.windows) == [[2, 3], [1]])
-        // Out of a stack, a column of its own on that side.
-        do { let r = l.move(3, .left); #expect(r == .moved) }
-        #expect(l.columns.map(\.windows) == [[3], [2], [1]])
-        for id: WindowID in [1, 2, 3] {
-            for d in [Direction.left, .right] { _ = l.move(id, d) }
+    }
+
+    @Test func outOfAStackIntoAColumnOfItsOwn() {
+        var l = layout([[1], [2, 3]])
+        do { let r = l.move(3, .left, maxColumns: two); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[1], [3], [2]])
+    }
+
+    @Test func threeColumnsOnADesktopStackAgain() {
+        // 2026-11-03, 15:41: Find My (3) stepped out of its stack beside Dia (1), then went back
+        // and forth past Dia and Messages (2) and never got back into a stack. Now the next press
+        // takes it into the column beside it, beneath that window.
+        var l = layout([[1], [2, 3]])
+        _ = l.move(3, .left, maxColumns: two)
+        #expect(l.columns.map(\.windows) == [[1], [3], [2]])
+        do { let r = l.move(3, .left, maxColumns: two); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[1, 3], [2]])
+        // Two columns again: from here it moves as usual, out of the stack the way it came.
+        do { let r = l.move(3, .right, maxColumns: two); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[1], [3], [2]])
+        do { let r = l.move(3, .right, maxColumns: two); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[1], [2, 3]])
+    }
+
+    @Test func fourWindowsFindTheGridAgain() {
+        // The site's walk-through: D out of the 2×2, past the stack and back, then beneath C.
+        var l = layout([[1, 2], [3, 4]])
+        _ = l.move(4, .left, maxColumns: two)
+        #expect(l.columns.map(\.windows) == [[1, 2], [4], [3]])
+        // A stack is passed, never joined: no third window beneath two beside one alone.
+        _ = l.move(4, .left, maxColumns: two)
+        #expect(l.columns.map(\.windows) == [[4], [1, 2], [3]])
+        _ = l.move(4, .right, maxColumns: two)
+        #expect(l.columns.map(\.windows) == [[1, 2], [4], [3]])
+        _ = l.move(4, .right, maxColumns: two)
+        #expect(l.columns.map(\.windows) == [[1, 2], [3, 4]])
+    }
+
+    @Test func everyArrangementOfThreeIsReachable() {
+        // From the usual three, the arrows alone reach every way of putting them in two columns.
+        var reached = Set<[[WindowID]]>()
+        var frontier = [layout([[1], [2, 3]])]
+        while let next = frontier.popLast() {
+            let key = next.columns.map(\.windows)
+            guard reached.insert(key).inserted else { continue }
+            for id: WindowID in [1, 2, 3] {
+                for d in Direction.allCases {
+                    var l = next
+                    if l.move(id, d, maxColumns: two) == .moved { frontier.append(l) }
+                }
+            }
         }
-        #expect(l.columns.allSatisfy { $0.windows.count == 1 })
+        let twoColumns = reached.filter { $0.count == 2 }
+        // Three windows in two columns: which one is alone (3), which side it's on (2), and the
+        // stack's order (2).
+        #expect(twoColumns.count == 12)
+        // Never all three in one column the screen's full width.
+        #expect(!reached.contains { $0.count == 1 })
+    }
+
+    @Test func aLoneWindowGoesBelowOrAboveTheWindowBesideIt() {
+        // Three columns on a desktop: ↓ puts it beneath its neighbor, ↑ above.
+        var l = layout([[1], [2], [3]])
+        do { let r = l.move(1, .down, maxColumns: two); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[2, 1], [3]])
+        var up = layout([[1], [2], [3]])
+        do { let r = up.move(2, .up, maxColumns: two); #expect(r == .moved) }
+        #expect(up.columns.map(\.windows) == [[2, 1], [3]])
+    }
+
+    @Test func besideAStackALoneWindowTradesPlacesWithItsTopOrBottom() {
+        // [A][B/C], A ↓: A goes beneath B, and C takes A's column. ↑: above C, B takes its column.
+        var down = layout([[1], [2, 3]])
+        do { let r = down.move(1, .down, maxColumns: two); #expect(r == .moved) }
+        #expect(down.columns.map(\.windows) == [[3], [2, 1]])
+        var up = layout([[1], [2, 3]])
+        do { let r = up.move(1, .up, maxColumns: two); #expect(r == .moved) }
+        #expect(up.columns.map(\.windows) == [[2], [1, 3]])
+    }
+
+    @Test func twoSideBySideHaveNothingAboveOrBelow() {
+        var l = layout([[1], [2]])
+        do { let r = l.move(1, .down, maxColumns: two); #expect(r == .edge) }
+        do { let r = l.move(1, .up, maxColumns: two); #expect(r == .edge) }
+        #expect(l.columns.map(\.windows) == [[1], [2]])
+    }
+
+    @Test func anUltrawideKeepsItsColumnsApart() {
+        // Three columns is what a 3440-wide display takes: sideways is past, not into.
+        var l = layout([[1], [2], [3]])
+        do { let r = l.move(1, .right, maxColumns: Layout.maxColumns(forWidth: 3440)); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[2], [1], [3]])
     }
 
     @Test func aWindowKeepsItsWidthAsItMoves() {
         var l = Layout(columns: [Column(windows: [1], weight: 0.7), Column(windows: [2], weight: 0.3)])
-        _ = l.move(1, .right)
+        _ = l.move(1, .right, maxColumns: two)
         #expect(l.columns.map(\.windows) == [[2], [1]])
         #expect(l.columns.map(\.weight) == [0.3, 0.7])
     }
 
     @Test func upAndDownSwapInTheStack() {
         var l = layout([[1, 2, 3]])
-        do { let r = l.move(3, .up); #expect(r == .moved) }
+        do { let r = l.move(3, .up, maxColumns: two); #expect(r == .moved) }
         #expect(l.columns[0].windows == [1, 3, 2])
-        do { let r = l.move(1, .up); #expect(r == .edge) }
-        do { let r = l.move(2, .down); #expect(r == .edge) }
+        do { let r = l.move(1, .up, maxColumns: two); #expect(r == .edge) }
+        do { let r = l.move(2, .down, maxColumns: two); #expect(r == .edge) }
     }
 
     @Test func loneWindowHitsTheEdge() {
         var l = layout([[1]])
-        for d in Direction.allCases { #expect((l.move(1, d)) == .edge) }
-        do { let r = l.move(42, .left); #expect(r == .notFound) }
+        for d in Direction.allCases { #expect((l.move(1, d, maxColumns: two)) == .edge) }
+        do { let r = l.move(42, .left, maxColumns: two); #expect(r == .notFound) }
     }
 
     @Test func swapAndReplace() {
@@ -426,7 +507,7 @@ let laptops = [
         l.remove(3)
         #expect(l.spotlight == nil)
         l.toggleSpotlight(1)
-        _ = l.move(2, .left)
+        _ = l.move(2, .left, maxColumns: 2)
         #expect(l.spotlight == nil)
     }
 
@@ -605,7 +686,7 @@ let laptops = [
         var l = saved
         l.remove(1)
         l.spreadOut(maxColumns: 2)
-        _ = l.move(3, .left)
+        _ = l.move(3, .left, maxColumns: 2)
         l.restore(1, from: saved)
         #expect(l.columns.allSatisfy { $0.windows.count == 1 })
     }

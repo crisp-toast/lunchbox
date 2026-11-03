@@ -254,6 +254,8 @@ final class Tiler {
                 self?.untrack(app.processIdentifier)
                 self?.stopExpecting(app.bundleIdentifier, pid: app.processIdentifier, why: "it quit")
             }
+            // Its number may not have come with it: any app that's gone goes.
+            self?.forgetQuitApps()
         }
         on(NSWorkspace.didActivateApplicationNotification) { [weak self] n in
             if let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication { self?.appActivated(app) }
@@ -266,8 +268,14 @@ final class Tiler {
         on(NSApplication.didChangeScreenParametersNotification, .default) { [weak self] _ in self?.displaysMayHaveChanged() }
         // A laptop's lid closed, the displays asleep, the lock screen: every Workspace stays as it
         // is until the Mac has been back in use a moment (`SleepWatch`).
-        on(NSWorkspace.willSleepNotification) { [weak self] _ in self?.sleepWatch.willSleep(); self?.heldForSleep = true }
-        on(NSWorkspace.screensDidSleepNotification) { [weak self] _ in self?.sleepWatch.displaysDidSleep(); self?.heldForSleep = true }
+        on(NSWorkspace.willSleepNotification) { [weak self] _ in
+            self?.sleepWatch.willSleep(at: CACurrentMediaTime())
+            self?.heldForSleep = true
+        }
+        on(NSWorkspace.screensDidSleepNotification) { [weak self] _ in
+            self?.sleepWatch.displaysDidSleep(at: CACurrentMediaTime())
+            self?.heldForSleep = true
+        }
         on(NSWorkspace.didWakeNotification) { [weak self] _ in
             self?.sleepWatch.didWake(at: CACurrentMediaTime())
             self?.displaysMayHaveChanged()
@@ -346,6 +354,8 @@ final class Tiler {
         overview.detach()
         away.forgetAll() // resuming puts windows back from what persist() saved
         cover = CoverWatch()
+        vanishedSince = [:]
+        closing = [:]
         apps = [:]
         windows = [:]
         spaces = Array(repeating: [:], count: spaceCount)
@@ -564,7 +574,14 @@ final class Tiler {
             let shown = shownSpaces()
             var all: [(AppHandle, WindowInfo)] = []
             for (app, infos) in results { infos.forEach { all.append((app, $0)) } }
-            all.sort { ($0.1.frame.minX, $0.1.frame.minY) < ($1.1.frame.minX, $1.1.frame.minY) }
+            // Windows with a spot from before go back to it first; the rest then join those layouts
+            // the way new windows do. The other way round, a window back from Hide (quitting brings
+            // them back) took a column first and the restored ones each added one after it: three
+            // narrow columns where the usual three would be (2026-11-03).
+            all.sort { a, b in
+                (self.savedPlacement[a.1.id] == nil ? 1 : 0, a.1.frame.minX, a.1.frame.minY)
+                    < (self.savedPlacement[b.1.id] == nil ? 1 : 0, b.1.frame.minX, b.1.frame.minY)
+            }
             for (app, info) in all { self.consider(info, app: app, onScreen: onScreen, shown: shown) }
             // Windows closed while LunchboxWM wasn't running don't come back, and their
             // numbers get reused by new windows: forget their spots.
@@ -1504,6 +1521,8 @@ final class Tiler {
         if !keepAway { away.forget(id) }
         unlistedSince[id] = nil
         offScreenSince[id] = nil
+        vanishedSince[id] = nil
+        closing[id] = nil
         removeFromLayouts(id)
         if let w = windows.removeValue(forKey: id) {
             w.handle.app.windowIDs.removeValue(forKey: w.handle.element)
@@ -1762,20 +1781,29 @@ final class Tiler {
     /// Mission Control, App Exposé (which hides every other app's windows) or Show Desktop is up:
     /// windows in view are out of sight without going anywhere, and keep their tiles. The Dock
     /// says so (`overview`); failing that, several tiles in view out of sight at once, their apps
-    /// not hidden, is the same (`CoverWatch`).
+    /// not hidden, with none of the other apps' tiles still in sight, is the same (`CoverWatch`).
+    /// Windows being closed, or already gone from the window server, don't count.
     private func screenCovered(onScreen: Set<CGWindowID>, shown: Set<Int>? = nil) -> Bool {
         if overview.isActive { return true }
         var shown = shown
-        var gone = 0
-        for id in visibleFrames().keys where !onScreen.contains(id) {
-            guard let w = windows[id], !w.hidden, !w.minimized,
-                  NSRunningApplication(processIdentifier: w.pid)?.isHidden != true else { continue }
+        var gone = 0, stayed = 0, otherApps = false
+        let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let now = CACurrentMediaTime()
+        for id in visibleFrames().keys {
+            guard let w = windows[id], !w.hidden, !w.minimized else { continue }
+            if onScreen.contains(id) {
+                if w.pid != front { stayed += 1 }
+                continue
+            }
+            guard NSRunningApplication(processIdentifier: w.pid)?.isHidden != true,
+                  vanishedSince[id] == nil, closing[id].map({ now - $0 >= 3 }) ?? true else { continue }
             // Behind a full screen app: out of view for another reason.
             if shown == nil { shown = shownSpaces() }
             if let shown, isOutOfView(id, shown: shown) { continue }
             gone += 1
+            if w.pid != front { otherApps = true }
         }
-        let covered = cover.covered(gone: gone, at: CACurrentMediaTime())
+        let covered = cover.covered(gone: gone, otherApps: otherApps, stayed: stayed, at: now)
         if covered, gone >= 2, !wasCovered { log.notice("\(gone) tiles in view went out of sight at once: they keep their tiles") }
         wasCovered = covered
         return covered
@@ -1791,6 +1819,10 @@ final class Tiler {
     /// which drops it.
     private func checkForGhosts() {
         guard enabled else { return }
+        // Whatever the apps say (or don't), the window server knows what's gone.
+        sweepGone()
+        // A key press or click since the Mac or its displays went to sleep: they're awake.
+        sleepWatch.input(at: CACurrentMediaTime() - Self.secondsSinceInput())
         // Asleep, locked or just back: nothing has gone anywhere. Once things settle, every app
         // is asked again, and a window still missing gets its usual moment to show up.
         if holding {
@@ -1819,6 +1851,60 @@ final class Tiler {
         for app in stale.values { scheduleScan(app) }
         reparkStrays()
         rescanUntiled(onScreen: onScreen)
+    }
+
+    /// When `sweepGone` last looked, and windows the window server didn't have then.
+    private var lastSweep: CFTimeInterval = 0
+    private var vanishedSince: [CGWindowID: CFTimeInterval] = [:]
+    /// Windows LunchboxWM was just asked to close (⌘⇧Delete): going, not covered.
+    private var closing: [CGWindowID: CFTimeInterval] = [:]
+
+    /// Apps that quit and windows that closed without LunchboxWM hearing about it let their tiles
+    /// go, within a couple of seconds. Otherwise the tile stays, empty: a window opening next sits
+    /// beside nothing, and the one there keeps half the screen. macOS doesn't always say an app
+    /// quit (Find My closing its last window, 2026-11-03), an app that quit can't answer when asked
+    /// about its windows, and that's no longer taken as having none (it might only be busy).
+    /// So ask the system: a process that's gone, and a window the window server no longer has
+    /// (twice in a row, a second apart, so a moment's hiccup never closes anything), are gone.
+    /// At most once a second.
+    private func sweepGone() {
+        let now = CACurrentMediaTime()
+        guard now - lastSweep >= 1 else { return }
+        lastSweep = now
+        closing = closing.filter { now - $0.value < 3 }
+        forgetQuitApps()
+        let ids = Array(windows.keys)
+        let alive = existingWindowIDs(ids)
+        var gone: [CGWindowID] = []
+        for id in ids {
+            if alive.contains(id) { vanishedSince[id] = nil; continue }
+            if let since = vanishedSince[id] {
+                if now - since >= 0.9 { gone.append(id) }
+            } else {
+                vanishedSince[id] = now
+            }
+        }
+        vanishedSince = vanishedSince.filter { windows[$0.key] != nil && !gone.contains($0.key) }
+        guard !gone.isEmpty else { return }
+        let tiled = gone.contains { place(of: $0) != nil }
+        let focusedFrame = focusedID.flatMap { gone.contains($0) ? visibleFrames()[$0] : nil }
+        for id in gone {
+            log.notice("window \(id) (\(self.windows[id]?.handle.app.bundleID ?? "?", privacy: .public)) closed without a word; letting its tile go")
+            forget(id)
+        }
+        guard tiled else { return }
+        relayout(animated: true)
+        persist()
+        if let focusedFrame { focusNearest(to: focusedFrame) }
+    }
+
+    /// Apps whose process is gone: as if macOS had said they quit.
+    private func forgetQuitApps() {
+        for (pid, app) in apps where kill(pid, 0) != 0 && errno == ESRCH {
+            log.notice("\(app.bundleID ?? "an app", privacy: .public) quit without a word; letting its tiles go")
+            untrack(pid)
+            stopExpecting(app.bundleID, pid: pid, why: "it quit")
+        }
     }
 
     /// The other way round: a window on screen without a tile is looked at again (every 2 s at
@@ -2221,9 +2307,25 @@ final class Tiler {
                     }
                     // A window that can't fill its tile changed its own size (another Simulator
                     // device, a different video): that's the most it wants now. Fit it at that size.
-                    if w.resizable, self.limits[id] != nil, let before = w.settledSize,
-                       abs(actual.width - before.width) > 8 || abs(actual.height - before.height) > 8 {
-                        self.limits[id] = SizeLimits(maxWidth: actual.width, maxHeight: actual.height)
+                    // Not when one side is at the size LunchboxWM asked for: that's the app still
+                    // catching up with the ask (Messages and other iPad-style apps take a moment),
+                    // not a size of its own, and taking it as the most it goes would leave it a
+                    // strip in its tile from then on.
+                    if w.resizable, let known = self.limits[id] {
+                        if let before = w.settledSize,
+                           abs(actual.width - before.width) > 8 || abs(actual.height - before.height) > 8,
+                           abs(actual.width - target.width) > 2, abs(actual.height - target.height) > 2 {
+                            self.limits[id] = SizeLimits(maxWidth: actual.width, maxHeight: actual.height)
+                        } else {
+                            // Bigger than the most it was thought to take, or smaller than the least:
+                            // that was wrong, so it's asked for its tile's size again.
+                            var l = known
+                            if let m = l.maxWidth, actual.width > m + 2 { l.maxWidth = nil }
+                            if let m = l.maxHeight, actual.height > m + 2 { l.maxHeight = nil }
+                            if let m = l.minWidth, actual.width < m - 2 { l.minWidth = nil }
+                            if let m = l.minHeight, actual.height < m - 2 { l.minHeight = nil }
+                            if l != known { self.limits[id] = l.isEmpty ? nil : l }
+                        }
                     }
                     w.frame = actual
                     w.target = nil
@@ -2622,7 +2724,8 @@ final class Tiler {
         guard let id = focusedID, let (space, uuid) = place(of: id), space == currentSpace,
               var layout = spaces[space][uuid] else { return }
         let before = layout.columns.map(\.windows)
-        switch layout.move(id, direction) {
+        let width = displays.first { $0.uuid == uuid }?.visible.width ?? 1600
+        switch layout.move(id, direction, maxColumns: Layout.maxColumns(forWidth: width)) {
         case .moved:
             spaces[space][uuid] = layout
         case .edge:
@@ -2920,8 +3023,11 @@ final class Tiler {
         log.notice("close: front \(running?.bundleIdentifier ?? "?", privacy: .public) (tracked: \(front != nil)), LunchboxWM focus \(self.focusedID.map(String.init) ?? "nil", privacy: .public)")
         if let front, known?.handle.app !== front {
             // The front app's own key window: a dialog, or a window LunchboxWM doesn't tile.
-            front.queue.async {
-                if let window = front.element.element(kAXFocusedWindowAttribute) { Self.pressClose(window) }
+            front.queue.async { [weak self] in
+                guard let window = front.element.element(kAXFocusedWindowAttribute) else { return }
+                let id = window.windowID
+                Self.pressClose(window)
+                if let id { DispatchQueue.main.async { self?.closing[id] = CACurrentMediaTime() } }
             }
             scheduleScan(front, after: [0.3, 1.0])
             return
@@ -2929,6 +3035,7 @@ final class Tiler {
         // The window LunchboxWM has focused here. Also used when the front app isn't one
         // LunchboxWM tiles (a helper that took focus, or LunchboxWM itself).
         guard let known else { return }
+        closing[known.id] = CACurrentMediaTime()
         let element = known.handle.element
         known.handle.app.queue.async { Self.pressClose(element) }
         scheduleScan(known.handle.app, after: [0.3, 1.0])
@@ -2937,6 +3044,7 @@ final class Tiler {
     /// Closes one specific window, whatever has focus. Used by the `close-<id>` script command.
     func close(windowID id: CGWindowID) {
         guard let w = windows[id] else { return }
+        closing[id] = CACurrentMediaTime()
         let element = w.handle.element
         w.handle.app.queue.async { Self.pressClose(element) }
         scheduleScan(w.handle.app, after: [0.3, 1.0])
@@ -3632,9 +3740,12 @@ final class Tiler {
 
     /// A window settled at another size than it was asked for. Look again a moment later
     /// (a slow app may still be catching up), and if it's still that size, centered where
-    /// LunchboxWM put it, remember what it takes and lay out around it.
-    private func learnLimits(of id: CGWindowID, askedFor target: CGRect) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+    /// LunchboxWM put it, remember what it takes and lay out around it. It takes two looks in a
+    /// row at the same size: an app that resizes in steps (Messages, Find My and other iPad-style
+    /// apps) caught partway would otherwise be taken for one that stops there, and sit as a strip
+    /// in its tile from then on.
+    private func learnLimits(of id: CGWindowID, askedFor target: CGRect, looks: Int = 0, seen: CGSize? = nil) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + (looks == 0 ? 0.15 : 0.3)) { [weak self] in
             guard let self, let w = self.windows[id], !w.hidden, w.target == target else { return } // moved on since
             let element = w.handle.element
             w.handle.app.queue.async {
@@ -3642,6 +3753,12 @@ final class Tiler {
                 DispatchQueue.main.async {
                     guard let frame, let w = self.windows[id], !w.hidden, w.target == target,
                           abs(frame.midX - target.midX) <= 3, abs(frame.midY - target.midY) <= 3 else { return }
+                    let steady = seen.map { abs($0.width - frame.width) <= 2 && abs($0.height - frame.height) <= 2 } ?? false
+                    guard steady else {
+                        // Still changing: look again, a few times at most.
+                        if looks < 4 { self.learnLimits(of: id, askedFor: target, looks: looks + 1, seen: frame.size) }
+                        return
+                    }
                     let before = self.limits[id] ?? SizeLimits()
                     let after = before.learning(asked: target.size, got: frame.size)
                     guard after != before else { return }

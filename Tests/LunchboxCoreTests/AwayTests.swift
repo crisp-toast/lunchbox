@@ -128,6 +128,23 @@ import Testing
         #expect(!after)
     }
 
+    @Test func oneAppsWindowsGoingIsThemClosing() {
+        // App Exposé keeps the app in front's windows in view: only its own going is a closing
+        // (two Android Studio windows with their project), and they let their tiles go.
+        var cover = CoverWatch()
+        let closing = cover.covered(gone: 2, otherApps: false, at: 0)
+        #expect(!closing)
+    }
+
+    @Test func anotherAppStillInSightIsNotTheScreenCovered() {
+        // Mission Control and App Exposé take every other app's tiles out of sight.
+        var cover = CoverWatch()
+        let stayed = cover.covered(gone: 2, otherApps: true, stayed: 1, at: 0)
+        let allGone = cover.covered(gone: 2, otherApps: true, stayed: 0, at: 1)
+        #expect(!stayed)
+        #expect(allGone)
+    }
+
     @Test func eachCoveringStartsOver() {
         var cover = CoverWatch()
         let first = cover.covered(gone: 2, at: 0)
@@ -193,7 +210,7 @@ import Testing
 
     @Test func holdsWhileAsleepAndForAMomentAfterWaking() {
         var watch = SleepWatch()
-        watch.willSleep()
+        watch.willSleep(at: 1)
         #expect(watch.holding(at: 10, locked: false))
         // Asleep for hours: the clock it's given doesn't matter until it wakes.
         #expect(watch.holding(at: 10_000, locked: false))
@@ -205,7 +222,7 @@ import Testing
 
     @Test func holdsWhileTheDisplaysSleep() {
         var watch = SleepWatch()
-        watch.displaysDidSleep()
+        watch.displaysDidSleep(at: 1)
         #expect(watch.asleep)
         watch.displaysDidWake(at: 5)
         #expect(watch.holding(at: 6, locked: false))
@@ -222,10 +239,29 @@ import Testing
 
     @Test func theLockScreenIsOnlyAskedAboutWhenNothingElseHolds() {
         var watch = SleepWatch()
-        watch.willSleep()
+        watch.willSleep(at: 1)
         var asked = false
         _ = watch.holding(at: 1, locked: { asked = true; return false }())
         #expect(!asked)
+    }
+
+    @Test func aKeyPressAfterSleepIsAwakeEvenWithoutAWake() {
+        // The displays woke (Screen Sharing, say) and macOS never said so: windows would otherwise
+        // keep their tiles, closed or minimized, for as long as that lasted.
+        var watch = SleepWatch()
+        watch.displaysDidSleep(at: 100)
+        watch.input(at: 90) // before they slept: still asleep
+        #expect(watch.asleep)
+        watch.input(at: 300)
+        #expect(!watch.asleep)
+        #expect(watch.holding(at: 301, locked: false))
+        #expect(!watch.holding(at: 300 + SleepWatch.settle + 0.5, locked: false))
+    }
+
+    @Test func inputWhileAwakeChangesNothing() {
+        var watch = SleepWatch()
+        watch.input(at: 50)
+        #expect(!watch.holding(at: 50.5, locked: false))
     }
 
     @Test func aLaterWakeKeepsTheLaterSettle() {
