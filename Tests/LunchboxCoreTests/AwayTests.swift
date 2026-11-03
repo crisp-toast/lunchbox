@@ -154,6 +154,34 @@ import Testing
         // Typing in another app just then isn't moving this window.
         #expect(OffDisplayMove.decide(dragged: false, inputAgo: 0.1, appInFront: false) == .backToTile)
     }
+
+    @Test func anAppAnAgentClaimedStays() {
+        // spoof.sh move, or Simulator reopening where the agent's test left it.
+        #expect(OffDisplayMove.decide(dragged: false, inputAgo: 40, appInFront: false, claimed: true) == .leaveThere)
+    }
+}
+
+@Suite struct AgentClaimsLapse {
+    @Test func aClaimLastsAnHourFromWhenItWasLastMade() {
+        var claims = AgentClaims()
+        claims.claim("com.apple.dt.Devices", at: 100)
+        #expect(claims.contains("com.apple.dt.Devices", at: 100 + 3599))
+        #expect(!claims.contains("com.apple.dt.Devices", at: 100 + 3600))
+        // Claimed again: another hour.
+        claims.claim("com.apple.dt.Devices", at: 3000)
+        #expect(claims.contains("com.apple.dt.Devices", at: 3000 + 3599))
+        #expect(claims.current(at: 3000 + 10) == ["com.apple.dt.Devices"])
+    }
+
+    @Test func releasedOrNeverClaimedIsNotClaimed() {
+        var claims = AgentClaims()
+        claims.claim("company.thebrowser.Browser", at: 0)
+        claims.release("company.thebrowser.Browser")
+        #expect(!claims.contains("company.thebrowser.Browser", at: 1))
+        #expect(!claims.contains("com.apple.Safari", at: 1))
+        #expect(!claims.contains(nil, at: 1))
+        #expect(claims.current(at: 1).isEmpty)
+    }
 }
 
 /// A laptop's lid closed and opened again, the displays asleep, the lock screen: windows keep

@@ -139,7 +139,35 @@ public enum OffDisplayMove: Equatable, Sendable {
     /// - dragged: you dragged it there.
     /// - inputAgo: seconds since your last key press or click.
     /// - appInFront: its app is the one in front, where that key press or menu click went.
-    public static func decide(dragged: Bool, inputAgo: Double, appInFront: Bool) -> OffDisplayMove {
-        dragged || (appInFront && inputAgo < inputSeconds) ? .leaveThere : .backToTile
+    /// - claimed: an agent testing the app there claimed it (`AgentClaims`), so it put it there.
+    public static func decide(dragged: Bool, inputAgo: Double, appInFront: Bool, claimed: Bool = false) -> OffDisplayMove {
+        dragged || claimed || (appInFront && inputAgo < inputSeconds) ? .leaveThere : .backToTile
+    }
+}
+
+/// Apps an agent claimed to test on a display LunchboxWM doesn't tile, the dummy plug
+/// (`leave-app:<bundle id>`, the mac-mini skill's `spoof.sh claim`). A claim covers only that
+/// display: the app's windows there stay there, never brought back to your screen (`OffDisplayMove`),
+/// while its windows on the screens LunchboxWM tiles tile like any other. So a window an agent opens
+/// for you lands in its tile, claim or not, and claiming an app you're using never takes your
+/// windows out of their tiles. A claim lasts `lifetime` from when it was last made, so one an agent
+/// forgets to release (`manage-app:`) lapses by itself.
+public struct AgentClaims: Sendable {
+    public static let lifetime = 3600.0
+    private var since: [String: Double] = [:]
+
+    public init() {}
+
+    public mutating func claim(_ bundleID: String, at time: Double) { since[bundleID] = time }
+    public mutating func release(_ bundleID: String) { since[bundleID] = nil }
+
+    public func contains(_ bundleID: String?, at time: Double) -> Bool {
+        guard let bundleID, let made = since[bundleID] else { return false }
+        return time - made < Self.lifetime
+    }
+
+    /// The apps claimed now, for `dump`.
+    public func current(at time: Double) -> [String] {
+        since.keys.filter { contains($0, at: time) }.sorted()
     }
 }

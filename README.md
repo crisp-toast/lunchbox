@@ -209,8 +209,10 @@ normalize, re-tile everything, and open **Keyboard Shortcuts…** (the same sear
 when the second display is a dummy plug: windows that open on other displays move to the main one,
 while a window you drag onto another display (or send there with a shortcut or Window › Move to) is
 left there, untiled. An app moving its own window there (Simulator going back to where it was last)
-gets it back in its tile, so nothing ends up on a screen you can't see; agents testing an app on a
-dummy plug use `leave-app:` first (the mac-mini skill's `spoof.sh claim`).
+gets it back in its tile, so nothing ends up on a screen you can't see. An agent testing an app on a
+dummy plug claims it first (`leave-app:`, the mac-mini skill's `spoof.sh claim`): that app's windows
+on the dummy plug then stay there, while its windows on your screen still tile, so a window an agent
+opens for you lands in its tile like any other. A claim lapses after an hour.
 
 ## How it works
 
@@ -274,8 +276,10 @@ taking focus), `welcomeclose`, `find:<text>` (opens Summon with that text), `hel
 `send-1…9`, `workspaces-3…9`, `displays-all`, `displays-main`, `press:<keycode>[:cmd][:shift][:opt]`
 (presses the keys through the whole system, with LunchboxWM's Accessibility permission, for end-to-end
 tests and demo recordings), `expect:<bundle id>` (holds a placeholder for a window of that app, without
-opening anything, to try placeholders), `leave-app:<bundle id>` and `manage-app:<bundle id>` (stop and
-resume tiling one app's windows, for agents testing it on a dummy-plug display), `license:<key>`,
+opening anything, to try placeholders), `leave-app:<bundle id>` and `manage-app:<bundle id>` (claim and
+release one app for an agent testing it on a dummy-plug display: its windows there stay there, its
+windows on the screens LunchboxWM tiles still tile, and a claim lapses after an hour; `dump` lists
+`claimedApps`), `license:<key>`,
 `license:window`, `license:remove`, `license:snapshot:<png>`, `practice:<command>` (drives
 onboarding's practice screen), `timeback-add:<action>:<count>[:<days ago>]`, `copy-diagnostics`,
 `float` (float or tile the focused window), `sort` (Sort My Windows), `sort@<display id>` (only that

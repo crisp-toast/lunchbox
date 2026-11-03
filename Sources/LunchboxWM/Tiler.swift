@@ -717,7 +717,8 @@ final class Tiler {
         // Everything but being in view.
         let tiles = ruleTiles
             && !offDisplay.contains(info.id)
-            && !leftAloneApps.contains(app.bundleID ?? "")
+            // An agent's claim covers only the display LunchboxWM doesn't tile: on yours, its windows tile.
+            && !(claimed(app.bundleID) && isOnUnmanagedDisplay(info.frame))
             && !appHidden
             && !userFloating.contains(info.id)
             && stashed[info.id] == nil
@@ -1302,7 +1303,8 @@ final class Tiler {
               !windows.values.contains(where: { $0.pid == app.pid && $0.tabs >= 2 }) else { return nil }
         if let held = heldTile(forNewWindowOf: app) { return .held(held) }
         let now = CACurrentMediaTime()
-        guard !leftAloneApps.contains(app.bundleID ?? ""), !Self.floatingApps.contains(app.bundleID ?? ""),
+        // A claimed app's new window may be on its way to the dummy plug: it tiles once it shows up.
+        guard !claimed(app.bundleID), !Self.floatingApps.contains(app.bundleID ?? ""),
               NSRunningApplication(processIdentifier: app.pid)?.isHidden != true, !isBursting(app.pid) else { return nil }
         let probe = CGWindowID(UInt32.max - 1)
         // Restarted within the hour: its windows go back to their old spots, here in view.
@@ -1359,7 +1361,7 @@ final class Tiler {
     private func prePlace(_ info: WindowInfo, app: AppHandle, park: Bool = false) {
         guard initialScanDone, windows[info.id] == nil, info.tileable, info.tabs < 2,
               savedPlacement[info.id] == nil, away[info.id] == nil,
-              !leftAloneApps.contains(app.bundleID ?? ""), !Self.floatingApps.contains(app.bundleID ?? ""),
+              !claimed(app.bundleID), !Self.floatingApps.contains(app.bundleID ?? ""),
               NSRunningApplication(processIdentifier: app.pid)?.isHidden != true,
               !isOnUnmanagedDisplay(info.frame),
               // It may be about to become a tab, which would drag its whole tab group along.
@@ -1675,23 +1677,25 @@ final class Tiler {
     /// Windows you moved onto a display LunchboxWM doesn't manage (Use All Displays off): left
     /// alone while there. (An app moving its own window there gets it back in its tile.)
     private var offDisplay: Set<CGWindowID> = []
-    /// Apps an agent is testing on the spoof display: LunchboxWM doesn't tile their windows
-    /// at all, so opening one never shuffles Tyler's layout. Set with leave-app:<bundle id>.
-    private var leftAloneApps: Set<String> = []
+    /// Apps an agent is testing on the dummy plug (`AgentClaims`): their windows there stay there.
+    /// Set with leave-app:<bundle id>, ended with manage-app:<bundle id> or after an hour.
+    private var claims = AgentClaims()
+
+    private func claimed(_ bundleID: String?) -> Bool { claims.contains(bundleID, at: CACurrentMediaTime()) }
 
     func setLeftAlone(_ bundleID: String, _ leave: Bool) {
         guard !bundleID.isEmpty else { return }
-        log.notice("\(leave ? "leaving" : "tiling", privacy: .public) \(bundleID, privacy: .public)")
+        log.notice("\(leave ? "claimed for the untiled display" : "claim ended", privacy: .public): \(bundleID, privacy: .public)")
         if leave {
-            leftAloneApps.insert(bundleID)
-            scanAll()
+            // Its windows on your screen keep their tiles; only ones on the dummy plug stay there.
+            claims.claim(bundleID, at: CACurrentMediaTime())
             return
         }
         // Windows it still has on the unmanaged display stay there, not on Tyler's screen.
         // LunchboxWM never tracked where they went, so ask where they are now.
         let mine = windows.values.filter { $0.handle.app.bundleID == bundleID }
         guard let app = mine.first?.handle.app else {
-            leftAloneApps.remove(bundleID)
+            claims.release(bundleID)
             return
         }
         let elements = mine.map { ($0.id, $0.handle.element) }
@@ -1699,7 +1703,7 @@ final class Tiler {
             let frames = elements.compactMap { id, element in element.frame.map { (id, $0) } }
             DispatchQueue.main.async {
                 for (id, frame) in frames where self.isOnUnmanagedDisplay(frame) { self.offDisplay.insert(id) }
-                self.leftAloneApps.remove(bundleID)
+                self.claims.release(bundleID)
                 self.scheduleScan(app)
             }
         }
@@ -1712,12 +1716,14 @@ final class Tiler {
     }
 
     /// Whether you moved this tiled window onto a display LunchboxWM doesn't tile (dragged it, or
-    /// with a key or a menu just then), rather than its app moving it there by itself.
+    /// with a key or a menu just then), or an agent testing its app there did, rather than its app
+    /// moving it there by itself.
     private func movedThereByYou(_ id: CGWindowID) -> Bool {
         guard let w = windows[id] else { return false }
         let dragged = draggedByUser.contains(id) || CACurrentMediaTime() - (droppedAt[id] ?? 0) < 1.5
         let inFront = NSWorkspace.shared.frontmostApplication?.processIdentifier == w.pid
-        return OffDisplayMove.decide(dragged: dragged, inputAgo: Self.secondsSinceInput(), appInFront: inFront) == .leaveThere
+        return OffDisplayMove.decide(dragged: dragged, inputAgo: Self.secondsSinceInput(), appInFront: inFront,
+                                     claimed: claimed(w.handle.app.bundleID)) == .leaveThere
     }
 
     /// Stops tiling a window you moved onto an unmanaged display, and closes its gap.
@@ -1728,7 +1734,7 @@ final class Tiler {
         w.target = nil
         relayout(animated: true)
         persist()
-        log.notice("window \(id) was moved onto an unmanaged display by hand; leaving it there")
+        log.notice("window \(id) was moved onto an unmanaged display by hand (or by an agent testing its app); leaving it there")
     }
 
     private func appActivated(_ running: NSRunningApplication) {
@@ -1827,7 +1833,7 @@ final class Tiler {
         for w in windows.values where (now - w.seenAt < 120 || now - w.restoredAt < 30 || away[w.id] != nil)
             && (w.standard || adopted.contains(w.id)) && (!w.hidden || away[w.id] != nil) && !w.minimized && !w.fullScreen
             && onScreen.contains(w.id) && place(of: w.id) == nil && !offDisplay.contains(w.id)
-            && !leftAloneApps.contains(w.handle.app.bundleID ?? "") && !Self.floatingApps.contains(w.handle.app.bundleID ?? "") {
+            && !(claimed(w.handle.app.bundleID) && isOnUnmanagedDisplay(w.frame)) && !Self.floatingApps.contains(w.handle.app.bundleID ?? "") {
             guard (rechecked[w.id].map { now - $0 >= 2 } ?? true), recheck(w.id) else { continue }
             apps[w.pid] = w.handle.app
         }
@@ -3300,7 +3306,7 @@ final class Tiler {
     /// - since: when the click was, so a window that beat LunchboxWM here counts.
     /// - point: where you are, which picks the display (the mouse, by default).
     func expectWindow(from bundleID: String, another: Bool = false, since: CFTimeInterval? = nil, near point: CGPoint? = nil) {
-        guard enabled, initialScanDone, !Self.floatingApps.contains(bundleID), !leftAloneApps.contains(bundleID),
+        guard enabled, initialScanDone, !Self.floatingApps.contains(bundleID),
               another || !expected.contains(where: { $0.bundleID == bundleID }) else { return }
         let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first { !$0.isTerminated }
         // A hidden app brings back the windows it has; nothing new is coming.
@@ -4111,7 +4117,7 @@ final class Tiler {
             let state: String
             if w.minimized { state = "minimized" }
             else if userFloating.contains(w.id) { state = "floated by you" }
-            else if leftAloneApps.contains(w.handle.app.bundleID ?? "") { state = "app left alone" }
+            else if claimed(w.handle.app.bundleID), isOnUnmanagedDisplay(w.frame) { state = "on the untiled display, its app claimed by an agent" }
             else if Self.floatingApps.contains(w.handle.app.bundleID ?? "") { state = "floats (its app always does)" }
             else if !w.standard { state = "floats (panel or dialog)" }
             else { state = w.hidden ? "not tiled, off screen" : "not tiled" }
@@ -4152,6 +4158,7 @@ final class Tiler {
         return [
             "enabled": enabled, "currentSpace": currentSpace + 1, "focused": focusedID ?? 0, "placeholders": placeholders,
             "useAllDisplays": useAllDisplays, "windowServerFocus": WindowFocus.isAvailable,
+            "claimedApps": claims.current(at: CACurrentMediaTime()),
             "newWindowSupport": newWindowSupport,
             "displays": displays.map { "\($0.name) \(NSStringFromRect($0.visible))" },
             "spaces": spaceList, "windows": windowList,
