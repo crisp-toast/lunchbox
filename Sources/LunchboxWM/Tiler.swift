@@ -447,6 +447,15 @@ final class Tiler {
         }
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .defaultMode)
         app.observer = observer
+        // Windows LunchboxWM took on before it could listen to their app (still starting up) say
+        // when they close, move or resize too, so a closed one's gap fills at once, not after a
+        // routine look.
+        for (element, _) in app.windowIDs {
+            for name in [kAXUIElementDestroyedNotification, kAXWindowMovedNotification, kAXWindowResizedNotification,
+                         kAXWindowMiniaturizedNotification, kAXWindowDeminiaturizedNotification] {
+                AXObserverAddNotification(observer, element, name as CFString, refcon)
+            }
+        }
         // Windows it made while LunchboxWM couldn't listen yet won't be announced.
         if app.observerAttempts > 0 { scheduleScan(app, after: [0]) }
     }
@@ -607,7 +616,19 @@ final class Tiler {
         var changed = false
         let now = CACurrentMediaTime()
         for id in seen { unlistedSince[id] = nil }
-        for w in windows.values where w.pid == app.pid && !seen.contains(w.id) {
+        let unlisted = windows.values.filter { $0.pid == app.pid && !seen.contains($0.id) }
+        // The window server still has them (not closed, only out of the list a moment)?
+        let existing = existingWindowIDs(unlisted.map(\.id))
+        // A tab of the app's coming forward (or it just made a window, ⌘T): the one gone behind
+        // keeps its tile a moment, for the tab in front to take over.
+        let tabbing = infos.contains { $0.tabs >= 2 } || (lastCreated[app.pid].map { now - $0 < 1 } ?? false)
+        for w in unlisted {
+            // Closed: the window server no longer has it. Its tile goes now, not in a moment.
+            guard existing.contains(w.id) else {
+                forget(w.id)
+                changed = true
+                continue
+            }
             if isOutOfView(w.id, shown: shown) { continue } // behind a full screen app: it keeps its tile
             if overview.isActive { continue } // under Mission Control: still there
             // Going in or out of full screen, a window isn't on any Space for a moment.
@@ -619,7 +640,11 @@ final class Tiler {
                 if holding { continue }
                 let since = unlistedSince[w.id] ?? now
                 unlistedSince[w.id] = since
-                let wait = away[w.id] != nil ? 6.0 : 1.5
+                // A tile in view, out of sight and off its app's list, nothing to do with tabs: an
+                // app that keeps closed windows around closed it. Its gap fills right away.
+                let closedAndKept = !w.hidden && away[w.id] == nil && place(of: w.id)?.space == currentSpace
+                    && !onScreen.contains(w.id) && w.tabs < 2 && !tabbing
+                let wait = away[w.id] != nil ? 6.0 : closedAndKept ? 0.12 : 1.5
                 if now - since < wait {
                     scheduleScan(app, after: [wait + 0.1 - (now - since)])
                     continue
@@ -721,6 +746,8 @@ final class Tiler {
         // Gone out of sight a moment ago, and now in full screen: the green button after all.
         if info.fullScreen, away[info.id] != nil { away.wentFullScreen(info.id) }
         window.standard = info.standard
+        // In a tab group as last seen: a tab that just went behind reads as no tabs.
+        let hadTabs = window.tabs >= 2
         window.tabs = info.tabs
         window.resizable = info.resizable
         // A window that can't be resized tiles at its own size.
@@ -787,14 +814,19 @@ final class Tiler {
         }
         // A tiled window that only went out of view (a tab sent back, a window on its way to
         // full screen, a closed window an app keeps around) keeps its tile a moment, so a
-        // tab coming forward can take it over instead of the layout reshuffling.
+        // tab coming forward can take it over instead of the layout reshuffling. Only where a tab
+        // may be coming (it's in a tab group, or its app just made a window: ⌘T on a window
+        // without tabs yet); otherwise just long enough to see it isn't a flicker, so the windows
+        // around a closed one fill its gap at once. One LunchboxWM is closing goes right away.
         if !wantsTile && placed, initialScanDone, !onScreen.contains(info.id), !window.hidden, !info.minimized,
-           !info.fullScreen, !appHidden, info.tileable || info.windowLike {
+           !info.fullScreen, !appHidden, info.tileable || info.windowLike, closing[info.id] == nil {
             let now = CACurrentMediaTime()
+            let tabs = hadTabs || info.tabs >= 2 || (lastCreated[app.pid].map { now - $0 < 1 } ?? false)
+            let wait = tabs ? 0.6 : 0.12
             let since = offScreenSince[info.id] ?? now
             offScreenSince[info.id] = since
-            if now - since < 0.6 {
-                scheduleScan(app, after: [0.65 - (now - since)])
+            if now - since < wait {
+                scheduleScan(app, after: [wait + 0.05 - (now - since)])
                 return false
             }
         }
@@ -1842,16 +1874,33 @@ final class Tiler {
         let now = CACurrentMediaTime()
         var stale: [pid_t: AppHandle] = [:]
         var shown: Set<Int>?
+        var settlesAt: CFTimeInterval?
         for id in visibleFrames().keys where !onScreen.contains(id) {
-            guard let w = windows[id], !w.hidden, now > settlingUntil[id] ?? 0 else { continue }
+            guard let w = windows[id], !w.hidden else { continue }
+            // Still settling from a move of LunchboxWM's: look again the moment it's done (closed
+            // right after it moved, its gap fills then, not at the next routine look).
+            if let until = settlingUntil[id], now <= until {
+                settlesAt = min(settlesAt ?? until, until)
+                continue
+            }
             if shown == nil { shown = shownSpaces() }
             if let shown, isOutOfView(id, shown: shown) { continue }
             stale[w.pid] = w.handle.app
         }
         for app in stale.values { scheduleScan(app) }
+        if let settlesAt, ghostRecheckAt.map({ $0 > settlesAt + 0.01 || $0 < now }) ?? true {
+            ghostRecheckAt = settlesAt + 0.02
+            DispatchQueue.main.asyncAfter(deadline: .now() + max(0.02, settlesAt + 0.02 - now)) { [weak self] in
+                self?.ghostRecheckAt = nil
+                self?.checkForGhosts()
+            }
+        }
         reparkStrays()
         rescanUntiled(onScreen: onScreen)
     }
+
+    /// When `checkForGhosts` looks again for a tile that went out of sight while settling.
+    private var ghostRecheckAt: CFTimeInterval?
 
     /// When `sweepGone` last looked, and windows the window server didn't have then.
     private var lastSweep: CFTimeInterval = 0
@@ -2338,8 +2387,11 @@ final class Tiler {
     }
 
     private func mouseUp() {
-        // A click may have been a window's close button.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.checkForGhosts() }
+        // A click may have been a window's close button: look as soon as it's had time to close,
+        // and again in case its app was slow about it.
+        for delay in [0.12, 0.5] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.checkForGhosts() }
+        }
         let down = mouseDown
         mouseDown = nil
         let dragged = draggedByUser
@@ -3029,7 +3081,7 @@ final class Tiler {
                 Self.pressClose(window)
                 if let id { DispatchQueue.main.async { self?.closing[id] = CACurrentMediaTime() } }
             }
-            scheduleScan(front, after: [0.3, 1.0])
+            scheduleScan(front, after: [0.1, 0.3, 1.0])
             return
         }
         // The window LunchboxWM has focused here. Also used when the front app isn't one
@@ -3038,7 +3090,7 @@ final class Tiler {
         closing[known.id] = CACurrentMediaTime()
         let element = known.handle.element
         known.handle.app.queue.async { Self.pressClose(element) }
-        scheduleScan(known.handle.app, after: [0.3, 1.0])
+        scheduleScan(known.handle.app, after: [0.1, 0.3, 1.0])
     }
 
     /// Closes one specific window, whatever has focus. Used by the `close-<id>` script command.
@@ -3047,7 +3099,7 @@ final class Tiler {
         closing[id] = CACurrentMediaTime()
         let element = w.handle.element
         w.handle.app.queue.async { Self.pressClose(element) }
-        scheduleScan(w.handle.app, after: [0.3, 1.0])
+        scheduleScan(w.handle.app, after: [0.1, 0.3, 1.0])
     }
 
     private static func pressClose(_ window: AXUIElement) {
