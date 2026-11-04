@@ -259,7 +259,7 @@ You need a Mac with Apple silicon, macOS 14 or later, and Xcode or its Command L
 (`xcode-select --install`).
 
 ```bash
-git clone https://github.com/crisp-toast/tessel.git lunchbox && cd lunchbox
+git clone https://github.com/crisp-toast/lunchbox.git && cd lunchbox
 ./scripts/build.sh --install
 ```
 
