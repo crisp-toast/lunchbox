@@ -1,4 +1,5 @@
 import AppKit
+import LunchboxCore
 import os
 
 /// One running app we manage windows for. Every Accessibility call to the app
@@ -9,6 +10,9 @@ final class AppHandle {
     let bundleID: String?
     let element: AXUIElement
     let queue: DispatchQueue
+    /// An iPad-style app (Messages, Find My): its windows animate to every frame they're asked
+    /// for, so they're placed one step at a time and never glided (`placeShown`).
+    let animatesItsOwnFrames: Bool
     var observer: AXObserver?
     /// Window elements we've seen, so notifications about a destroyed element
     /// can still be matched to a window ID. Main thread only.
@@ -25,7 +29,19 @@ final class AppHandle {
         self.bundleID = bundleID
         self.element = AXUIElementCreateApplication(pid)
         self.queue = DispatchQueue(label: "com.sentientdonut.lunchbox.app.\(pid)", qos: .userInteractive)
+        self.animatesItsOwnFrames = Self.isIPadStyle(NSRunningApplication(processIdentifier: pid))
         AXUIElementSetMessagingTimeout(element, 0.5)
+    }
+
+    /// Mac Catalyst keeps its Info.plist where any Mac app does; an iPad app on a Mac with Apple
+    /// silicon runs from inside a wrapper, its own Info.plist beside its executable.
+    private static func isIPadStyle(_ app: NSRunningApplication?) -> Bool {
+        guard let app else { return false }
+        let plists = [app.bundleURL?.appendingPathComponent("Contents/Info.plist"),
+                      app.executableURL?.deletingLastPathComponent().appendingPathComponent("Info.plist")]
+        return plists.contains { url in
+            url.flatMap { NSDictionary(contentsOf: $0) as? [String: Any] }.map(WindowBehavior.animatesItsOwnFrames(infoPlist:)) ?? false
+        }
     }
 
     var latency: Double { latencyLock.withLock { $0.average } }

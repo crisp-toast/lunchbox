@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import os
 
 /// Private but long-stable HIServices call that maps an AX window to its window-server ID.
 /// Rectangle, Amethyst and AeroSpace all rely on it.
@@ -129,7 +130,7 @@ extension AXUIElement {
     /// threads at once, the size often landed first, at the app's spot; macOS takes no single
     /// frame value from other apps' windows.)
     @discardableResult
-    func placeAtOnce(in slot: CGRect) -> CGRect? { place(in: slot) }
+    func placeAtOnce(in slot: CGRect, window id: CGWindowID, of app: AppHandle) -> CGRect? { place(in: slot, window: id, of: app) }
 
     @discardableResult
     func setPosition(_ point: CGPoint) -> Bool {
@@ -173,6 +174,57 @@ extension AXUIElement {
         return CGRect(origin: p, size: s)
     }
 
+    /// `place(in:)` for window `id` of `app`, or `placeShown(in:)` if its app animates its windows itself.
+    @discardableResult
+    func place(in slot: CGRect, sizeFirst: Bool = false, window id: CGWindowID, of app: AppHandle) -> CGRect? {
+        app.animatesItsOwnFrames ? placeShown(in: slot, id: id, reveal: sizeFirst) : place(in: slot, sizeFirst: sizeFirst)
+    }
+
+    /// Puts a window of an iPad-style app (`AppHandle.animatesItsOwnFrames`: Messages, Find My)
+    /// in `slot`, one change at a time, each shown before the next is sent. Sent back to back the
+    /// way `place(in:)` does, the position was lost and the size held to the screen from where the
+    /// window was, and the move to the middle of the slot that followed dropped even that: Messages
+    /// opened short, shook, and grew a little more each time it was opened (2026-11-03).
+    /// Smaller first where it gets smaller (so it fits where it's going), then into place, then
+    /// bigger; one that stops short of the slot goes to its middle. About a quarter of a second a
+    /// step, the window's own animation. `reveal`: back from parked, it's moved into view before
+    /// it's resized, never resized while it's held to the corner of the screen.
+    @discardableResult
+    func placeShown(in slot: CGRect, id: CGWindowID, reveal: Bool = false) -> CGRect? {
+        WindowsBeingPlaced.during(id) {
+            func differs(_ a: CGSize, _ b: CGSize) -> Bool { abs(a.width - b.width) > 1 || abs(a.height - b.height) > 1 }
+            func differs(_ a: CGPoint, _ b: CGPoint) -> Bool { abs(a.x - b.x) > 1 || abs(a.y - b.y) > 1 }
+            guard let start = frame else { return nil }
+            let smaller = CGSize(width: min(start.width, slot.width), height: min(start.height, slot.height))
+            if !reveal, differs(smaller, start.size) { setSize(smaller); waitUntilShown(id) }
+            if let p = position, differs(p, slot.origin) { setPosition(slot.origin); waitUntilShown(id) }
+            if let s = size, differs(s, slot.size) { setSize(slot.size); waitUntilShown(id) }
+            guard let s = size else { return frame }
+            let short = abs(s.width - slot.width) > 2 || abs(s.height - slot.height) > 2
+            let spot = short ? CGPoint(x: (slot.midX - s.width / 2).rounded(), y: (slot.midY - s.height / 2).rounded()) : slot.origin
+            if let p = position, differs(p, spot) { setPosition(spot); waitUntilShown(id) }
+            return frame
+        }
+    }
+
+    /// Waits until the window server shows window `id` where its app says it's going (an
+    /// iPad-style app answers at once, then animates there), a little under half a second at most.
+    private func waitUntilShown(_ id: CGWindowID, timeout: CFTimeInterval = 0.45) {
+        let start = CACurrentMediaTime()
+        var going: CGRect?, shown: CGRect?
+        repeat {
+            going = frame
+            shown = serverFrame(of: id)
+            guard let going, let shown else { return }
+            if shown.isClose(to: going, tolerance: 1) {
+                log.debug("window \(id) shown where it's going after \(Int((CACurrentMediaTime() - start) * 1000)) ms")
+                return
+            }
+            usleep(8_000)
+        } while CACurrentMediaTime() < start + timeout
+        log.notice("window \(id) not shown where its app says it's going after \(Int(timeout * 1000)) ms: going to \(NSStringFromRect(going ?? .zero), privacy: .public), shown at \(NSStringFromRect(shown ?? .zero), privacy: .public)")
+    }
+
     func set(_ attribute: String, _ value: Bool) {
         AXUIElementSetAttributeValue(self, attribute as CFString, value as CFBoolean)
     }
@@ -209,6 +261,26 @@ func isDialogShowing(_ id: CGWindowID, pid: pid_t, frame: CGRect) -> Bool {
            (0...200).contains(margin.width), (0...200).contains(margin.height) { return true }
     }
     return false
+}
+
+/// Windows `placeShown` is moving right now. What they report on the way (moved, resized, a
+/// frame partway) is their app animating to where they were sent, not a move or a size of their
+/// own: LunchboxWM leaves it be, and looks at where they are once they're there.
+enum WindowsBeingPlaced {
+    private static let counts = OSAllocatedUnfairLock(initialState: [CGWindowID: Int]())
+
+    static func contains(_ id: CGWindowID) -> Bool { counts.withLock { $0[id] != nil } }
+
+    static func during<T>(_ id: CGWindowID, _ body: () -> T) -> T {
+        counts.withLock { $0[id, default: 0] += 1 }
+        defer {
+            counts.withLock { counts in
+                let left = (counts[id] ?? 1) - 1
+                counts[id] = left > 0 ? left : nil
+            }
+        }
+        return body()
+    }
 }
 
 /// Whether the window server is showing a window right now: far cheaper than the

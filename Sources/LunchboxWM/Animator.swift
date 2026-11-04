@@ -92,8 +92,10 @@ final class Animator {
         var start = from
         if let existing = running[window.id] { start = existing.frame(at: now) }
 
+        // An iPad-style app animates the window itself, starting over from wherever it's shown at
+        // every new ask: a frame a tick would only stop it and set it off again (Messages shook).
         let snaps = (kind != .animate && kind != .slide) || latency > Self.slideLatency || window.app.slowest > Self.stallLatency / 2
-            || start.isClose(to: to, tolerance: 1)
+            || window.app.animatesItsOwnFrames || start.isClose(to: to, tolerance: 1)
         guard !snaps else {
             running[window.id] = nil
             window.queue.async { [weak self] in
@@ -152,9 +154,12 @@ final class Animator {
         } else {
             // A window that won't take this size sits centered on its slot (until LunchboxWM learns
             // what it takes), not in its corner.
-            actual = element.place(in: target, sizeFirst: sizeFirst)
+            actual = element.place(in: target, sizeFirst: sizeFirst, window: window.id, of: window.app)
         }
-        window.app.recordLatency(CACurrentMediaTime() - t0, calls: positionOnly ? 3 : 4)
+        // (Waiting out an iPad-style app's own animation isn't time the app took to answer.)
+        if positionOnly || !window.app.animatesItsOwnFrames {
+            window.app.recordLatency(CACurrentMediaTime() - t0, calls: positionOnly ? 3 : 4)
+        }
         // Parking only needs the window pushed off the right edge (macOS may clamp its
         // height); a normal move needs it centered where it was sent.
         let landed: Bool = actual.map { a in

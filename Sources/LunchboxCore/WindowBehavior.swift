@@ -26,4 +26,17 @@ extension WindowBehavior {
     /// Calculator, System Settings and the like tile, at the size they take.) LunchboxWM never even
     /// watches these two: the screenshot UI isn't a regular app, and LunchboxWM is itself.
     public static let floatingApps: Set<String> = ["com.apple.screencaptureui", "com.sentientdonut.lunchbox"]
+
+    /// Whether an app, by its Info.plist, is an iPad-style app: Mac Catalyst (Messages, Find My,
+    /// Home, Stocks, Weather) or an iPad app on a Mac with Apple silicon. Those say which devices
+    /// they're for (`UIDeviceFamily`); a Mac app made with AppKit never does.
+    ///
+    /// Their windows animate to every frame they're asked for, over about a quarter of a second,
+    /// and a second ask while one is on its way starts from where the window is shown right then:
+    /// a size sent right after a position puts the window back where it was (held to the screen
+    /// from there, so it comes out short), and a position sent right after a size drops the size.
+    /// So LunchboxWM places them one step at a time, each shown before the next is sent.
+    public static func animatesItsOwnFrames(infoPlist: [String: Any]) -> Bool {
+        infoPlist["UIDeviceFamily"] != nil
+    }
 }

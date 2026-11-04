@@ -1283,7 +1283,7 @@ final class Tiler {
                     arrivals[element] = (id, tile, now + 1.5)
                 }
                 guard !frame.isClose(to: tile, tolerance: 1) else { return }
-                WindowHandle.queue(for: id).async { _ = element.placeAtOnce(in: tile) }
+                WindowHandle.queue(for: id).async { _ = element.placeAtOnce(in: tile, window: id, of: app) }
             }
         }
         app.queue.async { [weak self] in
@@ -1427,7 +1427,7 @@ final class Tiler {
         log.notice("window \(info.id) (\(app.bundleID ?? "?", privacy: .public)) \(park ? "waits out of sight for the rest of its burst" : "goes straight to its tile", privacy: .public)")
         let element = info.element, resizable = info.resizable
         WindowHandle.queue(for: info.id).async { [weak self] in
-            guard let actual = element.placeAtOnce(in: target), resizable,
+            guard let actual = element.placeAtOnce(in: target, window: info.id, of: app), resizable,
                   abs(actual.width - target.width) > 2 || abs(actual.height - target.height) > 2 else { return }
             DispatchQueue.main.async { self?.fittedOnArrival(info, app: app, asked: target, got: actual) }
         }
@@ -1456,7 +1456,7 @@ final class Tiler {
             prePlaced[info.id] = nil
             guard let fitted = plannedFrame(for: info, app: app), !fitted.isClose(to: actual, tolerance: 2) else { return }
             let element = info.element
-            WindowHandle.queue(for: info.id).async { element.place(in: fitted) }
+            WindowHandle.queue(for: info.id).async { element.place(in: fitted, window: info.id, of: app) }
         }
     }
 
@@ -1662,9 +1662,10 @@ final class Tiler {
             // A new window its app just moved or sized, before it's laid out: back to its tile at
             // once, if the window server says it's not there (Lunchbox's own moves land there).
             if let a = Self.arrivals.withLock({ $0[element] }), CACurrentMediaTime() < a.until, place(of: a.id) == nil {
-                // (Not while you're dragging it somewhere yourself.)
-                if NSEvent.pressedMouseButtons & 1 == 0, let now = serverFrame(of: a.id), !now.isClose(to: a.tile, tolerance: 2) {
-                    WindowHandle.queue(for: a.id).async { _ = element.placeAtOnce(in: a.tile) }
+                // (Not while you're dragging it somewhere yourself, nor while it's still on its way there.)
+                if NSEvent.pressedMouseButtons & 1 == 0, !WindowsBeingPlaced.contains(a.id),
+                   let now = serverFrame(of: a.id), !now.isClose(to: a.tile, tolerance: 2) {
+                    WindowHandle.queue(for: a.id).async { _ = element.placeAtOnce(in: a.tile, window: a.id, of: app) }
                 }
                 return
             }
@@ -2255,7 +2256,7 @@ final class Tiler {
                     // (`learnLimits` handles it); anywhere else, it moved.
                     let moved = abs(actual.midX - target.midX) > 3 || abs(actual.midY - target.midY) > 3
                     if moved, last.map({ actual.isClose(to: $0, tolerance: 1) }) == true,
-                       CACurrentMediaTime() > self.settlingUntil[id] ?? 0,
+                       CACurrentMediaTime() > self.settlingUntil[id] ?? 0, !WindowsBeingPlaced.contains(id),
                        !self.draggedByUser.contains(id), NSEvent.pressedMouseButtons & 1 == 0 {
                         // Placed, then moved onto a display LunchboxWM doesn't tile: left there if you
                         // moved it, else (its app did) put back like any other move.
@@ -2324,6 +2325,12 @@ final class Tiler {
                 let fullScreen = element.isFullScreen
                 DispatchQueue.main.async {
                     if fullScreen, let w = self.windows[id] { self.scheduleScan(w.handle.app); return }
+                    // An iPad-style window on its way to where LunchboxWM sent it, partway there: look
+                    // again once it's had time to arrive.
+                    if WindowsBeingPlaced.contains(id) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.windowChangedOnItsOwn(id) }
+                        return
+                    }
                     // Late notifications from our own moves land here too; only act on a real difference.
                     guard let actual, let w = self.windows[id], let target = w.target, !w.hidden,
                           !actual.isClose(to: target, tolerance: 2) else { return }
@@ -3805,7 +3812,9 @@ final class Tiler {
                 DispatchQueue.main.async {
                     guard let frame, let w = self.windows[id], !w.hidden, w.target == target,
                           abs(frame.midX - target.midX) <= 3, abs(frame.midY - target.midY) <= 3 else { return }
-                    let steady = seen.map { abs($0.width - frame.width) <= 2 && abs($0.height - frame.height) <= 2 } ?? false
+                    // Still on its way (an iPad-style window placed one step at a time): not its size yet.
+                    let steady = !WindowsBeingPlaced.contains(id)
+                        && seen.map { abs($0.width - frame.width) <= 2 && abs($0.height - frame.height) <= 2 } ?? false
                     guard steady else {
                         // Still changing: look again, a few times at most.
                         if looks < 4 { self.learnLimits(of: id, askedFor: target, looks: looks + 1, seen: frame.size) }
@@ -3914,9 +3923,9 @@ final class Tiler {
         w.frame = frame
         guard !liveMoving.contains(id) else { liveTargets[id] = frame; return }
         liveMoving.insert(id)
-        let element = w.handle.element
+        let element = w.handle.element, app = w.handle.app
         WindowHandle.queue(for: id).async { [weak self] in
-            _ = element.place(in: frame)
+            _ = element.place(in: frame, window: id, of: app)
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.liveMoving.remove(id)
