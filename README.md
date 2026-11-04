@@ -2,6 +2,19 @@
 
 A small, fast tiling window manager for macOS that lives in the menu bar.
 
+**Two ways to get it:**
+
+- **Buy it** at [lunchboxwm.com](https://lunchboxwm.com): $4.99 once, every version after it. A signed,
+  notarized app that updates itself. This is what keeps Lunchbox going.
+- **Build it yourself, free**, from this repo, and change it however suits you. A copy built from the
+  source tiles without a license; it just doesn't update itself (pull and build again). See
+  [Build and install](#build-and-install).
+
+The source is public under the [PolyForm Shield License 1.0.0](LICENSE.md): use it, read it, change it
+and build it for yourself or your team, for anything except offering a product that competes with
+Lunchbox (giving away or selling builds of it, or of a fork of it, counts, even for free). The names
+Lunchbox and LunchboxWM and the icon aren't part of the license.
+
 - One window on a big display sits centered at a comfortable 16:10 size (never smaller than
   1440×900); on a laptop's screen, or any without room to spare around that, it fills the screen
   (⌘⇧− makes it smaller, still centered). Two tile side by side; a third
@@ -242,14 +255,30 @@ opens for you lands in its tile like any other. A claim lapses after an hour.
 
 ## Build and install
 
+You need a Mac with Apple silicon, macOS 14 or later, and Xcode or its Command Line Tools
+(`xcode-select --install`).
+
 ```bash
+git clone https://github.com/crisp-toast/tessel.git lunchbox && cd lunchbox
 ./scripts/build.sh --install
 ```
 
-This builds a release binary, wraps it in `build/LunchboxWM.app`, signs it with the Apple Development
-identity (so macOS keeps the Accessibility permission across rebuilds), copies it to
-`/Applications`, and relaunches it. The first launch asks for Accessibility access in
-System Settings → Privacy & Security.
+This fetches Sparkle (the update framework, into `Vendor/`), builds a release binary, wraps it in
+`build/LunchboxWM.app`, signs it, copies it to `/Applications` (replacing any copy there), and
+relaunches it. The first launch asks for Accessibility access in System Settings → Privacy &
+Security. Built this way it's free to use: no license, and it never updates itself to the store's
+copy. To update, `git pull` and run the script again. `swift test` runs the tests.
+
+Signing: with a Developer ID or Apple Development certificate in your keychain it signs with that,
+so macOS keeps the Accessibility permission across rebuilds. Without one it signs ad hoc, and
+macOS asks for the permission again after each rebuild (remove the old entry from the list first).
+
+`STORE=1 ./scripts/build.sh` makes a copy that behaves like the store's (asks for a license, updates
+from lunchboxwm.com), for testing those. Releases (`scripts/release.sh`, `scripts/ship.sh`) need
+Sentient Donut's certificates and keys, which aren't in this repo.
+
+Contributions are welcome. By opening a pull request you agree it can ship in the store's copy, as
+well as being shared here under the same license.
 
 ## Scripting and debugging
 
@@ -380,3 +409,5 @@ The Buy buttons go nowhere yet: set `CHECKOUT_URL` at the top of the page's scri
 ## Selling it
 
 Buying (paid up front, $4.99, no free trial), licensing and the release are described in [docs/store.md](docs/store.md).
+Only the store's copy (`scripts/release.sh` passes `-DLUNCHBOX_STORE`, and refuses to ship a binary
+without it) asks for a license and updates itself; see `Sources/LunchboxWM/Build.swift`.

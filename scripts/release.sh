@@ -30,10 +30,14 @@ fi
 # (pause, resume, retile, balance), since any process can post one. Its own build folder, so
 # nothing compiled for scripts/build.sh's development builds can end up in it.
 SCRATCH=".build/dist"
-swift build -c release --arch arm64 --scratch-path "$SCRATCH" --product LunchboxWM
+# LUNCHBOX_STORE: the store's copy, the only one that asks for a license and updates itself (Build.swift).
+swift build -c release --arch arm64 --scratch-path "$SCRATCH" --product LunchboxWM -Xswiftc -DLUNCHBOX_STORE
 BIN="$(swift build -c release --arch arm64 --scratch-path "$SCRATCH" --show-bin-path)/LunchboxWM"
 if LC_ALL=C grep -aq "takes every script command" "$BIN"; then
   echo "$BIN is a development build (it takes every script command). Not shipping it."; exit 1
+fi
+if ! LC_ALL=C grep -aq "store copy from lunchboxwm.com" "$BIN"; then
+  echo "$BIN isn't the store's copy (it would tile without a license and never update). Not shipping it."; exit 1
 fi
 rm -rf "$OUT"; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/LunchboxWM"

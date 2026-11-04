@@ -71,7 +71,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         // Without a license nothing tiles, so the tiling and window items would do nothing: the
         // menu offers the license instead, plus help, settings and Quit.
-        let unlicensed = licensing.map { $0.license == nil } ?? false
+        let unlicensed = licensing.map { !$0.canTile } ?? false
         if !trusted {
             menu.addItem(disabled: "Lunchbox needs Accessibility access to move windows.")
             menu.addItem(action("Allow Accessibility Access…") { [weak self] in self?.onGrantAccess?() })
@@ -159,24 +159,34 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         options.addItem(login)
         options.addItem(action("Keyboard Shortcuts…") { [weak self] in self?.onShowShortcuts?() })
         options.addItem(action("Welcome & Setup…") { [weak self] in self?.onShowWelcome?() })
-        let automatic = action("Check for Updates Automatically", checked: updater?.checksAutomatically ?? true) { [weak self] in
-            guard let updater = self?.updater else { return }
-            updater.checksAutomatically.toggle()
+        // A copy built from the source updates with `git pull`, never to the store's copy.
+        if Build.isStoreCopy {
+            let automatic = action("Check for Updates Automatically", checked: updater?.checksAutomatically ?? true) { [weak self] in
+                guard let updater = self?.updater else { return }
+                updater.checksAutomatically.toggle()
+            }
+            automatic.toolTip = "Looks for a new version about once an hour. Lunchbox always asks before installing one."
+            options.addItem(automatic)
         }
-        automatic.toolTip = "Looks for a new version about once an hour. Lunchbox always asks before installing one."
-        options.addItem(automatic)
         let diagnostics = action("Copy Diagnostics") { [weak self] in self?.onCopyDiagnostics?() }
         diagnostics.toolTip = "Copies a summary for support to paste into an email: versions, displays, and which apps' windows are in each Workspace. No window titles, files or license key."
         options.addItem(diagnostics)
         if let license = licensing?.license {
             options.addItem(.separator())
             options.addItem(action("Licensed to \(license.email)…") { [weak self] in self?.onEnterLicense?() })
+        } else if !Build.isStoreCopy {
+            options.addItem(.separator())
+            let free = action("Built from Source: Free to Use") { [weak self] in self?.onBuy?() }
+            free.toolTip = "This copy was built from the public source, so it needs no license. Buying one supports Lunchbox, and gets the signed copy that updates itself."
+            options.addItem(free)
         }
         settings.submenu = options
         menu.addItem(settings)
         menu.addItem(.separator())
-        menu.addItem(action("Check for Updates…") { [weak self] in self?.onCheckForUpdates?() })
-        menu.addItem(.separator())
+        if Build.isStoreCopy {
+            menu.addItem(action("Check for Updates…") { [weak self] in self?.onCheckForUpdates?() })
+            menu.addItem(.separator())
+        }
         menu.addItem(NSMenuItem(title: "Quit Lunchbox", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 

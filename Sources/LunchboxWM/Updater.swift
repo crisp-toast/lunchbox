@@ -18,17 +18,19 @@ final class Updater: NSObject, SPUUpdaterDelegate {
 
     override init() {
         super.init()
-        controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
+        // Only the store's copy updates itself: one built from the source would be replaced by the
+        // store's, which asks for a license.
+        controller = SPUStandardUpdaterController(startingUpdater: Build.isStoreCopy, updaterDelegate: self, userDriverDelegate: nil)
         // Found before a relaunch, and still newer than this copy.
         let saved = UserDefaults.standard.dictionary(forKey: Self.key)
-        if let build = saved?["build"] as? String, let name = saved?["name"] as? String, Self.isNewer(build) {
+        if Build.isStoreCopy, let build = saved?["build"] as? String, let name = saved?["name"] as? String, Self.isNewer(build) {
             available = name
         } else {
             UserDefaults.standard.removeObject(forKey: Self.key)
         }
     }
 
-    var canCheck: Bool { controller.updater.canCheckForUpdates }
+    var canCheck: Bool { Build.isStoreCopy && controller.updater.canCheckForUpdates }
 
     /// The hourly check (Settings › Check for Updates Automatically). Installing always asks.
     var checksAutomatically: Bool {
@@ -37,6 +39,7 @@ final class Updater: NSObject, SPUUpdaterDelegate {
     }
 
     func checkNow() {
+        guard Build.isStoreCopy else { return }
         NSApp.activate(ignoringOtherApps: true)
         controller.checkForUpdates(nil)
     }

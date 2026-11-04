@@ -33,7 +33,7 @@ enum SupportDiagnostics {
         let osBuild = sysctl("kern.osversion").map { " (\($0))" } ?? ""
         let model = sysctl("hw.model") ?? "unknown Mac"
 
-        let license = licensing.license != nil ? "licensed" : "not licensed"
+        let license = licensing.license != nil ? "licensed" : Build.isStoreCopy ? "not licensed" : "built from source"
 
         func onOff(_ on: Bool) -> String { on ? "on" : "off" }
         let settings = [
@@ -55,7 +55,7 @@ enum SupportDiagnostics {
 
         let windows = tiler.supportWindows()
         return SupportSummary(
-            app: "LunchboxWM \(version) (\(build)), \(Build.name)",
+            app: "LunchboxWM \(version) (\(build)), \(Build.name), \(Build.origin)",
             system: "macOS \(os.majorVersion).\(os.minorVersion)\(os.patchVersion > 0 ? ".\(os.patchVersion)" : "")\(osBuild), \(model)",
             license: license, settings: settings, screens: screens,
             currentWorkspace: tiler.currentSpace + 1, workspaces: windows.workspaces, untiled: windows.untiled

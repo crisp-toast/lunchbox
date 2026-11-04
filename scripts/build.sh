@@ -5,7 +5,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-swift build -c release -j "${JOBS:-4}" --product LunchboxWM -Xswiftc -DLUNCHBOX_DEV
+# Built from the source, it's free to use: no license, no self-updates. STORE=1 makes it behave like
+# the store's copy instead (asks for a license, updates from lunchboxwm.com), for testing those.
+swift build -c release -j "${JOBS:-4}" --product LunchboxWM -Xswiftc -DLUNCHBOX_DEV ${STORE:+-Xswiftc -DLUNCHBOX_STORE}
 BIN="$(swift build -c release --show-bin-path)/LunchboxWM"
 
 APP="build/LunchboxWM.app"

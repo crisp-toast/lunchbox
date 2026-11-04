@@ -1,8 +1,9 @@
 import AppKit
 import LunchboxCore
 
-/// LunchboxWM's license: what's stored on this Mac, and whether tiling may run. LunchboxWM is
-/// paid up front, with no free trial, so without a license nothing tiles.
+/// LunchboxWM's license: what's stored on this Mac, and whether tiling may run. The store's copy is
+/// paid up front, with no free trial, so without a license nothing tiles. A copy built from the
+/// source needs none (`Build.isStoreCopy`).
 final class Licensing {
     /// The store's Ed25519 public key. Its private half signs licenses on the server
     /// (LICENSE_PRIVATE_KEY) and is kept off this repo.
@@ -26,8 +27,8 @@ final class Licensing {
         license = defaults.string(forKey: Self.licenseKey).flatMap { License.parse($0, publicKeyBase64: Self.publicKey) }
     }
 
-    /// Licensed: the only way to tile.
-    var canTile: Bool { license != nil }
+    /// Licensed, or built from the source.
+    var canTile: Bool { license != nil || !Build.isStoreCopy }
 
     /// Checks and keeps a pasted key or activation link. Returns nil for one the store didn't sign.
     @discardableResult
