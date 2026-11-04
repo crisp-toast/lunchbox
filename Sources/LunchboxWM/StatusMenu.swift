@@ -83,6 +83,17 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             menu.addItem(action("Enter License…") { [weak self] in self?.onEnterLicense?() })
             menu.addItem(.separator())
         } else if trusted {
+            // Sort My Windows first, the one thing here worth reaching for on a messy desktop, with a
+            // line under it saying what it does.
+            let sort = action("Sort My Windows") { [weak self] in self?.onSort?() }
+            if #available(macOS 14.4, *) { sort.subtitle = "Your work, the web and chat, each in its own Workspace" }
+            sort.toolTip = "Sorts every open window into Workspaces by kind: your work, the web, chat and music. Only as many Workspaces as it takes, and Undo puts it all back."
+            sort.isEnabled = tiler.enabled && !(sorting?() ?? false)
+            menu.addItem(sort)
+            if tiler.canUndoSort {
+                menu.addItem(action("Undo Sort") { [weak self] in self?.onUndoSort?() })
+            }
+            menu.addItem(.separator())
             menu.addItem(action("Tiling", checked: tiler.enabled) { [weak self] in self?.onToggle?() })
             menu.addItem(.separator())
             for i in 0..<tiler.spaceCount {
@@ -124,13 +135,6 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             let retile = action("Re-tile All Windows") { [weak self] in self?.tiler.retile() }
             retile.isEnabled = tiler.enabled
             menu.addItem(retile)
-            let sort = action("Sort My Windows") { [weak self] in self?.onSort?() }
-            sort.toolTip = "Sorts every open window into Workspaces by kind: your work, the web, chat and music. Only as many Workspaces as it takes, and Undo puts it all back."
-            sort.isEnabled = tiler.enabled && !(sorting?() ?? false)
-            menu.addItem(sort)
-            if tiler.canUndoSort {
-                menu.addItem(action("Undo Sort") { [weak self] in self?.onUndoSort?() })
-            }
             menu.addItem(.separator())
         }
 

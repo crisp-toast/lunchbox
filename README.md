@@ -73,7 +73,7 @@ Lunchbox and LunchboxWM and the icon aren't part of the license.
   Workspace you pick; with Reduce Motion nothing flies. Click or Esc skips straight to picking. Undo
   (on the note afterwards, which stays until you close it, and in the menu for ten minutes) puts
   everything back. Setup ends with it whenever two or more windows are open (Not Now skips it);
-  otherwise it's in the menu. It never runs on its own.
+  otherwise it's the first thing in the menu bar menu. It never runs on its own.
 - **Start Fresh**, the other choice on that setup step, closes every window instead, each as if you
   clicked its red button: apps still ask before closing anything unsaved, nothing is forced, no app
   quits, and windows with no close button are left alone. It asks first (Return cancels), says how
