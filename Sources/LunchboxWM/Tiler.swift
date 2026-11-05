@@ -206,6 +206,9 @@ final class Tiler {
         let saved = defaults.string(forKey: "limits").flatMap { try? JSONDecoder().decode(SavedLimits.self, from: Data($0.utf8)) }
         limits = [:]
         savedLimits = saved?.boot == Self.bootTime && saved?.version == SavedLimits.currentVersion ? saved!.windows : [:]
+        // What each app's window took (by bundle ID, so it outlasts a restart of the Mac).
+        appLimits = defaults.string(forKey: "appLimits")
+            .flatMap { try? JSONDecoder().decode([String: SizeLimits].self, from: Data($0.utf8)) } ?? [:]
     }
 
     // MARK: Lifecycle
@@ -753,6 +756,7 @@ final class Tiler {
         // A window that can't be resized tiles at its own size.
         if !info.resizable, info.tileable, !window.hidden, limits[info.id] != .fixed(info.frame.size) {
             limits[info.id] = .fixed(info.frame.size)
+            rememberLimits(limits[info.id], app: app.bundleID, pid: app.pid, window: info.id)
             if place(of: info.id) != nil { layoutChangedSize = true }
         }
         let appHidden = NSRunningApplication(processIdentifier: app.pid)?.isHidden ?? false
@@ -1103,9 +1107,18 @@ final class Tiler {
     private func insert(_ window: ManagedWindow) {
         if returnToSpot(window) { return }
         let saved = savedPlacement.removeValue(forKey: window.id)
+        // A window that just opened takes what its app's last one did, so it lands where that fits.
+        if saved == nil, initialScanDone, window.isNew, window.resizable {
+            expectLimits(of: window.id, app: window.handle.app.bundleID, at: window.frame.size)
+        }
         // Its app restarted: back to the Workspace and spot it had when the app quit, wherever you are.
         let back = saved == nil && initialScanDone && window.isNew ? restartSpot(for: window, take: true) : nil
-        if back != nil, let app = window.handle.app.bundleID {
+        if let back, let app = window.handle.app.bundleID {
+            // The tile Summon or the Dock held for it is at that spot (`expectWindow` put it there):
+            // it takes that, so it opens exactly where you saw it would.
+            if back.space == currentSpace,
+               expected.contains(where: { $0.bundleID == app && place(of: $0.id).map { $0 == (back.space, back.display) } == true }),
+               takePlaceholder(for: window) { return }
             // Not the tile Summon or the Dock held for it here: it's going back where it was.
             let held = expected.filter { $0.bundleID == app }
             if !held.isEmpty { giveUp(held, why: "it went back where it was before it quit") }
@@ -1161,6 +1174,40 @@ final class Tiler {
     private var limits: [CGWindowID: SizeLimits] = [:]
     /// Limits saved when LunchboxWM last ran, waiting for their windows to be seen again.
     private var savedLimits: [String: SavedLimits.Entry] = [:]
+    /// What each app's window took the last time it had only that one (System Settings keeps a
+    /// width of its own), by bundle ID, kept across relaunches. The tile held for its next window
+    /// when it has none open (`expectWindow`), and the one that window is planned for, take it from
+    /// the start: the tile you see is the one it gets, not one beneath another window that then
+    /// moves to a column of its own as it turns out narrow.
+    private var appLimits: [String: SizeLimits] = [:]
+
+    /// What the next window of `bundleID` is expected to take, when none of its windows (but
+    /// `id`) is open: nil when that's not known.
+    private func expectedLimits(ofApp bundleID: String?, besides id: CGWindowID? = nil) -> SizeLimits? {
+        guard let bundleID, let known = appLimits[bundleID],
+              !windows.values.contains(where: { $0.handle.app.bundleID == bundleID && $0.id != id && place(of: $0.id) != nil })
+        else { return nil }
+        return known
+    }
+
+    /// A new window of an app expected to take something (`expectedLimits`) is taken to, if it
+    /// opened within that: one opening bigger than the last one went is another kind of window.
+    private func expectLimits(of id: CGWindowID, app bundleID: String?, at size: CGSize) {
+        guard limits[id] == nil, let expected = expectedLimits(ofApp: bundleID, besides: id) else { return }
+        let fitted = expected.clamp(size)
+        guard abs(fitted.width - size.width) <= 2, abs(fitted.height - size.height) <= 2 else { return }
+        limits[id] = expected
+    }
+
+    /// Notes what a window takes (nil: it fills its tile) as what its app's next window will,
+    /// when it's the app's only window in a tile.
+    private func rememberLimits(_ taken: SizeLimits?, app bundleID: String?, pid: pid_t, window id: CGWindowID) {
+        guard let bundleID, !Self.floatingApps.contains(bundleID),
+              !windows.values.contains(where: { $0.pid == pid && $0.id != id && place(of: $0.id) != nil }) else { return }
+        let next = taken.flatMap { $0.isEmpty ? nil : $0 }
+        guard appLimits[bundleID] != next else { return }
+        appLimits[bundleID] = next
+    }
 
     private struct SavedLimits: Codable {
         struct Entry: Codable { let app: String; let width: CGFloat; let height: CGFloat; let limits: SizeLimits }
@@ -1356,6 +1403,10 @@ final class Tiler {
         guard !claimed(app.bundleID), !Self.floatingApps.contains(app.bundleID ?? ""),
               NSRunningApplication(processIdentifier: app.pid)?.isHidden != true, !isBursting(app.pid) else { return nil }
         let probe = CGWindowID(UInt32.max - 1)
+        // With none of its windows open, it takes what its last one did (`appLimits`): a column of
+        // its own at its own width, say, from the start.
+        var planning = limits
+        planning[probe] = expectedLimits(ofApp: app.bundleID)
         // Restarted within the hour: its windows go back to their old spots, here in view.
         let spots = quitMemory.spots(for: app.bundleID ?? "", now: now)
         if !spots.isEmpty {
@@ -1364,7 +1415,7 @@ final class Tiler {
                 guard spot.space == currentSpace, let d = activeDisplays.first(where: { $0.uuid == spot.display }) else { return nil }
                 var layout = spaces[currentSpace][d.uuid] ?? Layout()
                 guard layout.restore(probe, from: QuitMemory.layout(of: spot, as: probe)),
-                      let tile = layout.frames(in: d.visible, gap: Self.gap, limits: limits)[probe] else { return nil }
+                      let tile = layout.frames(in: d.visible, gap: Self.gap, limits: planning)[probe] else { return nil }
                 tiles.append((spot.frame, tile))
             }
             return .restart(tiles)
@@ -1377,8 +1428,8 @@ final class Tiler {
                 layout.insert(id, near: layout.windows.last, maxColumns: maxColumns)
             }
             let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
-            layout.insert(probe, near: near, maxColumns: maxColumns, limits: limits, room: room(on: d))
-            guard let tile = layout.frames(in: d.visible, gap: Self.gap, limits: limits)[probe] else { return nil }
+            layout.insert(probe, near: near, maxColumns: maxColumns, limits: planning, room: room(on: d))
+            guard let tile = layout.frames(in: d.visible, gap: Self.gap, limits: planning)[probe] else { return nil }
             return (d.frame, tile)
         }
         return tiles.isEmpty ? nil : .byDisplay(tiles)
@@ -1417,7 +1468,11 @@ final class Tiler {
               !windows.values.contains(where: { $0.pid == app.pid && $0.tabs >= 2 }),
               // A tab being dragged out into a window of its own follows the mouse.
               NSEvent.pressedMouseButtons & 1 == 0 else { return }
-        if !info.resizable { limits[info.id] = .fixed(info.frame.size) } // it goes in at its own size
+        if !info.resizable {
+            limits[info.id] = .fixed(info.frame.size) // it goes in at its own size
+        } else {
+            expectLimits(of: info.id, app: app.bundleID, at: info.frame.size)
+        }
         let planned = park ? CGRect(origin: Display.hidingSpot(in: displays), size: info.frame.size) : plannedFrame(for: info, app: app)
         guard let target = planned else {
             log.notice("window \(info.id) (\(app.bundleID ?? "?", privacy: .public)) arrives where its app put it")
@@ -1442,6 +1497,7 @@ final class Tiler {
         let after = before.learning(asked: target.size, got: actual.size)
         guard after != before, !after.isEmpty else { return }
         limits[info.id] = after
+        rememberLimits(after, app: app.bundleID, pid: app.pid, window: info.id)
         log.notice("window \(info.id) (\(app.bundleID ?? "?", privacy: .public)) can't fill its tile: it takes \(String(describing: after), privacy: .public)")
         if let w = windows[info.id], place(of: info.id) != nil {
             // Already laid out: fit it now, in one move.
@@ -1467,6 +1523,12 @@ final class Tiler {
     /// Where a window on its way will tile, worked out without changing anything.
     private func plannedFrame(for info: WindowInfo, app: AppHandle) -> CGRect? {
         let probe = ManagedWindow(handle: WindowHandle(id: info.id, element: info.element, app: app), frame: info.frame)
+        // The tile held for it, where you saw it'd go (`expectWindow` held it at the old spot of an
+        // app that restarted, too).
+        if let e = expected.first(where: { $0.matches(probe) }), let (s, uuid) = place(of: e.id), s == currentSpace,
+           let d = activeDisplays.first(where: { $0.uuid == uuid }) {
+            return spaces[s][uuid]?.frames(in: d.visible, gap: Self.gap, limits: limits)[e.id]
+        }
         // Its app restarted: it's going back where it was (`insert`).
         if let back = restartSpot(for: probe, take: false) {
             guard back.space == currentSpace, let d = activeDisplays.first(where: { $0.uuid == back.display }) else {
@@ -1476,10 +1538,6 @@ final class Tiler {
             var layout = spaces[currentSpace][d.uuid] ?? Layout()
             guard layout.restore(info.id, from: QuitMemory.layout(of: back, as: info.id)) else { return nil }
             return layout.frames(in: d.visible, gap: Self.gap, limits: limits)[info.id]
-        }
-        if let e = expected.first(where: { $0.matches(probe) }), let (s, uuid) = place(of: e.id), s == currentSpace,
-           let d = activeDisplays.first(where: { $0.uuid == uuid }) {
-            return spaces[s][uuid]?.frames(in: d.visible, gap: Self.gap, limits: limits)[e.id] // the tile held for it
         }
         guard let display = arrivalDisplay(for: info.frame) else { return nil }
         var layout = spaces[currentSpace][display.uuid] ?? Layout()
@@ -2372,6 +2430,7 @@ final class Tiler {
                            abs(actual.width - before.width) > 8 || abs(actual.height - before.height) > 8,
                            abs(actual.width - target.width) > 2, abs(actual.height - target.height) > 2 {
                             self.limits[id] = SizeLimits(maxWidth: actual.width, maxHeight: actual.height)
+                            self.rememberLimits(self.limits[id], app: w.handle.app.bundleID, pid: w.pid, window: id)
                         } else {
                             // Bigger than the most it was thought to take, or smaller than the least:
                             // that was wrong, so it's asked for its tile's size again.
@@ -2380,7 +2439,10 @@ final class Tiler {
                             if let m = l.maxHeight, actual.height > m + 2 { l.maxHeight = nil }
                             if let m = l.minWidth, actual.width < m - 2 { l.minWidth = nil }
                             if let m = l.minHeight, actual.height < m - 2 { l.minHeight = nil }
-                            if l != known { self.limits[id] = l.isEmpty ? nil : l }
+                            if l != known {
+                                self.limits[id] = l.isEmpty ? nil : l
+                                self.rememberLimits(self.limits[id], app: w.handle.app.bundleID, pid: w.pid, window: id)
+                            }
                         }
                     }
                     w.frame = actual
@@ -2702,6 +2764,9 @@ final class Tiler {
         }
         if let json = try? JSONEncoder().encode(SavedLimits(boot: Self.bootTime, windows: entries)) {
             UserDefaults.standard.set(String(decoding: json, as: UTF8.self), forKey: "limits")
+        }
+        if let json = try? JSONEncoder().encode(appLimits) {
+            UserDefaults.standard.set(String(decoding: json, as: UTF8.self), forKey: "appLimits")
         }
     }
 
@@ -3481,15 +3546,29 @@ final class Tiler {
         let mine = windows.values.filter { $0.handle.app.bundleID == bundleID }
         if let since, mine.contains(where: { $0.seenAt >= since }) { return }
         let point = point ?? NSScreen.topLeftPoint(fromCocoa: NSEvent.mouseLocation)
-        guard let display = activeDisplays.first(where: { $0.frame.contains(point) })
+        guard var display = activeDisplays.first(where: { $0.frame.contains(point) })
             ?? activeDisplays.first(where: \.isMain) ?? activeDisplays.first else { return }
 
+        // The tile is held where its window will really go (`insert`), so it never opens anywhere
+        // else: at the old spot of an app that quit within the hour, and at the size its last window
+        // took (a column of its own for System Settings, at its own width).
+        var back: QuitMemory.Spot?
+        if let spot = quitMemory.spots(for: bundleID, now: CACurrentMediaTime()).first, spot.space < spaceCount,
+           let d = activeDisplays.first(where: { $0.uuid == spot.display }) {
+            // Going back to another Workspace (and you with it): there's nothing to hold here.
+            guard spot.space == currentSpace else { return }
+            back = spot
+            display = d
+        }
         let id = Placeholder.id(placeholderCount)
         placeholderCount += 1
+        limits[id] = expectedLimits(ofApp: bundleID)
         var layout = spaces[currentSpace][display.uuid] ?? Layout()
-        let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
-        layout.insert(id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width),
-                      limits: limits, room: room(on: display))
+        if !(back.map { layout.restore(id, from: QuitMemory.layout(of: $0, as: id)) } ?? false) {
+            let near = focusedID.flatMap { layout.contains($0) ? $0 : nil } ?? layout.windows.last
+            layout.insert(id, near: near, maxColumns: Layout.maxColumns(forWidth: display.visible.width),
+                          limits: limits, room: room(on: display))
+        }
         spaces[currentSpace][display.uuid] = layout
 
         let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
@@ -3516,6 +3595,7 @@ final class Tiler {
             return false
         }
         expected.removeAll { $0 === e }
+        limits[e.id] = nil
         e.tile.dismiss(animated: animationsAllowed)
         TimeBackLedger.shared.count(.tiled)
         let waited = CACurrentMediaTime() - e.started
@@ -3537,6 +3617,7 @@ final class Tiler {
         for e in gone {
             expected.removeAll { $0 === e }
             removeFromLayouts(e.id)
+            limits[e.id] = nil
             e.tile.dismiss(animated: animationsAllowed)
             log.notice("let go of the tile for \(e.bundleID, privacy: .public): \(why, privacy: .public)")
         }
@@ -3748,6 +3829,9 @@ final class Tiler {
         }
         if w.resizable, let target = w.target, abs(actual.width - target.width) > 2 || abs(actual.height - target.height) > 2 {
             learnLimits(of: id, askedFor: target)
+        } else if w.resizable, w.isNew, limits[id] == nil, w.target != nil {
+            // A new window that fills its tile: so will its app's next one.
+            rememberLimits(nil, app: w.handle.app.bundleID, pid: w.pid, window: id)
         }
     }
 
@@ -3824,6 +3908,7 @@ final class Tiler {
                     let after = before.learning(asked: target.size, got: frame.size)
                     guard after != before else { return }
                     self.limits[id] = after.isEmpty ? nil : after
+                    self.rememberLimits(self.limits[id], app: w.handle.app.bundleID, pid: w.pid, window: id)
                     w.settledSize = frame.size
                     self.reconsiderColumn(of: id)
                     log.notice("window \(id) (\(w.handle.app.bundleID ?? "?", privacy: .public)) can't fill its tile: it takes \(String(describing: after), privacy: .public)")
@@ -3947,8 +4032,12 @@ final class Tiler {
         for uuid in spaces[currentSpace].keys { spaces[currentSpace][uuid]?.balance() }
         for id in spaces[currentSpace].values.flatMap(\.windows) {
             if let w = windows[id], !w.hidden { w.target = nil }
-            // Start over on what each window takes, in case LunchboxWM ever learned it wrong.
-            if windows[id]?.resizable == true { limits[id] = nil }
+            // Start over on what each window takes, in case LunchboxWM ever learned it wrong, and on
+            // what its app's next window is expected to.
+            if let w = windows[id], w.resizable {
+                limits[id] = nil
+                if let app = w.handle.app.bundleID { appLimits[app] = nil }
+            }
         }
         relayout(animated: true)
         persist()
