@@ -3,6 +3,25 @@
     <channel>
         <title>LunchboxWM</title>
         <item>
+            <title>1.4.2</title>
+            <pubDate>Thu, 05 Nov 2026 16:22:38 -0600</pubDate>
+            <sparkle:version>254</sparkle:version>
+            <sparkle:shortVersionString>1.4.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<h2>What’s new in Lunchbox 1.4.2</h2>
+<p>Messages and other iPad-style apps (Find My, Home, Stocks, Weather) open straight to their tile's full size. Sort My Windows is now first in the menu. And Lunchbox's source is now on GitHub: build it yourself for free, or buy the signed copy that updates itself.</p>
+]]></description>
+            <enclosure url="https://lunchboxwm.com/download/LunchboxWM-1.4.2.dmg" length="3121358" type="application/octet-stream" sparkle:edSignature="TNOkeKJrRNu5lkYkmMjeKPUgYoPQ0R/FRrxQVQfqp55+KJAHMO2S6tDL2M87SXfYW3RJAnJr+NNZmX5eRUFpBw=="/>
+            <sparkle:deltas>
+                <enclosure url="https://lunchboxwm.com/download/LunchboxWM254-248.delta" sparkle:deltaFrom="248" length="213354" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="zrkQGf3+ej82HC+AfrjBnmJv2W7mytqgonqCJTmaDipPfZI9n2xs+en+cdghHzxbuUyOXpT0oEsKnyviTmkLBA=="/>
+                <enclosure url="https://lunchboxwm.com/download/LunchboxWM254-245.delta" sparkle:deltaFrom="245" length="262054" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="/jrlikNUJpKEX9DEekQebUFjjcfKgk6fhTVVo31B8BxTbkZNjAUR/zgiHAvhtN8qOAwoOr/d7YtckMSWKQSyCA=="/>
+                <enclosure url="https://lunchboxwm.com/download/LunchboxWM254-233.delta" sparkle:deltaFrom="233" length="432922" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="Z+eDpPHDt85KgCwTxPgOXT3HVjq4VRlDAfEB2AWxEKVt2Tf/IkYM0AVugnWc3e+283l9Rp/E7/WRXGVTnvftDg=="/>
+                <enclosure url="https://lunchboxwm.com/download/LunchboxWM254-224.delta" sparkle:deltaFrom="224" length="501610" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="pP1AY+xS0A6FEzMQbd5gqkZBCLgmPRov3PYC+EuSlT5osax5P5tXQ8OW36CLP9W5+o2Xq0WqS33WIq4YcNOiAQ=="/>
+                <enclosure url="https://lunchboxwm.com/download/LunchboxWM254-218.delta" sparkle:deltaFrom="218" length="509450" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="VIlBU2wfyWqJlntejtEiYYzYuwhwNa+BE2yOBzd/5BLQEXbOFDIBAQxMx5fAZY1v2odYvb63QWW6t3cr5KYaDQ=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>1.4.1</title>
             <pubDate>Tue, 03 Nov 2026 17:14:01 -0600</pubDate>
             <sparkle:version>248</sparkle:version>
@@ -38,25 +57,6 @@
                 <enclosure url="https://lunchboxwm.com/download/LunchboxWM245-218.delta" sparkle:deltaFrom="218" length="457094" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="ENPoS92NjY17Rd4npMJ9QJNzrFgd591YHuyvt6731i8Q4gevmfwXmEoNVaeV6bftuLeVzi2fffsFSsKWHaSlCw=="/>
                 <enclosure url="https://lunchboxwm.com/download/LunchboxWM245-214.delta" sparkle:deltaFrom="214" length="458878" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="9OE1eMm+Z6598NcRroC6R6uMPGzW9zauXqpwuz7eUMSKwxrsIr+b5N7VFny/DGm9SHy5GM+gWiAQLvWZbno4AA=="/>
                 <enclosure url="https://lunchboxwm.com/download/LunchboxWM245-211.delta" sparkle:deltaFrom="211" length="461442" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="ob+JS+KD60KWSqbFgHulSmqUepxgKxB/JEq3GmGf6+2l6dopyOG3ziOU8cB1kRrrHz2bjl4KeYQNx1Fk5DyUCQ=="/>
-            </sparkle:deltas>
-        </item>
-        <item>
-            <title>1.3</title>
-            <pubDate>Thu, 22 Oct 2026 18:23:40 -0500</pubDate>
-            <sparkle:version>233</sparkle:version>
-            <sparkle:shortVersionString>1.3</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<h2>What’s new in Lunchbox 1.3</h2>
-<p>Sort My Windows: Lunchbox can sort a messy desktop into Workspaces by kind (your work, the web, chat and music), using only as many as it takes, and shows you where everything went. Find it in Lunchbox's menu; Undo puts everything back. New copies offer it at the end of setup, along with Start Fresh, which closes every window as if you clicked its red button, so apps still ask before closing anything unsaved.</p>
-]]></description>
-            <enclosure url="https://lunchboxwm.com/download/LunchboxWM-1.3.dmg" length="3008666" type="application/octet-stream" sparkle:edSignature="eeZMS17MeBJHrl7dxvBKC41PasL5ORqahyakg37bGxbi336YwBSzXOH7zD1pIodlGNyn/GlxYmLZATdxR7sSBg=="/>
-            <sparkle:deltas>
-                <enclosure url="https://lunchboxwm.com/download/LunchboxWM233-224.delta" sparkle:deltaFrom="224" length="303858" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="LKEbxLb3q6a/Q8O+h9Dp1p3gy81A1EPkK97Q787fjYmkGzHitJvcl1SofmFuANQVZZYsiknoTZn91D5wGOqADg=="/>
-                <enclosure url="https://lunchboxwm.com/download/LunchboxWM233-218.delta" sparkle:deltaFrom="218" length="315150" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="zpy39oQZGkDS2ZZVx7ZBWOXy8StwHjNeEMphuIIQecM7NQgEQaycPWeWgvzKhTulMNEBFVG8OO0FmE8z0TU/AA=="/>
-                <enclosure url="https://lunchboxwm.com/download/LunchboxWM233-214.delta" sparkle:deltaFrom="214" length="317226" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="czsTZzrRDcgrnQ7g33GldYWBJde7KBaw5nmFQD6wTmfvXCRCJc/VCPV4bdVS8enHsazott1I+iiDmg83Jk20Bw=="/>
-                <enclosure url="https://lunchboxwm.com/download/LunchboxWM233-211.delta" sparkle:deltaFrom="211" length="320346" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="G1VIG2gafUhLQe//wMUXsP6l1glYpUnH7rD/wGdYtYuEfc/teEdbTTWbIrm+GQkQ/Pi2dtMF9Vm5dxrl+NWRAg=="/>
-                <enclosure url="https://lunchboxwm.com/download/LunchboxWM233-204.delta" sparkle:deltaFrom="204" length="331994" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="fYEglEC6M21l+lZDWx0iCcvbmq71oKdPDlmIBvN6ThY3aF6a73Fr61NmwoXped/BE/5fp9eRjqCFN6C9D4dVBw=="/>
             </sparkle:deltas>
         </item>
     </channel>
