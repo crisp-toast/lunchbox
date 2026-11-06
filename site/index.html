@@ -380,6 +380,7 @@ p { margin: 0; }
 .checks li::before { content: ""; width: 18px; height: 18px; margin-top: 2px; border-radius: 50%; background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat; }
 .price-card .btn { justify-content: center; height: 50px; font-size: 16px; }
 .price-card .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.buy-options { display: grid; gap: 10px; }
 .buy-form { display: grid; }
 .buy-form .btn { width: 100%; }
 .buy-form .btn[disabled] { opacity: .6; cursor: progress; }
@@ -659,15 +660,18 @@ footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: f
         <li>Multi-display support, or main display only</li>
         <li>All future updates, free, forever</li>
       </ul>
-      <form class="buy-form" id="buy-form" method="post" action="api/checkout">
-        <input type="hidden" name="attempt" id="attempt" value="">
-        <button class="btn dark" type="submit" id="buy-button"><span>Buy Lunchbox · $4.99</span></button>
-      </form>
-      <p class="buy-note" id="buy-note" aria-live="polite"></p>
+      <div class="buy-options">
+        <form class="buy-form" id="buy-form" method="post" action="api/checkout">
+          <input type="hidden" name="attempt" id="attempt" value="">
+          <button class="btn dark" type="submit" id="buy-button"><span>Buy Lunchbox · $4.99</span></button>
+        </form>
+        <p class="buy-note" id="buy-note" aria-live="polite"></p>
+        <a class="btn" href="https://github.com/crisp-toast/lunchbox"><svg><use href="#github"/></svg>Source on GitHub</a>
+      </div>
       <p class="fine">Pay once, then download it and enter your license. No subscription. Refunds within 14 days, no questions.</p>
       <p class="fine">macOS 14 Sonoma or later · Apple silicon<sup class="fn"><a href="#fn-silicon" aria-label="Footnote 2">2</a></sup></p>
       <p class="fine">Already bought it? <a href="download/LunchboxWM.dmg">Download Lunchbox</a> · <a href="recover.html">Get your license again</a></p>
-      <p class="fine">Rather build it yourself? <a href="https://github.com/crisp-toast/lunchbox">The source is on GitHub</a>, free to build and change for your own use. Buying gets the signed copy that updates itself, and keeps Lunchbox going.</p>
+      <p class="fine">Rather build it yourself? Lunchbox is open source under the <a href="https://github.com/crisp-toast/lunchbox/blob/main/LICENSE">MIT License</a>, free to build, change and share. Buying gets the signed copy that updates itself, and keeps Lunchbox going.</p>
     </div>
   </section>
 

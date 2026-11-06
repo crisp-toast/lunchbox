@@ -10,10 +10,9 @@ A small, fast tiling window manager for macOS that lives in the menu bar.
   source tiles without a license; it just doesn't update itself (pull and build again). See
   [Build and install](#build-and-install).
 
-The source is public under the [PolyForm Shield License 1.0.0](LICENSE.md): use it, read it, change it
-and build it for yourself or your team, for anything except offering a product that competes with
-Lunchbox (giving away or selling builds of it, or of a fork of it, counts, even for free). The names
-Lunchbox and LunchboxWM and the icon aren't part of the license.
+LunchboxWM is open source under the [MIT License](LICENSE): use it, read it, change it, fork it and
+share it, for anything. The names Lunchbox and LunchboxWM and the icon aren't part of the license, so
+a fork you share should go by a name and icon of its own.
 
 - One window on a big display sits centered at a comfortable 16:10 size (never smaller than
   1440×900); on a laptop's screen, or any without room to spare around that, it fills the screen

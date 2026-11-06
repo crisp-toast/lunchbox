@@ -98,5 +98,5 @@ Focused Window" now enters real Focus.
 17. **Legal review** of the Terms, Privacy and Refunds pages, and your sales tax setup.
 18. **Remove the Apple logo** from the site's download and buy buttons.
 19. **Switch Stripe to live keys**, make one real purchase yourself, and refund it.
-20. **Go public.** Point the site at the real domain (it's a private preview today), and keep the
-    GitHub repo private.
+20. **Go public.** Point the site at the real domain (it's a private preview today). The GitHub
+    repo is public, under the MIT License.
