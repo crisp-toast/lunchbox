@@ -1,0 +1,10 @@
+.build/
+build/
+.DS_Store
+.swiftpm/
+
+# Release downloads are built by scripts/release.sh and deployed, not committed.
+site/download/
+.wrangler/
+.dev.vars
+Vendor/

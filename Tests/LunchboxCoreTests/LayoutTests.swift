@@ -1,0 +1,693 @@
+import CoreGraphics
+import Testing
+@testable import LunchboxCore
+
+// The LG 5K's usable area (below the menu bar), in top-left-origin points.
+let screen = CGRect(x: 0, y: 25, width: 2560, height: 1415)
+let gap: CGFloat = 8
+
+func layout(_ columns: [[WindowID]]) -> Layout {
+    Layout(columns: columns.map { Column(windows: $0) })
+}
+
+@Suite struct SingleWindow {
+    @Test func centeredAtSixteenByTenNotFullscreen() throws {
+        let frame = try #require(layout([[1]]).frames(in: screen, gap: gap)[1])
+        #expect(frame.width < screen.width * 0.7)
+        #expect(abs(frame.width / frame.height - 1.6) < 0.01)
+        #expect(abs(frame.midX - screen.midX) <= 1)
+        #expect(abs(frame.midY - screen.midY) <= 1)
+    }
+
+    @Test func growsAroundCenterAndFillsAtMax() throws {
+        var l = layout([[1]])
+        let before = try #require(l.frames(in: screen, gap: gap)[1])
+        do { let r = l.resize(1, by: 0.1); #expect(r) }
+        let after = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(after.width > before.width)
+        #expect(abs(after.midX - before.midX) <= 1)
+        for _ in 0..<10 { l.resize(1, by: 0.1) }
+        let full = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(full == screen.insetBy(dx: gap, dy: gap))
+        do { let r = l.resize(1, by: 0.1); #expect(!r) } // already at max
+    }
+
+    @Test func aShapeYouPickStaysUntilTidy() throws {
+        var l = layout([[1]])
+        l.adopt(1, size: CGSize(width: 900, height: 1200), in: screen, gap: gap)
+        let picked = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(abs(picked.width - 900) <= 2 && abs(picked.height - 1200) <= 2)
+        l.balance()
+        let tidy = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(abs(tidy.width / tidy.height - Layout.singleAspect) < 0.01)
+    }
+
+    @Test func anotherWindowsShapeDoesNotCarryOver() throws {
+        var l = layout([[1]])
+        l.adopt(1, size: CGSize(width: 900, height: 1200), in: screen, gap: gap)
+        l.insert(2, near: 1, maxColumns: 3)
+        l.remove(1)
+        let f = try #require(l.frames(in: screen, gap: gap)[2])
+        #expect(abs(f.width / f.height - Layout.singleAspect) < 0.01)
+        #expect(f == layout([[2]]).frames(in: screen, gap: gap)[2])
+    }
+
+    @Test func shrinkStopsAtMinimum() {
+        var l = layout([[1]])
+        for _ in 0..<10 { l.resize(1, by: -0.1) }
+        #expect(abs(l.singleScale - Layout.singleScaleRange.lowerBound) < 0.0001)
+    }
+}
+
+// Usable areas (below the menu bar) of screens too small for a centered window to be worth it.
+let laptops = [
+    CGRect(x: 0, y: 33, width: 1470, height: 923),  // 13" MacBook Air
+    CGRect(x: 0, y: 38, width: 1512, height: 944),  // 14" MacBook Pro
+    CGRect(x: 0, y: 38, width: 1728, height: 1079), // 16" MacBook Pro
+    CGRect(x: 0, y: 25, width: 1920, height: 1055), // a 1080p display
+]
+
+@Suite struct SingleWindowOnALaptop {
+    @Test func fillsTheScreen() throws {
+        for screen in laptops {
+            let frame = try #require(layout([[1]]).frames(in: screen, gap: gap)[1])
+            #expect(frame == screen.insetBy(dx: gap, dy: gap))
+        }
+    }
+
+    @Test func aMidSizeScreenStillGetsAComfortableWindow() throws {
+        let screen = CGRect(x: 0, y: 25, width: 2304, height: 1271) // a 4K display at 2304×1296
+        let frame = try #require(layout([[1]]).frames(in: screen, gap: gap)[1])
+        #expect(frame.width == Layout.comfortableSize.width)
+        #expect(frame.height == Layout.comfortableSize.height)
+        #expect(abs(frame.midX - screen.midX) <= 1)
+    }
+
+    @Test func shrinksFromFullAndGrowsBack() throws {
+        let screen = laptops[1]
+        var l = layout([[1]])
+        do { let r = l.resize(1, by: 0.08, in: screen, gap: gap, limits: [:]); #expect(!r) } // already full
+        do { let r = l.resize(1, by: -0.08, in: screen, gap: gap, limits: [:]); #expect(r) }
+        let smaller = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(smaller.width < screen.width - 2 * gap && smaller.width > screen.width * 0.8)
+        #expect(abs(smaller.midX - screen.midX) <= 1)
+        do { let r = l.resize(1, by: 0.08, in: screen, gap: gap, limits: [:]); #expect(r) }
+        #expect(l.frames(in: screen, gap: gap)[1] == screen.insetBy(dx: gap, dy: gap))
+    }
+
+    @Test func oneSideShrinksFromFull() throws {
+        let screen = laptops[0]
+        var l = layout([[1]])
+        do { let r = l.resize(1, toward: .left, by: 0.05, in: screen, gap: gap); #expect(r) }
+        let frame = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(frame.width < screen.width - 2 * gap)
+        #expect(frame.height == screen.height - 2 * gap)
+    }
+
+    @Test func focusIsBigAndLeavesRoomForTheShelf() throws {
+        for screen in laptops {
+            var l = layout([[1], [2], [3]])
+            l.toggleSpotlight(1)
+            let frames = l.frames(in: screen, gap: gap)
+            let center = try #require(frames[1]), card = try #require(frames[2])
+            #expect(card.maxX < center.minX)
+            #expect(card.width >= 160)
+            #expect(center.height == screen.height - 2 * gap)
+            #expect(center.width > screen.width * 0.65)
+            #expect(abs(center.midX - screen.midX) <= 1)
+        }
+    }
+
+    @Test func focusShrinksFromWhereItIs() throws {
+        let screen = laptops[0]
+        var l = layout([[1], [2]])
+        l.toggleSpotlight(1)
+        let before = try #require(l.frames(in: screen, gap: gap)[1])
+        do { let r = l.resize(1, by: -0.05, in: screen, gap: gap, limits: [:]); #expect(r) }
+        let after = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(after.width < before.width && after.width > before.width * 0.85)
+        #expect(after.height < before.height && after.height > before.height * 0.85)
+        do { let r = l.resize(1, toward: .right, by: 0.05, in: screen, gap: gap); #expect(r) }
+        let wider = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(wider.width > after.width && wider.height == after.height)
+    }
+
+    @Test func focusOnABigDisplayIsUnchanged() throws {
+        var l = layout([[1], [2]])
+        l.toggleSpotlight(1)
+        let center = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(abs(center.width - (screen.width - 2 * gap) * Layout.defaultSingleScale) <= 1)
+        #expect(abs(center.width / center.height - Layout.singleAspect) < 0.01)
+    }
+
+    @Test func aBigDisplayKeepsSixtyPercent() {
+        #expect(abs(Layout.loneScale(in: screen.insetBy(dx: gap, dy: gap)) - Layout.defaultSingleScale) < 0.0001)
+    }
+}
+
+@Suite struct Tiling {
+    @Test func twoWindowsSplitTheScreen() throws {
+        let frames = layout([[1], [2]]).frames(in: screen, gap: gap)
+        let a = try #require(frames[1]), b = try #require(frames[2])
+        #expect(a.minX == gap)
+        #expect(b.maxX == screen.maxX - gap)
+        #expect(b.minX - a.maxX == gap)
+        #expect(a.height == screen.height - 2 * gap)
+        #expect(abs(a.width - b.width) <= 1)
+    }
+
+    @Test func stackedColumnSplitsHeight() throws {
+        let frames = layout([[1], [2, 3]]).frames(in: screen, gap: gap)
+        let top = try #require(frames[2]), bottom = try #require(frames[3])
+        #expect(top.minX == bottom.minX)
+        #expect(bottom.minY - top.maxY == gap)
+        #expect(bottom.maxY == screen.maxY - gap)
+    }
+
+    @Test func framesNeverOverlap() {
+        let frames = Array(layout([[1, 2], [3], [4, 5, 6]]).frames(in: screen, gap: gap).values)
+        for i in frames.indices {
+            for j in frames.indices where j > i {
+                #expect(!frames[i].intersects(frames[j]))
+            }
+        }
+    }
+}
+
+@Suite struct Inserting {
+    @Test func newWindowsGetColumnsUntilFull() {
+        var l = Layout()
+        l.insert(1, near: nil, maxColumns: 3)
+        l.insert(2, near: 1, maxColumns: 3)
+        l.insert(3, near: 2, maxColumns: 3)
+        #expect(l.columns.map(\.windows) == [[1], [2], [3]])
+        // The fourth makes a 2×2 grid; the fifth gets a column again, while there's room.
+        l.insert(4, near: 3, maxColumns: 3)
+        #expect(l.columns.map(\.windows) == [[1, 2], [3, 4]])
+        l.insert(5, near: 4, maxColumns: 3)
+        #expect(l.columns.map(\.windows) == [[1, 2], [3, 4], [5]])
+        l.insert(6, near: 5, maxColumns: 3)
+        #expect(l.columns.map(\.windows) == [[1, 2], [3, 4], [5, 6]])
+    }
+
+    @Test func newColumnGoesRightOfFocused() {
+        var l = layout([[1], [2]])
+        l.insert(3, near: 1, maxColumns: 3)
+        #expect(l.columns.map(\.windows) == [[1], [3], [2]])
+    }
+
+    @Test func removingLastInColumnDropsColumn() {
+        var l = layout([[1], [2, 3]])
+        l.remove(1)
+        #expect(l.columns.map(\.windows) == [[2, 3]])
+        l.remove(2)
+        l.remove(3)
+        #expect(l.isEmpty)
+    }
+
+    @Test func enteringFromNeighborDisplay() {
+        var l = layout([[1], [2]])
+        l.insert(9, entering: .right)
+        #expect(l.columns.first?.windows == [9])
+        l.insert(8, entering: .left)
+        #expect(l.columns.last?.windows == [8])
+    }
+}
+
+@Suite struct Moving {
+    /// A desktop display: two columns side by side.
+    let two = Layout.maxColumns(forWidth: 2560)
+
+    @Test func twoSideBySideTradePlacesInsteadOfStacking() {
+        var l = layout([[1], [2]])
+        do { let r = l.move(1, .right, maxColumns: two); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[2], [1]])
+        do { let r = l.move(1, .right, maxColumns: two); #expect(r == .edge) }
+        do { let r = l.move(1, .left, maxColumns: two); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[1], [2]])
+    }
+
+    @Test func besideAStackALoneWindowGoesPastTheWholeStack() {
+        // Stacking it would leave three windows in one column the screen's full width.
+        var l = layout([[1], [2, 3]])
+        do { let r = l.move(1, .right, maxColumns: two); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[2, 3], [1]])
+    }
+
+    @Test func outOfAStackIntoAColumnOfItsOwn() {
+        var l = layout([[1], [2, 3]])
+        do { let r = l.move(3, .left, maxColumns: two); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[1], [3], [2]])
+    }
+
+    @Test func threeColumnsOnADesktopStackAgain() {
+        // 2026-11-03, 15:41: Find My (3) stepped out of its stack beside Dia (1), then went back
+        // and forth past Dia and Messages (2) and never got back into a stack. Now the next press
+        // takes it into the column beside it, beneath that window.
+        var l = layout([[1], [2, 3]])
+        _ = l.move(3, .left, maxColumns: two)
+        #expect(l.columns.map(\.windows) == [[1], [3], [2]])
+        do { let r = l.move(3, .left, maxColumns: two); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[1, 3], [2]])
+        // Two columns again: from here it moves as usual, out of the stack the way it came.
+        do { let r = l.move(3, .right, maxColumns: two); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[1], [3], [2]])
+        do { let r = l.move(3, .right, maxColumns: two); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[1], [2, 3]])
+    }
+
+    @Test func fourWindowsFindTheGridAgain() {
+        // The site's walk-through: D out of the 2×2, past the stack and back, then beneath C.
+        var l = layout([[1, 2], [3, 4]])
+        _ = l.move(4, .left, maxColumns: two)
+        #expect(l.columns.map(\.windows) == [[1, 2], [4], [3]])
+        // A stack is passed, never joined: no third window beneath two beside one alone.
+        _ = l.move(4, .left, maxColumns: two)
+        #expect(l.columns.map(\.windows) == [[4], [1, 2], [3]])
+        _ = l.move(4, .right, maxColumns: two)
+        #expect(l.columns.map(\.windows) == [[1, 2], [4], [3]])
+        _ = l.move(4, .right, maxColumns: two)
+        #expect(l.columns.map(\.windows) == [[1, 2], [3, 4]])
+    }
+
+    @Test func everyArrangementOfThreeIsReachable() {
+        // From the usual three, the arrows alone reach every way of putting them in two columns.
+        var reached = Set<[[WindowID]]>()
+        var frontier = [layout([[1], [2, 3]])]
+        while let next = frontier.popLast() {
+            let key = next.columns.map(\.windows)
+            guard reached.insert(key).inserted else { continue }
+            for id: WindowID in [1, 2, 3] {
+                for d in Direction.allCases {
+                    var l = next
+                    if l.move(id, d, maxColumns: two) == .moved { frontier.append(l) }
+                }
+            }
+        }
+        let twoColumns = reached.filter { $0.count == 2 }
+        // Three windows in two columns: which one is alone (3), which side it's on (2), and the
+        // stack's order (2).
+        #expect(twoColumns.count == 12)
+        // Never all three in one column the screen's full width.
+        #expect(!reached.contains { $0.count == 1 })
+    }
+
+    @Test func aLoneWindowGoesBelowOrAboveTheWindowBesideIt() {
+        // Three columns on a desktop: ↓ puts it beneath its neighbor, ↑ above.
+        var l = layout([[1], [2], [3]])
+        do { let r = l.move(1, .down, maxColumns: two); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[2, 1], [3]])
+        var up = layout([[1], [2], [3]])
+        do { let r = up.move(2, .up, maxColumns: two); #expect(r == .moved) }
+        #expect(up.columns.map(\.windows) == [[2, 1], [3]])
+    }
+
+    @Test func besideAStackALoneWindowTradesPlacesWithItsTopOrBottom() {
+        // [A][B/C], A ↓: A goes beneath B, and C takes A's column. ↑: above C, B takes its column.
+        var down = layout([[1], [2, 3]])
+        do { let r = down.move(1, .down, maxColumns: two); #expect(r == .moved) }
+        #expect(down.columns.map(\.windows) == [[3], [2, 1]])
+        var up = layout([[1], [2, 3]])
+        do { let r = up.move(1, .up, maxColumns: two); #expect(r == .moved) }
+        #expect(up.columns.map(\.windows) == [[2], [1, 3]])
+    }
+
+    @Test func twoSideBySideHaveNothingAboveOrBelow() {
+        var l = layout([[1], [2]])
+        do { let r = l.move(1, .down, maxColumns: two); #expect(r == .edge) }
+        do { let r = l.move(1, .up, maxColumns: two); #expect(r == .edge) }
+        #expect(l.columns.map(\.windows) == [[1], [2]])
+    }
+
+    @Test func anUltrawideKeepsItsColumnsApart() {
+        // Three columns is what a 3440-wide display takes: sideways is past, not into.
+        var l = layout([[1], [2], [3]])
+        do { let r = l.move(1, .right, maxColumns: Layout.maxColumns(forWidth: 3440)); #expect(r == .moved) }
+        #expect(l.columns.map(\.windows) == [[2], [1], [3]])
+    }
+
+    @Test func aWindowKeepsItsWidthAsItMoves() {
+        var l = Layout(columns: [Column(windows: [1], weight: 0.7), Column(windows: [2], weight: 0.3)])
+        _ = l.move(1, .right, maxColumns: two)
+        #expect(l.columns.map(\.windows) == [[2], [1]])
+        #expect(l.columns.map(\.weight) == [0.3, 0.7])
+    }
+
+    @Test func upAndDownSwapInTheStack() {
+        var l = layout([[1, 2, 3]])
+        do { let r = l.move(3, .up, maxColumns: two); #expect(r == .moved) }
+        #expect(l.columns[0].windows == [1, 3, 2])
+        do { let r = l.move(1, .up, maxColumns: two); #expect(r == .edge) }
+        do { let r = l.move(2, .down, maxColumns: two); #expect(r == .edge) }
+    }
+
+    @Test func loneWindowHitsTheEdge() {
+        var l = layout([[1]])
+        for d in Direction.allCases { #expect((l.move(1, d, maxColumns: two)) == .edge) }
+        do { let r = l.move(42, .left, maxColumns: two); #expect(r == .notFound) }
+    }
+
+    @Test func swapAndReplace() {
+        var l = layout([[1], [2, 3]])
+        do { let r = l.swap(1, 3); #expect(r) }
+        #expect(l.columns.map(\.windows) == [[3], [2, 1]])
+        do { let r = l.replace(2, with: 7); #expect(r) }
+        #expect(l.columns.map(\.windows) == [[3], [7, 1]])
+    }
+}
+
+@Suite struct Sizing {
+    @Test func growWidensColumnAndHeightInStack() throws {
+        var l = layout([[1], [2, 3]])
+        let before = l.frames(in: screen, gap: gap)
+        do { let r = l.resize(2, by: 0.1); #expect(r) }
+        let after = l.frames(in: screen, gap: gap)
+        #expect(try #require(after[2]).width > before[2]!.width)
+        #expect(try #require(after[2]).height > before[2]!.height)
+        #expect(try #require(after[1]).width < before[1]!.width)
+    }
+
+    @Test func sharesStayWithinBounds() {
+        var l = layout([[1], [2]])
+        for _ in 0..<20 { l.resize(1, by: 0.1) }
+        let widths = l.columns.map(\.weight)
+        let share = widths[1] / widths.reduce(0, +)
+        #expect(share >= Layout.minFraction - 0.0001)
+    }
+
+    @Test func adoptTakesTheDraggedWidth() throws {
+        var l = layout([[1], [2]])
+        do { let r = l.adopt(1, size: CGSize(width: 1500, height: 1399), in: screen, gap: gap); #expect(r) }
+        let a = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(abs(a.width - 1500) <= 2)
+    }
+
+    @Test func balanceResets() {
+        var l = layout([[1], [2, 3]])
+        l.resize(1, by: 0.2)
+        l.resize(3, by: 0.2)
+        l.toggleSpotlight(2)
+        l.balance()
+        #expect(l.columns.map(\.weight) == [1, 1])
+        #expect(l.columns[1].weights == [1, 1])
+        #expect(l.spotlight == 2) // normalize keeps spotlight on
+    }
+
+    @Test func draggedShapeStaysCenteredAndNormalizeResetsIt() throws {
+        var l = layout([[1]])
+        do { let r = l.adopt(1, size: CGSize(width: 900, height: 1200), in: screen, gap: gap); #expect(r) }
+        let tall = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(abs(tall.width - 900) <= 2 && abs(tall.height - 1200) <= 2)
+        #expect(abs(tall.midX - screen.midX) <= 1 && abs(tall.midY - screen.midY) <= 1)
+        // Growing keeps the shape.
+        do { let r = l.resize(1, by: 0.08); #expect(r) }
+        let bigger = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(abs(bigger.width / bigger.height - tall.width / tall.height) < 0.02)
+        l.balance()
+        let normal = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(abs(normal.width / normal.height - 1.6) < 0.01)
+    }
+
+    @Test func spotlightedWindowTakesADraggedShape() throws {
+        var l = layout([[1], [2]])
+        l.toggleSpotlight(1)
+        do { let r = l.adopt(1, size: CGSize(width: 1000, height: 1300), in: screen, gap: gap); #expect(r) }
+        let f = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(abs(f.width - 1000) <= 2 && abs(f.height - 1300) <= 2)
+        #expect(l.columns.map(\.weight) == [1, 1]) // columns untouched
+        l.balance()
+        #expect(l.spotlight == 1)
+    }
+
+    @Test func maxColumnsByWidth() {
+        #expect(Layout.maxColumns(forWidth: 2560) == 2) // a 5K display
+        #expect(Layout.maxColumns(forWidth: 1920) == 2)
+        #expect(Layout.maxColumns(forWidth: 1470) == 2) // a 13" MacBook Air: two side by side
+        #expect(Layout.maxColumns(forWidth: 3440) == 3) // ultrawide
+        #expect(Layout.maxColumns(forWidth: 5120) == 4)
+        #expect(Layout.maxColumns(forWidth: 700) == 1)
+    }
+}
+
+@Suite struct DirectionalFocus {
+    let frames = layout([[1], [2, 3], [4]]).frames(in: screen, gap: gap)
+
+    @Test func neighbors() throws {
+        let one = try #require(frames[1])
+        var others = frames
+        others[1] = nil
+        #expect(nearest(from: one, direction: .right, in: others) == 2) // top of the stack wins the tie
+        #expect(nearest(from: one, direction: .left, in: others) == nil)
+
+        let three = try #require(frames[3])
+        others = frames
+        others[3] = nil
+        #expect(nearest(from: three, direction: .up, in: others) == 2)
+        #expect(nearest(from: three, direction: .right, in: others) == 4)
+        #expect(nearest(from: three, direction: .left, in: others) == 1)
+        #expect(nearest(from: three, direction: .down, in: others) == nil)
+    }
+
+    @Test func crossesToAnotherDisplay() {
+        // A display to the left, top-aligned with the main one.
+        let left = CGRect(x: -1920, y: 0, width: 1920, height: 1080)
+        let candidates: [WindowID: CGRect] = [10: left.insetBy(dx: 8, dy: 8)]
+        let source = frames[1]!
+        #expect(nearest(from: source, direction: .left, in: candidates) == 10)
+        #expect(nearest(from: source, direction: .right, in: candidates) == nil)
+    }
+
+    @Test func floatingSourceUsesCenters() {
+        // A source overlapping the tiles still finds the tile whose center is beyond its own.
+        let source = CGRect(x: 900, y: 300, width: 400, height: 300)
+        #expect(nearest(from: source, direction: .right, in: frames) != nil)
+    }
+}
+
+@Suite struct Spotlight {
+    @Test func centersOneAndShelvesTheRestOnTheLeft() throws {
+        var l = layout([[1], [2, 3]])
+        do { let r = l.toggleSpotlight(2); #expect(r) }
+        let frames = l.frames(in: screen, gap: gap)
+        let center = try #require(frames[2])
+        #expect(abs(center.midX - screen.midX) <= 1)
+        #expect(abs(center.width / center.height - 1.6) < 0.01)
+        for id: WindowID in [1, 3] {
+            let small = try #require(frames[id])
+            #expect(small.minX == gap)
+            #expect(small.maxX <= center.minX)
+            #expect(small.width < center.width / 2)
+        }
+        #expect(!frames[1]!.intersects(frames[3]!))
+    }
+
+    @Test func shelvedIsEverythingButTheSpotlight() {
+        var l = layout([[1], [2, 3]])
+        #expect(l.shelved.isEmpty)
+        l.toggleSpotlight(3)
+        #expect(l.shelved == [1, 2])
+    }
+
+    @Test func toggleEndsItAndLoneWindowsIgnoreIt() {
+        var l = layout([[1], [2]])
+        do { let r = l.toggleSpotlight(1); #expect(r) }
+        do { let r = l.toggleSpotlight(1); #expect(r) }
+        #expect(l.spotlight == nil)
+        var lone = layout([[1]])
+        do { let r = lone.toggleSpotlight(1); #expect(!r) }
+        #expect(lone.spotlight == nil)
+    }
+
+    @Test func anyLayoutChangeEndsIt() {
+        var l = layout([[1], [2], [3]])
+        l.toggleSpotlight(1)
+        l.insert(4, near: 1, maxColumns: 4)
+        #expect(l.spotlight == nil)
+        l.toggleSpotlight(1)
+        l.remove(3)
+        #expect(l.spotlight == nil)
+        l.toggleSpotlight(1)
+        _ = l.move(2, .left, maxColumns: 2)
+        #expect(l.spotlight == nil)
+    }
+
+    @Test func growResizesTheCenteredWindow() throws {
+        var l = layout([[1], [2]])
+        l.toggleSpotlight(1)
+        let before = try #require(l.frames(in: screen, gap: gap)[1])
+        do { let r = l.resize(1, by: 0.1); #expect(r) }
+        let after = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(after.width > before.width)
+        #expect(l.spotlight == 1)
+    }
+}
+
+@Suite struct ResizingOneSide {
+    @Test func aTiledWindowGetsWiderOrTallerAlone() throws {
+        var l = layout([[1, 2], [3]])
+        let a0 = try #require(l.frames(in: screen, gap: gap)[1]), b0 = try #require(l.frames(in: screen, gap: gap)[2])
+        let wider = l.resize(1, by: 0.05, horizontal: true, in: screen, gap: gap)
+        #expect(wider)
+        let a1 = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(a1.width > a0.width && a1.height == a0.height) // only the width changed
+        let taller = l.resize(1, by: 0.05, horizontal: false, in: screen, gap: gap)
+        #expect(taller)
+        let a2 = try #require(l.frames(in: screen, gap: gap)[1]), b2 = try #require(l.frames(in: screen, gap: gap)[2])
+        #expect(a2.height > a0.height && b2.height < b0.height) // its stack-mate gave it room
+    }
+
+    @Test func nothingToGiveWhenAloneInItsColumnOrRow() {
+        var l = layout([[1], [2]])
+        let taller = l.resize(1, by: 0.05, horizontal: false, in: screen, gap: gap)
+        #expect(!taller) // already the full height
+        var one = layout([[1, 2]])
+        let wider = one.resize(1, by: 0.05, horizontal: true, in: screen, gap: gap)
+        #expect(!wider) // already the full width
+    }
+
+    @Test func aCenteredWindowChangesOneSideAndStaysCentered() throws {
+        var l = layout([[1]])
+        let before = try #require(l.frames(in: screen, gap: gap)[1])
+        let grew = l.resize(1, by: 0.05, horizontal: false, in: screen, gap: gap)
+        #expect(grew)
+        let taller = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(taller.height > before.height && abs(taller.width - before.width) <= 1)
+        #expect(abs(taller.midX - before.midX) <= 1 && abs(taller.midY - before.midY) <= 1)
+        let shrank = l.resize(1, by: -0.05, horizontal: true, in: screen, gap: gap)
+        #expect(shrank)
+        let narrower = try #require(l.frames(in: screen, gap: gap)[1])
+        #expect(narrower.width < taller.width && abs(narrower.height - taller.height) <= 1)
+        #expect(abs(narrower.midX - before.midX) <= 1)
+    }
+}
+
+@Suite struct ArrowsPushEdges {
+    func frame(_ l: Layout, _ id: WindowID) throws -> CGRect { try #require(l.frames(in: screen, gap: gap)[id]) }
+
+    @Test func inTheRightColumnLeftWidensAndRightNarrows() throws {
+        var l = layout([[1], [2]])
+        let before = try frame(l, 2)
+        let wider = l.resize(2, toward: .left, by: 0.05, in: screen, gap: gap)
+        #expect(wider)
+        let after = try frame(l, 2)
+        #expect(after.width > before.width && after.minX < before.minX && after.maxX == before.maxX) // its left edge moved left
+        let narrower = l.resize(2, toward: .right, by: 0.05, in: screen, gap: gap)
+        #expect(narrower)
+        #expect(try frame(l, 2).width < after.width)
+    }
+
+    @Test func inTheLeftColumnRightWidensAndLeftNarrows() throws {
+        var l = layout([[1], [2]])
+        let before = try frame(l, 1)
+        let wider = l.resize(1, toward: .right, by: 0.05, in: screen, gap: gap)
+        #expect(wider)
+        let after = try frame(l, 1)
+        #expect(after.width > before.width && after.minX == before.minX) // its right edge moved right
+        let narrower = l.resize(1, toward: .left, by: 0.05, in: screen, gap: gap)
+        #expect(narrower)
+        #expect(try frame(l, 1).width < after.width)
+    }
+
+    @Test func atTheTopDownIsTallerAtTheBottomUpIs() throws {
+        var l = layout([[1, 2], [3]])
+        let top = try frame(l, 1), bottom = try frame(l, 2)
+        let topTaller = l.resize(1, toward: .down, by: 0.05, in: screen, gap: gap)
+        #expect(topTaller)
+        #expect(try frame(l, 1).height > top.height)
+        var m = layout([[1, 2], [3]])
+        let bottomTaller = m.resize(2, toward: .up, by: 0.05, in: screen, gap: gap)
+        #expect(bottomTaller)
+        let b = try #require(m.frames(in: screen, gap: gap)[2])
+        #expect(b.height > bottom.height && b.maxY == bottom.maxY) // its top edge moved up
+    }
+
+    @Test func onlyTheSharedEdgeMoves() throws {
+        // Three columns: the middle one grows right; the left column doesn't move at all.
+        var l = layout([[1], [2], [3]])
+        let left = try frame(l, 1)
+        let grew = l.resize(2, toward: .right, by: 0.05, in: screen, gap: gap)
+        #expect(grew)
+        #expect(try frame(l, 1) == left)
+        let right = try frame(l, 3), rightBefore = try frame(layout([[1], [2], [3]]), 3)
+        #expect(right.width < rightBefore.width)
+    }
+
+    @Test func aCenteredWindowStillGrowsWithRightAndUp() throws {
+        var l = layout([[1]])
+        let before = try frame(l, 1)
+        let grew = l.resize(1, toward: .right, by: 0.05, in: screen, gap: gap)
+        #expect(grew)
+        #expect(try frame(l, 1).width > before.width)
+    }
+}
+
+@Suite struct SpreadingOut {
+    @Test func closingTheWindowBesideAStackOpensItOut() {
+        var l = layout([[1], [2, 3]])
+        l.remove(1)
+        do { let r = l.spreadOut(maxColumns: Layout.maxColumns(forWidth: 2560)); #expect(r) }
+        #expect(l.columns.map(\.windows) == [[2], [3]])
+        let frames = l.frames(in: screen, gap: gap)
+        #expect(frames[2]!.height > screen.height * 0.9 && frames[3]!.height > screen.height * 0.9)
+    }
+
+    @Test func threeLeftInOneStackMakeTheUsualThree() {
+        var l = layout([[1, 2, 3]])
+        l.spreadOut(maxColumns: 2)
+        #expect(l.columns.map(\.windows) == [[1], [2, 3]])
+        var wide = layout([[1, 2, 3]])
+        wide.spreadOut(maxColumns: Layout.maxColumns(forWidth: 3440))
+        #expect(wide.columns.map(\.windows) == [[1], [2], [3]])
+    }
+
+    @Test func stacksBesideEnoughColumnsStay() {
+        var l = layout([[1, 2], [3, 4]])
+        l.remove(1)
+        do { let r = l.spreadOut(maxColumns: 2); #expect(!r) }
+        #expect(l.columns.map(\.windows) == [[2], [3, 4]])
+        var narrow = layout([[1, 2]])
+        do { let r = narrow.spreadOut(maxColumns: Layout.maxColumns(forWidth: 900)); #expect(!r) }
+    }
+
+    @Test func stopsWhereMinimumWidthsWouldNotFit() {
+        var l = layout([[1, 2]])
+        let room = (area: CGSize(width: 1500, height: 900), gap: CGFloat(8))
+        let wide: [WindowID: SizeLimits] = [1: SizeLimits(minWidth: 900), 2: SizeLimits(minWidth: 900)]
+        do { let r = l.spreadOut(maxColumns: 2, limits: wide, room: room); #expect(!r) }
+        do { let r = l.spreadOut(maxColumns: 2, limits: [1: SizeLimits(minWidth: 700)], room: room); #expect(r) }
+    }
+
+    @Test func aWindowComingBackFindsTheStackItLeft() {
+        // Full screen, say: 1 goes, the stack opens out, 1 comes back to [1][2/3].
+        let saved = Layout(columns: [Column(windows: [1], weight: 1.2), Column(windows: [2, 3], weights: [0.6, 0.4], weight: 0.8)])
+        var l = saved
+        l.remove(1)
+        l.spreadOut(maxColumns: 2)
+        #expect(l.columns.map(\.windows) == [[2], [3]])
+        do { let r = l.restore(1, from: saved); #expect(r) }
+        #expect(l.columns == saved.columns)
+    }
+
+    @Test func windowsLeavingTogetherComeBackInAnyOrder() {
+        // An app with two windows hidden: [1/4][2/3] down to [2][3] on an ultrawide, then back.
+        let saved = layout([[1, 4], [2, 3]])
+        for order in permutations([1, 4]) {
+            var l = saved
+            l.remove(1); l.spreadOut(maxColumns: 3)
+            l.remove(4); l.spreadOut(maxColumns: 3)
+            #expect(l.columns.map(\.windows) == [[2], [3]])
+            for id in order { l.restore(id, from: saved) }
+            #expect(l.columns.map(\.windows) == saved.columns.map(\.windows))
+        }
+    }
+
+    @Test func anythingElseChangingKeepsTheSpread() {
+        let saved = layout([[1], [2, 3]])
+        var l = saved
+        l.remove(1)
+        l.spreadOut(maxColumns: 2)
+        _ = l.move(3, .left, maxColumns: 2)
+        l.restore(1, from: saved)
+        #expect(l.columns.allSatisfy { $0.windows.count == 1 })
+    }
+}

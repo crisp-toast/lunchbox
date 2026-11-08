@@ -1,0 +1,1110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LunchboxWM · The tiling window manager for Mac</title>
+<meta name="description" content="Break free from the pile of windows. Lunchbox tiles every window as it opens: dialogs float, fixed-size apps keep their size, and there's no config file. $4.99 once.">
+<link rel="canonical" href="https://lunchboxwm.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="LunchboxWM">
+<meta property="og:title" content="LunchboxWM · The tiling window manager for Mac">
+<meta property="og:description" content="Break free from the pile of windows. Lunchbox tiles every window as it opens: dialogs float, fixed-size apps keep their size, and there's no config file. $4.99 once.">
+<meta property="og:url" content="https://lunchboxwm.com/">
+<meta property="og:image" content="https://lunchboxwm.com/media/share.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "LunchboxWM", "alternateName": "Lunchbox", "applicationCategory": "UtilitiesApplication", "operatingSystem": "macOS 14 or later (Apple silicon)", "url": "https://lunchboxwm.com/", "description": "Break free from the pile of windows. Lunchbox tiles every window as it opens: dialogs float, fixed-size apps keep their size, and there's no config file. $4.99 once.", "offers": {"@type": "Offer", "price": "4.99", "priceCurrency": "USD"}, "publisher": {"@type": "Organization", "name": "Sentient Donut LLC"}}</script>
+<link rel="icon" href="logo.svg">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+/* Layout: one calm, centered column; the product itself (a live mini Mac) is the only loud thing on the page. */
+:root {
+  color-scheme: light;
+  --paper: #fbfbfd;
+  --ink: #1d2126;
+  --muted: #69707a;
+  --line: #e6e8ec;
+  --soft: #f2f4f8;
+  --accent: #2f6bff;
+  --accent-deep: #1f45d6;
+  --ring: #3d7bff;
+  --display: "Figtree", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  --text: "Figtree", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --ease: cubic-bezier(.22, .9, .3, 1);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 16px/1.55 var(--text);
+  -webkit-font-smoothing: antialiased;
+  padding-inline: 16px;
+  overflow-x: hidden;
+}
+a { color: inherit; }
+.wrap { max-width: 1080px; margin: 0 auto; }
+h1, h2, h3 { font-family: var(--display); color: var(--ink); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(40px, 7.2vw, 70px); font-weight: 600; line-height: 1.02; letter-spacing: -0.047em; }
+h2 { font-size: clamp(30px, 4.6vw, 46px); font-weight: 600; line-height: 1.06; letter-spacing: -0.04em; }
+h3 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+p { margin: 0; }
+.lede { color: var(--muted); font-size: 18px; max-width: 34em; margin-inline: auto; }
+.eyebrow { font: 600 15px/1.2 var(--text); letter-spacing: -0.005em; color: var(--accent); }
+
+/* Nav: floats as a pill once you scroll */
+.nav {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  margin: 0 auto; max-width: 1080px; padding-top: 14px;
+}
+.nav-inner {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 10px 10px 10px 16px; border-radius: 18px;
+  transition: background .3s, box-shadow .3s, border-color .3s;
+  border: 1px solid transparent;
+}
+.nav:not(.scrolled) .nav-inner { background: rgba(255,255,255,.62); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-color: rgba(255,255,255,.75); box-shadow: 0 8px 30px rgba(20,30,60,.06); }
+.nav.scrolled .nav-inner { background: rgba(255,255,255,.86); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-color: var(--line); box-shadow: 0 8px 30px rgba(20,30,60,.08); }
+.brand { display: flex; align-items: center; gap: 10px; font: 600 17px var(--display); letter-spacing: -0.02em; text-decoration: none; }
+.brand svg { width: 28px; height: 28px; }
+/* The name: LunchboxWM. Only the main logo at the top has WM in the brand blue; everywhere else WM is the color of the words around it. */
+.wm { color: inherit; }
+.nav .brand .wm { color: var(--accent); }
+.nav-links { display: flex; gap: 28px; font-size: 14.5px; color: #4b525b; }
+.nav-links a { text-decoration: none; }
+.nav-links a:hover { color: var(--ink); }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 18px;
+  border-radius: 12px; font: 600 15px var(--text); text-decoration: none; cursor: pointer;
+  border: 1px solid var(--line); background: #fff; color: var(--ink);
+  transition: transform .15s var(--ease), box-shadow .2s;
+}
+.btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(20,30,60,.08); }
+.btn:focus-visible, .chapter:focus-visible, summary:focus-visible, .ctl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.dark { background: #16191d; color: #fff; border-color: #16191d; }
+.btn.dark .sep { width: 1px; align-self: stretch; margin: 11px 0; background: rgba(255,255,255,.22); }
+.btn.dark .price { font-weight: 500; color: rgba(255,255,255,.78); }
+.btn svg { width: 16px; height: 16px; }
+.btn.small { height: 38px; padding: 0 14px; font-size: 14px; border-radius: 11px; }
+.buy-note { font-size: 13px; color: var(--accent-deep); }
+.buy-note:empty { display: none; }
+
+/* Hero: colored glass breaking behind the headline, then holding mid-fall */
+.hero {
+  position: relative; isolation: isolate; overflow: hidden; text-align: center;
+  margin-inline: calc(50% - 50vw); margin-top: -76px; padding: 170px 16px 150px;
+  display: grid; gap: 22px; justify-items: center; background: #dfe1e5;
+}
+.hero-film { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; }
+/* A soft veil keeps the headline crisp over the glass; the bottom fades into the page. */
+.hero::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background: radial-gradient(50% 46% at 50% 52%, rgba(251,251,253,.35), rgba(251,251,253,0) 100%),
+              linear-gradient(180deg, rgba(251,251,253,.25), rgba(251,251,253,0) 20%, rgba(251,251,253,0) 72%, #fbfbfd 100%);
+}
+/* The words sit on frosted glass, so they read clearly over the shards. */
+.hero-copy {
+  display: grid; gap: 18px; justify-items: center; width: fit-content; max-width: min(700px, 100%);
+  padding: clamp(18px, 2.6vw, 30px) clamp(16px, 3vw, 34px); border-radius: 26px;
+  background: rgba(251,251,253,.34);
+  /* A strong blur: the intact panes behind have long straight edges that a light blur draws as a line across the panel. */
+  -webkit-backdrop-filter: blur(48px) saturate(1.35); backdrop-filter: blur(48px) saturate(1.35);
+  border: 1px solid rgba(255,255,255,.55);
+  box-shadow: 0 24px 60px -40px rgba(20,30,60,.3), inset 0 1px 0 rgba(255,255,255,.7);
+}
+/* The panel is the force: it waits below, punches up through the glass at the hit, then settles in slow motion. */
+.hero-wait .hero-copy { opacity: 0; transform: translateY(150px) scale(.9); }
+.hero-rise .hero-copy { animation: hero-rise 1.6s cubic-bezier(.1, .95, .2, 1) both; }
+@keyframes hero-rise {
+  0% { opacity: 0; transform: translateY(150px) scale(.9); }
+  12% { opacity: 1; }
+  100% { opacity: 1; transform: none; }
+}
+/* "pile of windows" gets a red crayon squiggle, like a spelling mistake, scribbled in after the words land.
+   It's a background image rather than an element inside the words: WebKit draws text around an inline SVG
+   heavier, as if it had a shadow. The image crops instead of squashing, so widening it draws it left to right. */
+.hero h1 .bad {
+  white-space: nowrap; padding: 0 .05em .2em; margin: 0 -.05em;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 44' preserveAspectRatio='xMinYMid slice'%3E%3Cfilter id='c' x='-4%25' y='-60%25' width='108%25' height='220%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.22 0.3' numOctaves='2' seed='7' result='w'/%3E%3CfeDisplacementMap in='SourceGraphic' in2='w' scale='3' xChannelSelector='R' yChannelSelector='G' result='r'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1 0.45' numOctaves='3' seed='3' result='g'/%3E%3CfeColorMatrix in='g' type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -5 0 0 0 3.45' result='x'/%3E%3CfeComposite in='r' in2='x' operator='in'/%3E%3C/filter%3E%3Cg fill='none' stroke-linecap='round' stroke-linejoin='round' filter='url(%23c)'%3E%3Cpath d='M5.0 25.0L9.8 19.2Q12.3 16.2 14.7 19.3L21.5 28.1Q23.3 30.5 25.8 28.9L38.1 21.1Q41.6 18.9 44.9 21.3L53.4 27.3Q55.6 28.8 58.0 27.7L74.2 19.9Q77.4 18.4 79.7 21.0L86.9 29.4Q89.1 32.1 92.0 30.1L107.8 19.3Q110.3 17.6 112.5 19.6L122.6 28.7Q125.2 31.1 128.2 29.2L140.4 21.5Q143.3 19.7 145.8 21.9L154.3 29.1Q156.8 31.3 159.6 29.4L173.3 20.2Q176.4 18.1 179.2 20.7L187.1 27.8Q189.0 29.6 191.4 28.6L209.3 21.5Q212.3 20.4 214.8 22.4L223.5 29.4Q226.5 31.8 229.7 29.7L242.6 21.0Q245.0 19.5 247.1 21.3L255.8 28.6Q258.8 31.2 262.5 29.6L280.2 21.9Q282.9 20.7 285.4 22.2L294.0 27.3Q297.1 29.2 300.5 27.8L318.9 20.1Q321.6 18.9 323.9 20.6L336.1 29.6Q338.7 31.6 341.6 29.9L355.2 22.3Q358.0 20.7 360.8 22.5L370.9 29.3Q373.2 30.8 375.4 29.2L386.3 21.6Q389.4 19.4 392.6 21.1L404.4 27.3Q407.3 28.9 410.5 27.6L425.5 21.4Q428.9 20.0 432.1 21.8L442.7 27.7Q445.7 29.4 448.8 27.8L465.3 19.6Q468.4 18.0 471.2 20.0L480.9 26.9Q483.7 28.9 486.9 27.5L504.1 20.5Q507.0 19.3 509.9 18.2L516.0 15.8' stroke='%23d3261c' stroke-width='8'/%3E%3Cpath d='M5.0 25.0L10.2 19.3Q12.9 16.5 15.2 19.6L21.4 28.1Q23.2 30.5 25.7 28.9L38.0 20.9Q41.5 18.7 44.8 21.2L52.8 27.3Q55.0 29.0 57.5 27.8L74.6 19.8Q77.7 18.3 80.0 21.0L87.1 29.5Q89.3 32.2 92.1 30.2L107.6 19.5Q110.1 17.8 112.3 19.7L122.8 28.7Q125.5 30.9 128.5 29.1L140.7 21.5Q143.6 19.7 146.1 22.0L153.9 28.9Q156.4 31.1 159.1 29.2L172.9 20.0Q176.0 17.9 178.7 20.4L186.8 27.9Q188.7 29.6 191.1 28.7L209.1 21.4Q212.1 20.2 214.6 22.2L223.6 29.3Q226.6 31.7 229.9 29.6L242.9 21.2Q245.3 19.7 247.5 21.5L256.4 28.8Q259.5 31.3 263.1 29.6L280.9 21.6Q283.6 20.4 286.0 22.0L294.5 27.4Q297.6 29.4 301.0 27.9L319.6 20.1Q322.2 19.0 324.5 20.8L335.9 29.9Q338.5 31.9 341.4 30.2L354.6 22.3Q357.4 20.7 360.2 22.4L371.5 29.2Q373.9 30.6 376.0 29.0L385.9 21.7Q388.9 19.4 392.2 21.2L404.3 27.6Q407.2 29.2 410.4 27.9L426.0 21.6Q429.5 20.2 432.7 22.1L442.6 27.8Q445.6 29.5 448.7 27.9L464.9 19.5Q468.0 17.9 470.9 19.9L481.0 26.9Q483.8 28.9 487.0 27.6L504.3 20.4Q507.2 19.2 510.0 18.1L516.0 15.7' stroke='%23b81d14' stroke-width='3.2' opacity='.45' transform='translate(1.2 1.6)'/%3E%3C/g%3E%3C/svg%3E") no-repeat left bottom / 100% .62em;
+}
+.hero-wait .hero h1 .bad { background-size: 0 .62em; }
+.hero-rise .hero h1 .bad { animation: scrawl .8s 1s cubic-bezier(.45, 0, .35, 1) both; }
+@keyframes scrawl { from { background-size: 0 .62em; } to { background-size: 100% .62em; } }
+.hero-copy .lede { color: #3f454d; max-width: 30em; text-shadow: 0 1px 10px rgba(251,251,253,.8); }
+.hero-copy .meta { color: #4b525b; text-shadow: 0 1px 8px rgba(251,251,253,.8); }
+.hero-copy .owned { color: #4b525b; text-shadow: 0 1px 8px rgba(251,251,253,.8); }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.owned { margin: -6px 0 14px; text-align: center; font-size: 14px; color: var(--muted); }
+.owned a { color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); }
+.owned a:hover { color: var(--ink); }
+.meta span::before { content: "·"; margin-right: 18px; color: #b9bec6; }
+.meta span:first-child::before { content: none; }
+
+/* The mini Mac */
+.mac {
+  position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 10;
+  border-radius: 10px; overflow: hidden; isolation: isolate;
+  background: radial-gradient(120% 90% at 15% 10%, #d9e7ff 0%, transparent 55%),
+              radial-gradient(90% 80% at 90% 20%, #ffe1ec 0%, transparent 60%),
+              radial-gradient(100% 90% at 60% 100%, #ffe9cf 0%, #f6efe8 70%);
+  box-shadow: 0 0 0 1px rgba(20,30,60,.08), 0 30px 80px -20px rgba(20,30,60,.28);
+  font-family: var(--text);
+}
+.mac.dim { background: radial-gradient(120% 90% at 15% 10%, #dfe3f6 0%, transparent 55%), radial-gradient(100% 90% at 60% 100%, #efe7f3 0%, #eceef6 70%); }
+.menubar {
+  position: absolute; inset: 0 0 auto 0; height: max(14px, 4.2%); z-index: 10;
+  display: flex; align-items: center; gap: 2.2%; padding: 0 1.6%;
+  font-size: clamp(7px, 1.05vw, 11px); font-weight: 600; color: #20242a;
+  background: rgba(255,255,255,.55); backdrop-filter: blur(6px);
+}
+.menubar .grow { flex: 1; }
+.menubar .item { font-weight: 500; opacity: .8; }
+.spaces { display: flex; gap: 4px; align-items: center; }
+.spaces .glyph { width: 1.3em; height: .9em; border: 1.5px solid currentColor; border-radius: 2px; position: relative; }
+.spaces .glyph::after { content: ""; position: absolute; inset: 1px 45% 1px 1px; background: currentColor; border-radius: 1px; }
+.spaces b { font-variant-numeric: tabular-nums; }
+.desk { position: absolute; left: 0; right: 0; bottom: 0; top: max(14px, 4.2%); } /* starts exactly below the menu bar */
+.win {
+  position: absolute; border-radius: clamp(3px, .45vw, 6px); overflow: hidden;
+  background: #fff; box-shadow: 0 0 0 .5px rgba(0,0,0,.12), 0 6px 18px -6px rgba(20,30,60,.3);
+  transition: left .55s var(--ease), top .55s var(--ease), width .55s var(--ease), height .55s var(--ease),
+              transform .55s var(--ease), opacity .4s, box-shadow .25s;
+  display: flex; flex-direction: column;
+}
+.win.gone { opacity: 0; transform: scale(.92); pointer-events: none; }
+.win.away { opacity: 0; transform: translateX(-12%) scale(.96); }
+.win.focused { box-shadow: 0 0 0 2px var(--ring), 0 0 0 6px rgba(61,123,255,.18), 0 10px 26px -8px rgba(20,30,60,.35); z-index: 3; }
+.win.shelved { transform: perspective(500px) rotateY(32deg) scale(.96); transform-origin: left center; z-index: 1; box-shadow: 0 0 0 .5px rgba(0,0,0,.12), 0 14px 26px -10px rgba(20,30,60,.45); }
+.win.shelved .content { opacity: .9; }
+.bar { height: clamp(9px, 1.7vw, 18px); flex: none; display: flex; align-items: center; gap: 3px; padding: 0 6px; background: #f3f4f6; border-bottom: .5px solid rgba(0,0,0,.08); font-size: clamp(6px, .85vw, 10px); font-weight: 600; color: #4b525b; }
+.bar i { width: clamp(3px, .55vw, 6px); height: clamp(3px, .55vw, 6px); border-radius: 50%; background: #ff5f57; }
+.bar i:nth-child(2) { background: #febc2e; }
+.bar i:nth-child(3) { background: #28c840; margin-right: 4px; }
+.content { flex: 1; padding: 6% 7%; display: grid; gap: 5%; align-content: start; transition: opacity .3s; }
+.ln { height: clamp(2px, .4vw, 5px); border-radius: 3px; background: #e4e6ea; }
+.notes { background: #fffaf0; }
+.notes .ln { background: #eadfc8; }
+.notes .ln.h { background: #c7b48c; width: 45%; height: clamp(3px, .6vw, 7px); }
+.browser .block { border-radius: 4px; background: linear-gradient(135deg, #dfe8ff, #f1e7ff); aspect-ratio: 16 / 7; }
+.browser .ln.b { background: #cfd8ea; }
+.term { background: #16191d; }
+.term .bar { background: #24282e; color: #b4bac3; border-color: rgba(255,255,255,.06); }
+.term .ln { background: #2e343c; }
+.term .ln.g { background: #3fbf72; width: 30%; }
+.finder .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10%; }
+.finder .fold { aspect-ratio: 4 / 3; border-radius: 3px; background: linear-gradient(#8cc4ff, #5aa5f5); }
+.music { background: #fff5f7; }
+.music .art { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8%; }
+.music .art span { aspect-ratio: 1; border-radius: 4px; background: linear-gradient(135deg, #ff9db0, #ffc58f); }
+.music .art span:nth-child(2) { background: linear-gradient(135deg, #a3b8ff, #d7a8ff); }
+.music .art span:nth-child(3) { background: linear-gradient(135deg, #8fe3c8, #a6d5ff); }
+
+/* overlays inside the mini Mac */
+.panel {
+  position: absolute; left: 50%; top: 14%; width: 52%; transform: translateX(-50%);
+  border-radius: clamp(6px, 1vw, 12px); background: rgba(250,250,252,.94); backdrop-filter: blur(10px);
+  box-shadow: 0 0 0 .5px rgba(0,0,0,.14), 0 18px 40px -10px rgba(20,30,60,.4);
+  padding: 2% 2.2%; z-index: 5; transition: opacity .25s, transform .25s var(--ease);
+  font-size: clamp(7px, 1.15vw, 13px);
+}
+.panel[hidden] { display: block !important; opacity: 0; transform: translateX(-50%) translateY(-6px) scale(.98); pointer-events: none; }
+.panel .q { font-size: 1.5em; padding: .2em .3em .35em; border-bottom: 1px solid #e8eaee; color: #1d2126; min-height: 1.9em; }
+.panel .q .hint { color: #9aa1aa; }
+.panel .q .caret { display: inline-block; width: 1px; height: 1em; background: var(--accent); vertical-align: -.12em; margin-left: 1px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.row { display: grid; grid-template-columns: 1.9em 1fr auto; gap: .2em .7em; align-items: center; padding: .55em .6em; border-radius: .6em; margin-top: .3em; }
+.row.sel { background: var(--accent); color: #fff; }
+.row .ic { width: 1.9em; height: 1.9em; border-radius: .45em; background: linear-gradient(135deg, #ff8a65, #8e7dff); grid-row: span 2; }
+.row .t { font-weight: 600; }
+.row .s { font-size: .82em; opacity: .75; grid-column: 2; }
+.row .ret { grid-row: 1; grid-column: 3; }
+.row .sub { grid-column: 2 / 4; display: flex; justify-content: space-between; align-items: center; font-size: .92em; padding-top: .35em; }
+.mini-kc { font: 600 .82em var(--text); border: 1px solid currentColor; border-radius: .35em; padding: .05em .45em; opacity: .85; }
+.help-row { display: grid; grid-template-columns: 8.5em 1fr; gap: .8em; padding: .35em .3em; align-items: center; }
+.help-row .k { display: flex; gap: .25em; flex-wrap: wrap; }
+.help-group { font: 600 .72em var(--text); letter-spacing: .08em; color: #8b929c; padding: .8em .3em .2em; }
+
+/* The real recording, in a display */
+.showcase { padding-block: 0 40px; display: grid; gap: 18px; margin-top: -70px; position: relative; z-index: 1; }
+.display {
+  position: relative; max-width: 100%; border-radius: clamp(14px, 2vw, 24px);
+  padding: clamp(6px, 1.1vw, 14px); background: linear-gradient(180deg, #2b2e34, #15171b);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.09), 0 50px 100px -40px rgba(20,30,60,.55);
+}
+.display video { display: block; width: 100%; max-width: 100%; aspect-ratio: 1920 / 1050; border-radius: clamp(6px, .9vw, 10px); background: #141518; object-fit: cover; }
+.display .toggle {
+  position: absolute; right: clamp(14px, 2vw, 26px); bottom: clamp(14px, 2vw, 26px); width: 34px; height: 34px;
+  border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center;
+  background: rgba(20,22,26,.55); color: #fff; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  opacity: .0; transition: opacity .2s;
+}
+.display:hover .toggle, .display .toggle:focus-visible, .display.paused .toggle { opacity: 1; }
+.display .toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.display .toggle svg { width: 13px; height: 13px; }
+.live { display: flex; align-items: center; justify-content: center; gap: 10px 16px; flex-wrap: wrap; min-height: 52px; }
+.live .keys { display: flex; gap: 6px; align-items: center; min-height: 44px; }
+.live .keys:empty { display: none; }
+.live .keys .plus { color: #a5abb4; font-weight: 600; }
+.live .cap { font-size: 17px; font-weight: 500; color: var(--ink); min-width: 0; text-align: center; transition: opacity .25s; }
+.live.swap .cap, .live.swap .keys { opacity: 0; }
+.live .keys { transition: opacity .25s; }
+.real { text-align: center; font-size: 13px; color: var(--muted); }
+
+/* Why: what it already knows, each with a small scene */
+.why { padding-block: 90px 40px; display: grid; gap: 40px; }
+.why > header { text-align: center; display: grid; gap: 14px; }
+.cards { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px; }
+.card { grid-column: span 2; display: grid; gap: 12px; align-content: start; padding: 12px 12px 22px; border-radius: 22px; background: #fff; border: 1px solid var(--line); }
+.card.wide { grid-column: span 3; }
+.card h3, .card p { padding-inline: 6px; }
+.card p { color: var(--muted); font-size: 15px; }
+.scene {
+  position: relative; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; isolation: isolate;
+  background: radial-gradient(110% 90% at 15% 0%, #e3edff 0%, transparent 60%), radial-gradient(100% 90% at 70% 100%, #ffeedd 0%, #f6f1ec 75%);
+  box-shadow: inset 0 0 0 1px rgba(20,30,60,.05);
+}
+.card.wide .scene { aspect-ratio: 2.4 / 1; }
+/* A tiny window: title bar and traffic lights */
+.sw { position: absolute; border-radius: 7px; background: #fff; box-shadow: 0 0 0 .5px rgba(0,0,0,.12), 0 6px 14px -6px rgba(20,30,60,.3); overflow: hidden; }
+.sw::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 13px; background: #f3f4f6; border-bottom: .5px solid rgba(0,0,0,.08); }
+.sw::after { content: ""; position: absolute; left: 6px; top: 4.5px; width: 4px; height: 4px; border-radius: 50%; background: #ff5f57; box-shadow: 6px 0 #febc2e, 12px 0 #28c840; }
+.sw.under { opacity: .7; }
+.dlg { left: 31%; top: 22%; width: 38%; height: 56%; z-index: 2; border-radius: 9px; box-shadow: 0 0 0 .5px rgba(0,0,0,.14), 0 16px 30px -10px rgba(20,30,60,.45); }
+.dlg::before, .dlg::after { content: none; }
+.dlg i { position: absolute; left: 14%; right: 14%; height: 6px; border-radius: 3px; background: #e4e6ea; }
+.dlg i:nth-child(1) { top: 22%; right: 34%; background: #c9ced6; }
+.dlg i:nth-child(2) { top: 40%; }
+.dlg b { position: absolute; right: 12%; bottom: 14%; width: 30%; height: 16%; border-radius: 5px; background: var(--accent); }
+.dlg em { position: absolute; right: 46%; bottom: 14%; width: 26%; height: 16%; border-radius: 5px; background: #eef0f3; }
+.slot { position: absolute; border-radius: 9px; border: 1.5px dashed rgba(47,107,255,.45); }
+.phone { position: absolute; border-radius: 10px; background: #16191d; padding: 4px; box-shadow: 0 8px 18px -8px rgba(20,30,60,.5); }
+.phone::after { content: ""; display: block; height: 100%; border-radius: 7px; background: linear-gradient(160deg, #8fb4ff, #c9a8ff 55%, #ffc0a8); }
+.ph {
+  position: absolute; border-radius: 7px; display: grid; place-items: center;
+  background: rgba(255,255,255,.5); box-shadow: inset 0 0 0 1px rgba(255,255,255,.8), 0 0 0 .5px rgba(20,30,60,.12);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: ph-pulse 1.8s ease-in-out infinite;
+}
+.ph::after { content: ""; width: 24px; height: 24px; border-radius: 7px; background: linear-gradient(135deg, #ffb36b, #ff6f8f); box-shadow: 0 4px 10px -4px rgba(20,30,60,.4); }
+@keyframes ph-pulse { 50% { background: rgba(255,255,255,.78); } }
+.badge {
+  position: absolute; left: 50%; top: 12%; transform: translateX(-50%); z-index: 2; display: grid; gap: 5px; justify-items: center;
+  padding: 7px 16px 8px; border-radius: 12px; background: rgba(30,33,38,.82); color: #fff; font: 600 12.5px var(--text); white-space: nowrap;
+  box-shadow: 0 10px 24px -10px rgba(20,30,60,.5);
+}
+.badge .dots { display: flex; gap: 5px; }
+.badge .dots span { width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,.35); }
+.badge .dots span.on { background: #fff; }
+.scene .keys2 { position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; z-index: 2; }
+.scene .keys2 .plus { color: #a5abb4; font-weight: 600; }
+.steps { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 0 4%; }
+.steps span { display: flex; align-items: center; gap: 8px; padding: 9px 13px 9px 9px; border-radius: 12px; background: #fff; font: 600 13.5px var(--text); white-space: nowrap; box-shadow: 0 0 0 1px var(--line), 0 6px 14px -8px rgba(20,30,60,.3); }
+.steps span b { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px; }
+.steps i { width: 14px; height: 1.5px; background: #b9c3d6; flex: none; }
+
+/* Trust strip */
+.trust { margin-top: 40px; display: grid; gap: 22px; }
+.trust .eyebrow { text-align: center; }
+.trust ul { list-style: none; margin: 0; padding: 26px; border-radius: 24px; background: var(--soft); border: 1px solid var(--line); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 30px; }
+.trust li { display: grid; grid-template-columns: 30px 1fr; gap: 3px 12px; align-content: start; }
+.trust svg { grid-row: span 2; width: 30px; height: 30px; padding: 7px; border-radius: 9px; background: #fff; color: var(--accent); box-shadow: 0 0 0 1px var(--line); fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.trust b { font: 600 15px/1.35 var(--display); }
+.trust li span { color: var(--muted); font-size: 14px; line-height: 1.5; }
+.trust a { color: inherit; }
+
+.kc {
+  display: inline-grid; place-items: center; min-width: 30px; height: 30px; padding: 0 9px;
+  border-radius: 8px; background: #fff; border: 1px solid #dfe2e7; border-bottom-width: 3px;
+  font: 600 13px var(--text); color: var(--ink); white-space: nowrap;
+  transition: transform .12s, background .2s, border-color .2s, color .2s;
+}
+.kc.big { min-width: 46px; height: 44px; font-size: 16px; border-radius: 10px; }
+.kc.press { transform: translateY(2px); border-bottom-width: 1px; background: var(--accent); border-color: var(--accent-deep); color: #fff; }
+.walk { padding-block: 80px 40px; display: grid; gap: 34px; }
+.walk header { text-align: center; display: grid; gap: 14px; }
+.walk header .lede { max-width: 30em; }
+.player { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 28px; align-items: start; }
+.chapters { display: grid; gap: 4px; }
+.chapter {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; text-align: left; cursor: pointer;
+  padding: 12px 14px; border-radius: 12px; border: 1px solid transparent; background: none; font: inherit; color: var(--muted);
+}
+.chapter .ct { font-weight: 600; color: var(--ink); font-size: 15px; }
+.chapter .ck { font: 500 13px var(--text); grid-column: 1 / 3; }
+.chapter.on { background: #fff; border-color: var(--line); box-shadow: 0 6px 20px -10px rgba(20,30,60,.25); }
+.chapter.on .ck { color: var(--accent-deep); }
+.chapter .progress { grid-column: 1 / 3; height: 2px; border-radius: 2px; background: var(--line); overflow: hidden; margin-top: 6px; opacity: 0; }
+.chapter.on .progress { opacity: 1; }
+.chapter .progress b { display: block; height: 100%; width: 0; background: var(--accent); }
+.stage { display: grid; gap: 16px; min-width: 0; }
+/* A fixed grid, so the step buttons never move as the keys and caption change. */
+.howto { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "keys cap ctls"; align-items: center; gap: 10px 14px; }
+.howto .keys { grid-area: keys; display: flex; gap: 6px; min-height: 44px; align-items: center; }
+.howto .keys .plus { color: #a5abb4; font-weight: 600; }
+.howto .cap { grid-area: cap; min-width: 0; min-height: 2.9em; display: flex; align-items: center; color: var(--ink); font-size: 16px; line-height: 1.45; }
+.ctls { grid-area: ctls; display: flex; gap: 6px; align-self: center; }
+@media (max-width: 600px) {
+  .howto { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "keys ctls" "cap cap"; align-items: start; }
+  .howto .keys { flex-wrap: wrap; row-gap: 6px; }
+  .howto .keys .kc.big { min-width: 38px; height: 38px; font-size: 14px; padding: 0 8px; }
+  .howto .cap { min-height: 4.35em; align-items: flex-start; font-size: 15px; }
+  .ctls { align-self: start; padding-top: 4px; }
+}
+.ctl { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: #fff; cursor: pointer; display: grid; place-items: center; color: var(--ink); }
+.ctl svg { width: 14px; height: 14px; }
+
+/* Pricing */
+.pricing { padding-block: 90px 40px; display: grid; gap: 34px; justify-items: center; text-align: center; }
+.price-card {
+  width: 100%; max-width: 460px; text-align: left; display: grid; gap: 22px;
+  padding: 30px; border-radius: 24px; background: #fff; border: 1px solid var(--line);
+  box-shadow: 0 30px 70px -30px rgba(20,30,60,.25);
+}
+.price-top { display: flex; align-items: center; gap: 14px; }
+.price-top svg { width: 52px; height: 52px; }
+.price-top div { display: grid; }
+.price-top b { font: 600 20px var(--display); letter-spacing: -0.02em; }
+.price-top small { color: var(--muted); font-size: 14px; }
+.amount { display: flex; align-items: baseline; gap: 10px; }
+.amount strong { font: 600 56px/1 var(--display); letter-spacing: -0.05em; font-variant-numeric: tabular-nums; }
+.amount span { color: var(--muted); font-size: 15px; }
+.lifetime { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--accent-deep); background: #edf3ff; border-radius: 999px; padding: 6px 12px; justify-self: start; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; font-size: 15px; }
+.checks li { display: grid; grid-template-columns: 20px 1fr; gap: 10px; }
+.checks li::before { content: ""; width: 18px; height: 18px; margin-top: 2px; border-radius: 50%; background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat; }
+.price-card .btn { justify-content: center; height: 50px; font-size: 16px; }
+.price-card .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.buy-options { display: grid; gap: 10px; }
+.buy-form { display: grid; }
+.buy-form .btn { width: 100%; }
+.buy-form .btn[disabled] { opacity: .6; cursor: progress; }
+.price-card .fine a { color: var(--ink); }
+.fine { font-size: 13px; color: var(--muted); text-align: center; }
+
+/* FAQ */
+.faq { padding-block: 70px 40px; display: grid; gap: 26px; max-width: 760px; margin: 0 auto; }
+.faq h2 { text-align: center; }
+details { border-bottom: 1px solid var(--line); padding: 18px 4px; }
+summary { cursor: pointer; font-weight: 600; font-size: 17px; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; color: var(--muted); font-weight: 400; font-size: 22px; line-height: 1; transition: transform .2s; }
+details[open] summary::after { transform: rotate(45deg); }
+details p { color: var(--muted); padding-top: 10px; max-width: 62ch; }
+
+/* Closing */
+.closing { padding-block: 100px 70px; display: grid; gap: 22px; justify-items: center; text-align: center; background: radial-gradient(60% 70% at 50% 40%, #eef3ff 0%, transparent 70%); }
+.closing svg.icon { width: 76px; height: 76px; filter: drop-shadow(0 14px 24px rgba(10,12,16,.35)); }
+.foot-links { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.foot-links a { text-decoration: none; }
+.foot-links a:hover { text-decoration: underline; }
+.fn { font-size: .55em; line-height: 0; vertical-align: super; margin-left: 1px; font-weight: 500; }
+.fn a { color: inherit; text-decoration: none; }
+.fn a:hover { text-decoration: underline; }
+.footnotes { border-top: 1px solid var(--line); padding-block: 24px 4px; font-size: 12px; line-height: 1.55; color: var(--muted); }
+.footnotes ol { margin: 0; padding-left: 18px; display: grid; gap: 8px; max-width: 860px; }
+.footnotes a { color: inherit; }
+footer { border-top: 1px solid var(--line); padding-block: 22px 30px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+
+@media (max-width: 860px) {
+  .player { grid-template-columns: minmax(0, 1fr); }
+  /* A scrolling strip clips what's drawn outside it, so give the selected chapter's shadow room inside. */
+  .chapters { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; scrollbar-width: none; padding: 8px 12px 20px; margin: -8px -12px -14px; }
+  .chapter { padding: 9px 12px; }
+  .chapter .ck, .chapter .progress { display: none; }
+  /* More chapters than fit: fade the edge so the strip reads as scrollable. */
+  .chapters { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); }
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .card, .card.wide { grid-column: span 1; }
+  .card:last-child { grid-column: 1 / -1; }
+  .card.wide .scene { aspect-ratio: 16 / 9; }
+  .card:last-child .scene { aspect-ratio: 2.4 / 1; }
+  .trust ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nav-links { display: none; }
+}
+@media (max-width: 600px) {
+  .hero h1 br { display: none; } /* wrap naturally instead of three short lines */
+  /* Phones: the glass gets a band of its own at the top, and the words rise into its lower half,
+     so the break stays in view above them without leaving an awkward gap. */
+  .hero { --film: clamp(380px, 112vw, 520px); padding: calc(var(--film) * .44) 14px 28px; background: #fbfbfd; }
+  .hero-film { inset: 0 0 auto 0; height: var(--film); }
+  .hero::before {
+    inset: 0 0 auto 0; height: var(--film);
+    background: linear-gradient(180deg, rgba(251,251,253,.2), rgba(251,251,253,0) 20%, rgba(251,251,253,0) 60%, #fbfbfd 100%);
+  }
+  .hero h1 { font-size: clamp(34px, 10vw, 44px); }
+  .hero-copy { background: rgba(251,251,253,.42); -webkit-backdrop-filter: blur(40px) saturate(1.3); backdrop-filter: blur(40px) saturate(1.3); padding: 20px 16px; gap: 14px; border-radius: 22px; }
+  .hero-copy .lede { font-size: 16px; }
+  .hero-wait .hero-copy { transform: translateY(90px) scale(.94); }
+  @keyframes hero-rise { 0% { opacity: 0; transform: translateY(90px) scale(.94); } 12% { opacity: 1; } 100% { opacity: 1; transform: none; } }
+  .showcase { margin-top: 0; }
+  .meta span::before { content: none; }
+  .meta { gap: 6px 16px; }
+  /* Tighter rhythm between sections. */
+  .why, .walk { padding-block: 56px 24px; }
+  .why { gap: 28px; }
+  .cards { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .card:last-child { grid-column: auto; }
+  .card:last-child .scene { aspect-ratio: 16 / 9; }
+  /* The three setup steps stack on a phone, so the longest one never overflows. */
+  .steps { flex-direction: column; gap: 6px; }
+  .steps i { width: 1.5px; height: 8px; }
+  .trust { margin-top: 24px; gap: 16px; }
+  .trust ul { grid-template-columns: minmax(0, 1fr); padding: 20px 18px; gap: 18px; }
+  .pricing { padding-block: 48px 24px; gap: 26px; }
+  .faq { padding-block: 52px 24px; }
+  .closing { padding-block: 72px 52px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; animation: none !important; }
+  html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="logo-box" x1="0.3" y1="0" x2="0.7" y2="1">
+    <stop offset="0" stop-color="#c9ced5"/><stop offset="0.3" stop-color="#b3b9c2"/><stop offset="0.55" stop-color="#9aa1ac"/><stop offset="0.8" stop-color="#aab0b9"/><stop offset="1" stop-color="#848c98"/>
+    </linearGradient>
+    <linearGradient id="logo-sheen" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff" stop-opacity="0.3"/><stop offset="0.22" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="logo-lip" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#6f7782"/><stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+    <linearGradient id="logo-tray" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#1c1f24"/><stop offset="1" stop-color="#353a42"/>
+    </linearGradient>
+    <linearGradient id="logo-wall" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#000000" stop-opacity="0.42"/><stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="logo-shade-hi" gradientUnits="userSpaceOnUse" x1="0" y1="208" x2="0" y2="318">
+    <stop offset="0" stop-color="#000000" stop-opacity="0.34"/><stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="logo-shade-lo" gradientUnits="userSpaceOnUse" x1="0" y1="574" x2="0" y2="684">
+    <stop offset="0" stop-color="#000000" stop-opacity="0.34"/><stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="logo-lit" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff" stop-opacity="0"/><stop offset="0.6" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#ffffff" stop-opacity="0.35"/>
+    </linearGradient>
+    <symbol id="github" viewBox="0 0 16 16"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></symbol>
+    <symbol id="apple" viewBox="0 0 16 16"><path fill="currentColor" d="M11.2 8.5c0-1.6 1.3-2.4 1.4-2.4-.8-1.1-2-1.3-2.4-1.3-1-.1-2 .6-2.5.6s-1.3-.6-2.2-.6c-1.1 0-2.2.7-2.8 1.7-1.2 2-.3 5.1.9 6.8.6.8 1.2 1.7 2.1 1.7.8 0 1.2-.5 2.2-.5s1.3.5 2.2.5c.9 0 1.5-.8 2-1.7.6-.9.9-1.8.9-1.9 0 0-1.8-.7-1.8-2.9zM9.6 3.6c.5-.6.8-1.3.7-2.1-.7 0-1.5.5-2 1.1-.4.5-.8 1.3-.7 2 .8.1 1.5-.4 2-1z"/></symbol>
+    <symbol id="logo" viewBox="64 64 896 896">
+      <!-- the box is the tile: a silver squircle -->
+      <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#logo-box)"/>
+      <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#logo-sheen)"/>
+      <rect x="68" y="68" width="888" height="888" rx="208" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="4"/>
+      <!-- the tray, pressed into the metal: its rim is shaded on top and lit below, and its dark walls are the dividers -->
+      <rect x="128" y="128" width="768" height="768" rx="148" fill="none" stroke="url(#logo-lip)" stroke-width="12"/>
+      <rect x="128" y="128" width="768" height="768" rx="148" fill="url(#logo-tray)"/>
+      <!-- three compartments: the layout LunchboxWM makes. Each is a bin: its far wall shows above its floor -->
+      <path d="M276 164 H438 A56 56 0 0 1 494 220 V804 A56 56 0 0 1 438 860 H276 A112 112 0 0 1 164 748 V276 A112 112 0 0 1 276 164 Z" fill="#c95a3c"/><path d="M276 164 H438 A56 56 0 0 1 494 220 V804 A56 56 0 0 1 438 860 H276 A112 112 0 0 1 164 748 V276 A112 112 0 0 1 276 164 Z" fill="url(#logo-wall)"/><path d="M276 208 H438 A42 42 0 0 1 480 250 V814 A42 42 0 0 1 438 856 H276 A98 98 0 0 1 178 758 V306 A98 98 0 0 1 276 208 Z" fill="#f57a5b"/><path d="M276 208 H438 A42 42 0 0 1 480 250 V814 A42 42 0 0 1 438 856 H276 A98 98 0 0 1 178 758 V306 A98 98 0 0 1 276 208 Z" fill="url(#logo-shade-hi)"/><path d="M276 164 H438 A56 56 0 0 1 494 220 V804 A56 56 0 0 1 438 860 H276 A112 112 0 0 1 164 748 V276 A112 112 0 0 1 276 164 Z" fill="none" stroke="url(#logo-lit)" stroke-width="4"/>
+      <path d="M586 164 H748 A112 112 0 0 1 860 276 V438 A56 56 0 0 1 804 494 H586 A56 56 0 0 1 530 438 V220 A56 56 0 0 1 586 164 Z" fill="#16a27a"/><path d="M586 164 H748 A112 112 0 0 1 860 276 V438 A56 56 0 0 1 804 494 H586 A56 56 0 0 1 530 438 V220 A56 56 0 0 1 586 164 Z" fill="url(#logo-wall)"/><path d="M586 208 H748 A98 98 0 0 1 846 306 V448 A42 42 0 0 1 804 490 H586 A42 42 0 0 1 544 448 V250 A42 42 0 0 1 586 208 Z" fill="#2bdea8"/><path d="M586 208 H748 A98 98 0 0 1 846 306 V448 A42 42 0 0 1 804 490 H586 A42 42 0 0 1 544 448 V250 A42 42 0 0 1 586 208 Z" fill="url(#logo-shade-hi)"/><path d="M586 164 H748 A112 112 0 0 1 860 276 V438 A56 56 0 0 1 804 494 H586 A56 56 0 0 1 530 438 V220 A56 56 0 0 1 586 164 Z" fill="none" stroke="url(#logo-lit)" stroke-width="4"/>
+      <path d="M586 530 H804 A56 56 0 0 1 860 586 V748 A112 112 0 0 1 748 860 H586 A56 56 0 0 1 530 804 V586 A56 56 0 0 1 586 530 Z" fill="#cc8d14"/><path d="M586 530 H804 A56 56 0 0 1 860 586 V748 A112 112 0 0 1 748 860 H586 A56 56 0 0 1 530 804 V586 A56 56 0 0 1 586 530 Z" fill="url(#logo-wall)"/><path d="M586 574 H804 A42 42 0 0 1 846 616 V758 A98 98 0 0 1 748 856 H586 A42 42 0 0 1 544 814 V616 A42 42 0 0 1 586 574 Z" fill="#fabb3d"/><path d="M586 574 H804 A42 42 0 0 1 846 616 V758 A98 98 0 0 1 748 856 H586 A42 42 0 0 1 544 814 V616 A42 42 0 0 1 586 574 Z" fill="url(#logo-shade-lo)"/><path d="M586 530 H804 A56 56 0 0 1 860 586 V748 A112 112 0 0 1 748 860 H586 A56 56 0 0 1 530 804 V586 A56 56 0 0 1 586 530 Z" fill="none" stroke="url(#logo-lit)" stroke-width="4"/>
+      <!-- the box's outer edge -->
+      <rect x="65.5" y="65.5" width="893" height="893" rx="210.5" fill="none" stroke="#4a525d" stroke-opacity="0.55" stroke-width="3"/>
+    </symbol>
+  </defs>
+</svg>
+
+<nav class="nav" id="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top"><svg><use href="#logo"/></svg><span>Lunchbox<span class="wm">WM</span></span></a>
+    <div class="nav-links"><a href="#why">Features</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></div>
+    <a class="btn dark small" href="#pricing" data-checkout>Buy · $4.99</a>
+  </div>
+</nav>
+
+<main class="wrap" id="top">
+  <script>if (!matchMedia("(prefers-reduced-motion: reduce)").matches) document.documentElement.classList.add("hero-wait");</script>
+  <section class="hero" id="hero">
+    <video class="hero-film" id="hero-film" muted playsinline preload="auto" poster="media/break-start.jpg" aria-hidden="true">
+      <source src="media/break.webm" type="video/webm">
+      <source src="media/break.mp4" type="video/mp4">
+    </video>
+    <div class="hero-copy">
+    <h1>Break free from the <br><span class="bad">pile of windows</span>.</h1>
+    <p class="lede">Lunchbox is the ultimate window manager for Mac. Every window opens neatly based on what it is. No account, no config files, no complexity.</p>
+    <div class="actions">
+      <a class="btn dark" href="#pricing" data-checkout><svg><use href="#apple"/></svg>Download for Mac<span class="sep"></span><span class="price">$4.99</span></a>
+      <a class="btn" href="#how">See how it works</a>
+      <a class="btn" href="https://github.com/crisp-toast/lunchbox"><svg><use href="#github"/></svg>Source on GitHub</a>
+    </div>
+    <p class="owned">Already own Lunchbox? <a href="download/LunchboxWM.dmg">Download it</a> · <a href="recover.html">Find my license</a></p>
+    <div class="meta"><span>No subscription, no account</span><span>One-time purchase, lifetime updates<sup class="fn"><a href="#fn-lifetime" aria-label="Footnote 1">1</a></sup></span><span>macOS 14 or later, Apple silicon<sup class="fn"><a href="#fn-silicon" aria-label="Footnote 2">2</a></sup></span></div>
+    </div>
+  </section>
+
+  <section class="showcase" aria-label="Lunchbox in action">
+    <div class="display" id="display">
+      <video id="reel" muted loop playsinline preload="auto" poster="media/hero.jpg?v=1.2.3" aria-label="Screen recording: three windows open and tile, the third beneath the second, then move, resize, focus, hide and close with Lunchbox's shortcuts">
+        <!-- ?v= changes with each new recording, so a cached old take never plays under the new captions. -->
+        <source src="media/hero.webm?v=1.2.3" type="video/webm">
+        <source src="media/hero.mp4?v=1.2.3" type="video/mp4">
+      </video>
+      <button class="toggle" id="reel-toggle" type="button" aria-label="Pause the recording"><svg viewBox="0 0 16 16"><path id="reel-icon" d="M5 3v10M11 3v10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="live" id="live" aria-live="off"><div class="keys" id="live-keys"></div><p class="cap" id="live-cap">Three windows, tiled the moment they opened.</p></div>
+    <p class="real">A real, unedited screen recording of Lunchbox on macOS. The colored windows stand in for your apps.</p>
+  </section>
+
+  <section class="why" id="why">
+    <header>
+      <span class="eyebrow">Why Lunchbox</span>
+      <h2>No config file. No SIP.<br>No surprises.</h2>
+      <p class="lede">Free tiling window managers are made for tinkering: a config file to write, rules for apps that misbehave, sometimes System Integrity Protection to turn off. Lunchbox already knows how Mac apps behave.</p>
+    </header>
+    <div class="cards">
+      <article class="card">
+        <div class="scene" aria-hidden="true">
+          <span class="sw under" style="left:4%;top:7%;width:44%;height:86%"></span><span class="sw under" style="left:52%;top:7%;width:44%;height:86%"></span>
+          <span class="sw dlg"><i></i><i></i><em></em><b></b></span>
+        </div>
+        <h3>Dialogs float, centered</h3>
+        <p>Open and Save panels, alerts and password prompts sit in the middle of their screen instead of splitting your tiles apart. So do About boxes and progress windows.</p>
+      </article>
+      <article class="card">
+        <div class="scene" aria-hidden="true">
+          <span class="slot" style="left:4%;top:5%;width:28%;height:90%"></span>
+          <span class="phone" style="left:8.5%;top:9%;width:19%;height:82%"></span>
+          <span class="sw" style="left:36%;top:7%;width:60%;height:86%"></span>
+        </div>
+        <h3>Fixed-size apps tile at their own size</h3>
+        <p>Simulator, Calculator and System Settings sit in a column sized to fit them, and the window beside them gets the rest. No list to keep: it learns each window's size the first time it places it.</p>
+      </article>
+      <article class="card">
+        <div class="scene" aria-hidden="true">
+          <span class="sw" style="left:4%;top:7%;width:44%;height:86%"></span><span class="sw" style="left:52%;top:7%;width:44%;height:40.5%"></span>
+          <span class="ph" style="left:52%;top:52.5%;width:44%;height:40.5%"></span>
+        </div>
+        <h3>New windows land in their tile</h3>
+        <p>A new window goes straight to its spot as it opens, not wherever its app put it. Open an app from Summon or the Dock and a placeholder holds its place while it starts.</p>
+      </article>
+      <article class="card wide">
+        <div class="scene" aria-hidden="true">
+          <span class="sw under" style="left:4%;top:7%;width:44%;height:86%"></span><span class="sw under" style="left:52%;top:7%;width:44%;height:86%"></span>
+          <span class="badge">Workspace 2<span class="dots"><span></span><span class="on"></span><span></span></span></span>
+          <span class="keys2"><span class="kc">Left ⌘</span><span class="plus">+</span><span class="kc">2</span></span>
+        </div>
+        <h3>Workspaces switch instantly</h3>
+        <p>Left ⌘ and a number takes you there, with no Mission Control slide. Add ⇧ and the window comes along. Three to start, up to nine.</p>
+      </article>
+      <article class="card wide">
+        <div class="scene" aria-hidden="true">
+          <div class="steps"><span><b>1</b>Install</span><i></i><span><b>2</b>Allow Accessibility</span><i></i><span><b>3</b>Practice</span></div>
+        </div>
+        <h3>Set up in about a minute</h3>
+        <p>Install it, allow Accessibility so it can move your windows, then try every shortcut on a practice screen that can't touch your real windows. Nothing to turn off in macOS, no file to edit.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="walk" id="how">
+    <header>
+      <span class="eyebrow">How it works</span>
+      <h2>Learn it before your<br>coffee cools.</h2>
+      <p class="lede">Left ⌘ goes somewhere. Add ⇧ and it moves something. Right ⌘ keeps its usual job, and every shortcut can be changed.</p>
+    </header>
+    <div class="player">
+      <div class="chapters" id="chapters" role="tablist" aria-label="Walkthroughs"></div>
+      <div class="stage">
+        <div class="mac" id="walk-mac"></div>
+        <div class="howto">
+          <div class="keys" id="keys" aria-live="polite"></div>
+          <p class="cap" id="caption"></p>
+          <div class="ctls">
+            <button class="ctl" id="prev" type="button" aria-label="Previous step"><svg viewBox="0 0 16 16"><path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <button class="ctl" id="play" type="button" aria-label="Pause"><svg viewBox="0 0 16 16"><path id="play-icon" d="M5 3v10M11 3v10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+            <button class="ctl" id="next" type="button" aria-label="Next step"><svg viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="trust" aria-label="What you can count on">
+    <span class="eyebrow">The fine print, up front</span>
+    <ul>
+      <li><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.8-2.6 2.7-4 5-4s4.2 1.4 5 4"/><path d="M2.5 2.5l11 11"/></svg><b>No account</b><span>Nothing to sign up for or sign in to. Your license is a key you get the moment you pay.</span></li>
+      <li><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/><path d="M2.5 2.5l11 11"/></svg><b>No tracking</b><span>The app sends no analytics, crash reports or keystrokes, and this site has no trackers. <a href="privacy.html">Privacy</a></span></li>
+      <li><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="8" r="2.8"/><path d="M7.8 8h6.7M12 8v2.5M14.5 8v2"/></svg><b>License works offline</b><span>It's checked on your Mac, so tiling never waits on a server.</span></li>
+      <li><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8l5 2v4.1c0 3.1-2.1 5.4-5 6.3-2.9-.9-5-3.2-5-6.3V3.8z"/></svg><b>Asks only when it needs to</b><span>Accessibility, to tile. Screen Recording, the first time the Focus Shelf appears, for its live previews. Browser control, the first time Summon sends a web search to your browser. No folder prompts: Summon doesn't search files.</span></li>
+      <li><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4.5L3 7.5l3 3"/><path d="M3.5 7.5H10a3 3 0 010 6H8"/></svg><b>14-day refunds</b><span>Full refund within 14 days of buying, no questions asked. <a href="refunds.html">Refunds</a></span></li>
+      <li><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2"/></svg><b>Made by Sentient Donut LLC</b><span>In Austin, Texas. Questions go to <a href="mailto:support@sentientdonut.com">support@sentientdonut.com</a>.</span></li>
+    </ul>
+  </section>
+
+  <section class="pricing" id="pricing">
+    <div style="display:grid;gap:14px">
+      <span class="eyebrow">Pricing</span>
+      <h2>One price.<br>Every version after it.</h2>
+      <p class="lede"><strong>No subscription.</strong> No account. Pay $4.99 once, and every Lunchbox we ever ship is yours.</p>
+    </div>
+    <div class="price-card">
+      <div class="price-top"><svg><use href="#logo"/></svg><div><b>Lunchbox<span class="wm">WM</span></b><small>For your Mac, for good</small></div></div>
+      <div class="amount"><strong>$4.99</strong><sup class="fn"><a href="#fn-price" aria-label="Footnote 3">3</a></sup><span>USD, one-time</span></div>
+      <div class="pills"><span class="lifetime">No subscription, ever</span><span class="lifetime">Lifetime updates included<sup class="fn"><a href="#fn-lifetime" aria-label="Footnote 1">1</a></sup></span></div>
+      <ul class="checks">
+        <li>Automatic tiling that knows dialogs and fixed-size apps</li>
+        <li>Focus, Tidy, Resize and instant Workspaces (three to start, up to nine)</li>
+        <li>Summon (⇧ then Space) for apps, open windows, the web and new windows</li>
+        <li>Every shortcut rebindable, with Restore All Defaults one click away</li>
+        <li>The Cheat Sheet: every shortcut, searchable in plain words</li>
+        <li>Multi-display support, or main display only</li>
+        <li>All future updates, free, forever</li>
+      </ul>
+      <div class="buy-options">
+        <form class="buy-form" id="buy-form" method="post" action="api/checkout">
+          <input type="hidden" name="attempt" id="attempt" value="">
+          <button class="btn dark" type="submit" id="buy-button"><span>Buy Lunchbox · $4.99</span></button>
+        </form>
+        <p class="buy-note" id="buy-note" aria-live="polite"></p>
+        <a class="btn" href="https://github.com/crisp-toast/lunchbox"><svg><use href="#github"/></svg>Source on GitHub</a>
+      </div>
+      <p class="fine">Pay once, then download it and enter your license. No subscription. Refunds within 14 days, no questions.</p>
+      <p class="fine">macOS 14 Sonoma or later · Apple silicon<sup class="fn"><a href="#fn-silicon" aria-label="Footnote 2">2</a></sup></p>
+      <p class="fine">Already bought it? <a href="download/LunchboxWM.dmg">Download Lunchbox</a> · <a href="recover.html">Get your license again</a></p>
+      <p class="fine">Rather build it yourself? Lunchbox is open source under the <a href="https://github.com/crisp-toast/lunchbox/blob/main/LICENSE">MIT License</a>, free to build, change and share. Buying gets the signed copy that updates itself, and keeps Lunchbox going.</p>
+    </div>
+  </section>
+
+  <section class="faq" id="faq">
+    <h2>Frequent Questions</h2>
+    <div>
+      <details><summary>Why pay when there are free tiling window managers?</summary><p>Free tilers are great if you enjoy configuring them. Lunchbox is for everyone else: dialogs, fixed-size apps and new windows are handled from the start, Workspaces are instant without turning anything off in macOS, and there's no config file. And if it isn't for you, you get your $4.99 back within 14 days.</p></details>
+      <details><summary>Is there a subscription?</summary><p>No, and there never will be. You pay $4.99 once and Lunchbox is yours, including every future version. Nothing renews and you're never charged again.</p></details>
+      <details><summary>Is there a free trial?</summary><p>No. Lunchbox is $4.99, paid once, up front. The recording and the walkthrough above show exactly how it works, and if it isn't right for you, you get a full refund within 14 days, no questions asked.</p></details>
+      <details><summary><span>What does Lunchbox need permission for?</span></summary><p><strong>Accessibility</strong> is required: it's how Lunchbox moves and resizes other apps' windows and hears its shortcuts. <strong>Screen Recording</strong> is asked the first time the Focus Shelf appears, so the Shelf can show live previews of your windows instead of app icons. <strong>Browser control</strong> is asked the first time Summon sends a web search to Safari, Chrome, Arc, Edge, Brave or Vivaldi, so the page opens as a tab in the Workspace you're in; say no and links open the usual way. There are no folder prompts: Summon doesn't search your files.</p></details>
+      <details><summary>Will it take over my keyboard?</summary><p>Only a handful of combinations, all with the left ⌘ key, plus ⇧ then Space for Summon (tapped one after the other, so typing a capital and a space never opens it). Right ⌘ keeps doing what it always did: ⌘← still jumps to the start of a line, and ⌘1 still picks a browser tab.</p></details>
+      <details><summary>Can I change the shortcuts?</summary><p>Yes, every one. Open Keyboard Shortcuts from the menu bar, click a command and press the keys you want. Lunchbox turns down combinations that would get in the way of typing or that another command already uses, and Restore All Defaults puts everything back. Prefer Vim keys? One click switches the arrows to H J K L, during setup or in Keyboard Shortcuts.</p></details>
+      <details><summary>How do I set it up?</summary><p>Lunchbox walks you through it the first time it opens: allow Accessibility, then try every shortcut on a practice screen that can't touch your real windows. It takes about a minute, and Welcome &amp; Setup in the menu bar runs it again.</p></details>
+      <details><summary>How do Workspaces work?</summary><p>Left ⌘ and a number goes to that Workspace instantly: ⌘1, ⌘2, ⌘3. Add ⇧ (⌘⇧2) and the focused window comes with you. You start with three and can add up to nine from the menu bar. Hide (⌘⇧H) tucks a window out of sight, still open; Summon brings it back to wherever you are. Right ⌘ and a number still reach the app in front, and with three Workspaces ⌘⇧4 and ⌘⇧5 are still the Mac's screenshot keys.</p></details>
+      <details><summary>Does it work with more than one display?</summary><p>Yes. Each display has its own layout and focus crosses between them at the edges. If a second display is a dummy plug or you only want your main screen tiled, turn off Use All Displays in Settings.</p></details>
+      <details><summary>Something isn't working. How do I get help?</summary><p>Write to <a href="mailto:support@sentientdonut.com">support@sentientdonut.com</a>. It helps to choose Settings › Copy Diagnostics in Lunchbox's menu first and paste what it copies into your email: your Lunchbox and macOS versions, your displays, and which apps' windows are in each Workspace. It never includes window titles, file names or your license key.</p></details>
+      <details><summary>What does "lifetime updates" mean?</summary><p>You buy Lunchbox once and every future version is included. No upgrade fees, no subscription, no catch.</p></details>
+    </div>
+  </section>
+
+  <section class="closing">
+    <svg class="icon"><use href="#logo"/></svg>
+    <h2>Go on, open another window.</h2>
+    <p class="lede">It already knows where to go.</p>
+    <div class="actions"><a class="btn dark" href="#pricing" data-checkout>Buy once · $4.99</a><a class="btn" href="#how">See how it works</a></div>
+    <p class="fine">One-time purchase · No subscription · Lifetime updates</p>
+  </section>
+
+  <section class="footnotes" id="footnotes" aria-label="Footnotes">
+    <ol>
+      <li id="fn-lifetime">Every future version of Lunchbox we release is included at no extra charge. See the <a href="terms.html">Terms of Sale</a>.</li>
+      <li id="fn-silicon">Requires a Mac with Apple silicon (M1 or later) and macOS 14 Sonoma or later. Lunchbox doesn't run on Intel-based Macs.</li>
+      <li id="fn-price">Price in US dollars, plus any sales tax or VAT we're required to charge, shown at checkout before you pay.</li>
+    </ol>
+  </section>
+
+  <footer>
+    <a class="brand" href="#top" style="font-size:15px"><svg style="width:22px;height:22px"><use href="#logo"/></svg><span>Lunchbox<span class="wm">WM</span></span></a>
+    <span>It’s time to stop losing things in a pile of windows.</span>
+    <span class="foot-links"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="refunds.html">Refunds</a><a href="recover.html">Lost license</a><a href="https://github.com/crisp-toast/lunchbox">GitHub</a><a href="mailto:support@sentientdonut.com">Contact</a></span>
+    <span>© 2026 Sentient Donut LLC</span>
+  </footer>
+</main>
+
+<script>
+
+(() => {
+  const nav = document.getElementById("nav");
+  const onScroll = () => nav.classList.toggle("scrolled", scrollY > 24);
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  // Buy: one checkout per visit. The attempt id makes a double click (or a resubmit) reuse
+  // the same Stripe Checkout Session, and the button says what's happening while it opens.
+  const buyForm = document.getElementById("buy-form"), buyButton = document.getElementById("buy-button");
+  const buyLabel = buyButton.querySelector("span"), buyNote = document.getElementById("buy-note");
+  document.getElementById("attempt").value = (crypto.randomUUID && crypto.randomUUID()) || Date.now() + "-" + Math.random().toString(16).slice(2);
+  const storeLive = /(^|\.)lunchboxwm\.com$/.test(location.hostname);
+  buyForm.addEventListener("submit", (e) => {
+    if (!storeLive) { e.preventDefault(); buyNote.textContent = "Checkout opens at launch. Thanks for your patience."; return; }
+    if (buyButton.disabled) { e.preventDefault(); return; }
+    buyButton.disabled = true;
+    buyLabel.textContent = "Opening secure checkout…";
+  });
+  // The other Buy buttons (the header's, Download for Mac, the closing one) open checkout
+  // straight away too, through the same form; without JavaScript they lead to Pricing.
+  const quickBuys = [...document.querySelectorAll("[data-checkout]")];
+  for (const link of quickBuys) {
+    link.dataset.label = link.innerHTML;
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (!storeLive) { document.getElementById("pricing").scrollIntoView({ behavior: "smooth" }); buyNote.textContent = "Checkout opens at launch. Thanks for your patience."; return; }
+      if (buyButton.disabled) return;
+      link.textContent = "Opening secure checkout…";
+      link.setAttribute("aria-busy", "true");
+      buyButton.click();
+    });
+  }
+  // Back from Stripe with the browser's Back button: the buttons work again.
+  addEventListener("pageshow", () => {
+    buyButton.disabled = false; buyLabel.innerHTML = 'Buy Lunchbox · $4.99';
+    for (const link of quickBuys) { link.innerHTML = link.dataset.label; link.removeAttribute("aria-busy"); }
+  });
+  if (new URLSearchParams(location.search).get("checkout") === "unavailable") {
+    buyNote.textContent = "Checkout didn't open, and you weren't charged. Please try again in a minute.";
+  }
+
+  // Keycaps joined by +, or by "then" for a key you tap after another (⇧ then Space).
+  const keyHTML = (keys) => keys.map((k, i) => {
+    if (k === "then") return '<span class="plus">then</span>';
+    const join = i > 0 && keys[i - 1] !== "then" ? '<span class="plus">+</span>' : "";
+    return join + `<span class="kc big">${k}</span>`;
+  }).join("");
+
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---------- the hero: glass breaking once, then holding on the shards mid-fall ----------
+  const film = document.getElementById("hero-film");
+  const root = document.documentElement;
+  // The words punch up through the pile on the frame the glass breaks (0.77 s in).
+  const HIT = 0.74;
+  const rise = () => { if (!root.classList.contains("hero-wait")) return; root.classList.remove("hero-wait"); root.classList.add("hero-rise"); };
+  const watchHit = () => { if (film.currentTime >= HIT) rise(); else requestAnimationFrame(watchHit); };
+  if (reduce) {
+    film.poster = "media/break-end.jpg";
+  } else {
+    // The clip opens on 0.77 s of still glass: start 0.3 s in, so the break comes a little sooner.
+    const START = 0.3;
+    const skipStill = () => { try { if (film.currentTime < START) film.currentTime = START; } catch (e) {} };
+    if (film.readyState >= 1) skipStill(); else film.addEventListener("loadedmetadata", skipStill, { once: true });
+    film.addEventListener("playing", () => requestAnimationFrame(watchHit), { once: true });
+    film.addEventListener("timeupdate", () => { if (film.currentTime >= HIT) rise(); });
+    film.play().catch(() => { film.poster = "media/break-end.jpg"; rise(); });
+    setTimeout(rise, 3300); // if the video never starts, show the words anyway
+  }
+
+  // ---------- the real recording ----------
+  // Times are seconds into hero.webm: what's happening, and when each key went down.
+  // Each beat starts a little before what it shows, so its keys have swapped in (150 ms)
+  // by the time they press.
+  const BEATS = [
+    { t: 0, keys: [], cap: "An empty Workspace on a real Mac." },
+    { t: 0.93, keys: [], cap: "Open a window. It sits centered at 16:10, or fills a laptop's screen." },
+    { t: 2.7, keys: [], cap: "Open another and they share the screen." },
+    { t: 4.52, keys: [], cap: "A third goes beneath the second." },
+    { t: 6.62, keys: ["⌘", "←"], cap: "Move focus with ⌘ and an arrow." },
+    { t: 7.81, keys: ["⇧", "⌘", "→"], cap: "Add ⇧ to carry the window. It stacks, then passes." },
+    { t: 10.71, keys: ["⇧", "⌘", "+"], cap: "Give it more room." },
+    { t: 12.62, keys: ["⇧", "⌘", "0"], cap: "Tidy evens everything out." },
+    { t: 14.01, keys: ["⇧", "⌘", "F"], cap: "Focus. The others wait on the Shelf." },
+    { t: 16.29, keys: ["⇧", "⌘", "F"], cap: "Press it again and they come back." },
+    { t: 17.72, keys: ["⇧", "⌘", "H"], cap: "Hide tucks a window out of sight." },
+    { t: 19.61, keys: ["⇧", "⌘", "⌫"], cap: "Close it, and the rest re-tile." },
+  ];
+  const PRESSES = [6.84, 8.03, 9.53, 10.93, 11.73, 12.84, 14.23, 16.51, 17.94, 19.83, 21.13];
+
+  const video = document.getElementById("reel");
+  const display = document.getElementById("display");
+  const live = document.getElementById("live");
+  const liveKeys = document.getElementById("live-keys");
+  const liveCap = document.getElementById("live-cap");
+  const toggle = document.getElementById("reel-toggle");
+  const reelIcon = document.getElementById("reel-icon");
+  let beatAt = -1, lastT = 0, userPaused = reduce, reelVisible = false;
+
+  function pressCaps() {
+    const caps = liveKeys.querySelectorAll(".kc");
+    caps.forEach((k) => k.classList.add("press"));
+    setTimeout(() => caps.forEach((k) => k.classList.remove("press")), 240);
+  }
+  function syncCaptions() {
+    const t = video.currentTime;
+    let i = 0;
+    while (i + 1 < BEATS.length && BEATS[i + 1].t <= t) i++;
+    let swapped = false;
+    if (i !== beatAt) {
+      beatAt = i;
+      swapped = true;
+      live.classList.add("swap");
+      setTimeout(() => {
+        liveKeys.innerHTML = keyHTML(BEATS[i].keys);
+        liveCap.textContent = BEATS[i].cap;
+        live.classList.remove("swap");
+      }, 150);
+    }
+    // A key press between the last frame and this one (the loop wraps from the end to 0).
+    const crossed = PRESSES.some((p) => lastT <= t ? p > lastT && p <= t : p > lastT || p <= t);
+    if (crossed) setTimeout(pressCaps, swapped ? 190 : 0);
+    lastT = t;
+  }
+  function frame() {
+    if (video.paused) return;
+    syncCaptions();
+    requestAnimationFrame(frame);
+  }
+  function updatePlay() {
+    if (reelVisible && !userPaused) video.play().catch(() => display.classList.add("paused"));
+    else video.pause();
+  }
+  video.addEventListener("play", () => {
+    display.classList.remove("paused");
+    toggle.setAttribute("aria-label", "Pause the recording");
+    reelIcon.setAttribute("d", "M5 3v10M11 3v10");
+    lastT = video.currentTime;
+    requestAnimationFrame(frame);
+  });
+  video.addEventListener("pause", () => {
+    display.classList.add("paused");
+    toggle.setAttribute("aria-label", "Play the recording");
+    reelIcon.setAttribute("d", "M5 3l8 5-8 5z");
+  });
+  // Animation frames stop in a background tab; the video's own clock keeps captions honest.
+  video.addEventListener("timeupdate", syncCaptions);
+  // The first play opens on the eye-catching part, the third window settled beneath the
+  // second just before focus moves (the poster is this frame); after that the loop starts
+  // from the empty desktop as usual.
+  const START = 5.5;
+  const startAtHook = () => { try { video.currentTime = START; } catch (e) {} };
+  if (video.readyState >= 1) startAtHook(); else video.addEventListener("loadedmetadata", startAtHook, { once: true });
+  video.addEventListener("seeked", () => { lastT = video.currentTime; syncCaptions(); });
+  toggle.addEventListener("click", () => { userPaused = !video.paused; updatePlay(); });
+  new IntersectionObserver(([e]) => { reelVisible = e.isIntersecting; updatePlay(); }, { threshold: 0.25 }).observe(display);
+  if (reduce) { display.classList.add("paused"); reelIcon.setAttribute("d", "M5 3l8 5-8 5z"); toggle.setAttribute("aria-label", "Play the recording"); }
+
+  // ---------- the mini Mac ----------
+  const APPS = {
+    A: { name: "Notes", kind: "notes" },
+    B: { name: "Browser", kind: "browser" },
+    C: { name: "Terminal", kind: "term" },
+    D: { name: "Finder", kind: "finder" },
+    E: { name: "Music", kind: "music" },
+    F: { name: "Browser", kind: "browser" },
+  };
+  const body = (kind) => ({
+    notes: '<div class="ln h"></div><div class="ln"></div><div class="ln" style="width:85%"></div><div class="ln"></div><div class="ln" style="width:60%"></div>',
+    browser: '<div class="block"></div><div class="ln b" style="width:70%"></div><div class="ln"></div><div class="ln" style="width:80%"></div>',
+    term: '<div class="ln g"></div><div class="ln" style="width:75%"></div><div class="ln" style="width:55%"></div><div class="ln g" style="width:20%"></div><div class="ln" style="width:65%"></div>',
+    finder: '<div class="grid"><span class="fold"></span><span class="fold"></span><span class="fold"></span><span class="fold"></span><span class="fold"></span><span class="fold"></span><span class="fold"></span><span class="fold"></span></div>',
+    music: '<div class="art"><span></span><span></span><span></span></div><div class="ln" style="width:60%"></div><div class="ln" style="width:40%"></div>',
+  })[kind];
+
+  function buildMac(root) {
+    root.innerHTML = `
+      <div class="menubar"><span>Finder</span><span class="item">File</span><span class="item">Edit</span><span class="item">View</span><span class="grow"></span><span class="spaces"><span class="glyph"></span><b class="space-num">1</b></span><span class="item">9:41</span></div>
+      <div class="desk">
+        ${Object.entries(APPS).map(([id, a]) => `<div class="win gone ${a.kind}" data-id="${id}"><div class="bar"><i></i><i></i><i></i><span>${a.name}</span></div><div class="content">${body(a.kind)}</div></div>`).join("")}
+        <div class="panel launcher" hidden></div>
+        <div class="panel help" hidden></div>
+      </div>`;
+    const wins = {};
+    for (const el of root.querySelectorAll(".win")) wins[el.dataset.id] = el;
+    return {
+      root, wins,
+      num: root.querySelector(".space-num"),
+      launcher: root.querySelector(".launcher"),
+      help: root.querySelector(".help"),
+    };
+  }
+
+  // Tile rectangles, in % of the desktop: [x, y, w, h]
+  const R = {
+    single: [20, 10, 60, 80],
+    halfL: [1.5, 2, 47.75, 96], halfR: [50.75, 2, 47.75, 96],
+    c1: [1.5, 2, 31.33, 96], c2: [34.33, 2, 31.33, 96], c3: [67.17, 2, 31.33, 96],
+    c1t: [1.5, 2, 31.33, 47.25], c1b: [1.5, 50.75, 31.33, 47.25],
+    c2t: [34.33, 2, 31.33, 47.25], c2b: [34.33, 50.75, 31.33, 47.25],
+    c3t: [67.17, 2, 31.33, 47.25], c3b: [67.17, 50.75, 31.33, 47.25],
+    f1: [1.5, 2, 23.13, 96], f2: [26.13, 2, 23.13, 96], f3: [50.75, 2, 23.13, 96], f4: [75.38, 2, 23.13, 96],
+    s1: [3, 14, 16, 15], s2: [3, 36, 16, 15], s3: [3, 58, 16, 15],
+    gTL: [1.5, 2, 47.75, 47.25], gBL: [1.5, 50.75, 47.75, 47.25], gTR: [50.75, 2, 47.75, 47.25], gBR: [50.75, 50.75, 47.75, 47.25],
+  };
+  // The fourth window makes a 2×2 grid: two columns of two.
+  const four = { A: R.gTL, B: R.gBL, C: R.gTR, D: R.gBR };
+  const shelf = (r) => ({ r, shelf: true });
+  const away = (r) => ({ r, away: true });
+
+  function apply(mac, step) {
+    for (const [id, el] of Object.entries(mac.wins)) {
+      let v = step.win[id];
+      const spec = Array.isArray(v) ? { r: v } : v;
+      el.classList.toggle("gone", !spec);
+      el.classList.toggle("shelved", !!(spec && spec.shelf));
+      el.classList.toggle("away", !!(spec && spec.away));
+      el.classList.toggle("focused", id === step.focus && !!spec && !spec.away);
+      if (spec) {
+        const [x, y, w, h] = spec.r;
+        el.style.left = x + "%"; el.style.top = y + "%"; el.style.width = w + "%"; el.style.height = h + "%";
+      }
+    }
+    mac.num.textContent = step.space || 1;
+    mac.root.classList.toggle("dim", (step.space || 1) !== 1);
+    const L = step.launcher;
+    mac.launcher.hidden = !L;
+    if (L) {
+      const rows = (L.rows || []).map((r, i) => `<div class="row ${i === (L.sel ?? 0) ? "sel" : ""}"><span class="ic" style="${r.ic || ""}"></span><span class="t">${r.t}</span><span class="mini-kc ret">↩</span><span class="s">${r.s}</span>${r.sub ? `<div class="sub"><span>＋ ${r.sub}</span><span class="mini-kc">⇧↩</span></div>` : ""}</div>`).join("");
+      mac.launcher.innerHTML = `<div class="q">${L.q ? L.q : '<span class="hint">Summon an app, window or website</span>'}<span class="caret"></span></div>${rows}`;
+    }
+    const H = step.help;
+    mac.help.hidden = !H;
+    if (H) {
+      const all = [
+        ["WINDOWS", [["Left ⌘", "←→"], "Focus the next window", "select switch"], [["⇧ Left ⌘", "←→"], "Move the window", "arrange swap"], [["⇧ Left ⌘", "F"], "Focus", "maximize fullscreen center"], [["⇧ Left ⌘", "0"], "Tidy", "reset even balance"]],
+        ["WORKSPACES", [["Left ⌘", "1"], "Go to Workspace 1", "desktop space switch"], [["⇧ Left ⌘", "2"], "Move the window to Workspace 2", "send desktop space"], [["⇧ Left ⌘", "H"], "Hide the window, still open", "stash tuck minimize away"]],
+        ["SUMMON", [["⇧ then", "Space"], "Summon an app, window or website", "launcher open search spotlight"]],
+      ];
+      const q = (H.q || "").toLowerCase();
+      let html = `<div class="q">${H.q || '<span class="hint">Search shortcuts</span>'}<span class="caret"></span></div>`;
+      for (const [group, ...rows] of all) {
+        const shown = rows.filter(([k, t, words]) => !q || (k.join(" ") + " " + t + " " + words).toLowerCase().includes(q));
+        if (!shown.length) continue;
+        html += `<div class="help-group">${group}</div>` + shown.map(([k, t]) => `<div class="help-row"><span class="k">${k.map((x) => `<span class="mini-kc">${x}</span>`).join("")}</span><span>${t}</span></div>`).join("");
+      }
+      mac.help.innerHTML = html;
+    }
+  }
+
+  const browserRows = [
+    { t: "Browser", s: "Go to its window", sub: "New Browser window" },
+    { t: "Browser — Recipes", s: "Browser · Workspace 2" },
+  ];
+  const notesRows = [
+    { t: "Notes", s: "Open", ic: "background:linear-gradient(135deg,#ffe58a,#f5c542)" },
+    { t: "Notes — Groceries", s: "Notes · Workspace 2", ic: "background:linear-gradient(135deg,#ffe58a,#f5c542)" },
+  ];
+  const webRows = [
+    { t: "Search the web for “best desk lamp”", s: "Google, in your browser", ic: "background:linear-gradient(135deg,#7aa6ff,#2f6bff)" },
+  ];
+
+  // Each chapter follows what LunchboxWM does with today's default shortcuts (README.md).
+  const CHAPTERS = [
+    { title: "Open with Summon", hint: "⇧ then Space", steps: [
+      { win: {}, keys: [], cap: "Open anything from the keyboard with Summon." },
+      { win: {}, keys: ["⇧", "then", "Space"], launcher: { q: "", rows: [] }, cap: "Tap ⇧, then Space, and Summon is there instantly." },
+      { win: {}, keys: ["N", "O", "T"], launcher: { q: "not", rows: notesRows, sel: 0 }, cap: "Type a few letters. Apps come first, then open windows, then the web." },
+      { win: { A: R.single }, focus: "A", keys: ["↩"], cap: "↩ opens it, already tiled and focused." },
+    ]},
+    { title: "It tiles itself", hint: "just open windows", steps: [
+      { win: { A: R.single }, focus: "A", keys: [], cap: "One window sits centered at a calm 16:10. On a laptop, it gets the whole screen." },
+      { win: { A: R.halfL, B: R.halfR }, focus: "B", keys: [], cap: "Open a second and they share the screen." },
+      { win: { A: R.halfL, B: R.gTR, C: R.gBR }, focus: "C", keys: [], cap: "A third goes beneath the second. The first keeps its half." },
+      { win: { A: R.gTL, D: R.gBL, B: R.gTR, C: R.gBR }, focus: "D", keys: [], cap: "A fourth goes beneath the first: a 2×2 grid, and nothing crossed the screen." },
+    ]},
+    { title: "Move focus", hint: "left ⌘ + arrows", steps: [
+      { win: four, focus: "A", keys: [], cap: "Hold the left ⌘ key and point with the arrows." },
+      { win: four, focus: "C", keys: ["Left ⌘", "→"], cap: "Focus jumps to the window on the right." },
+      { win: four, focus: "D", keys: ["Left ⌘", "↓"], cap: "Down to the one below. Right ⌘ still moves your text cursor." },
+    ]},
+    { title: "Move windows", hint: "⇧ + left ⌘ + arrows", steps: [
+      { win: four, focus: "D", keys: [], cap: "Add ⇧ to carry the focused window with you." },
+      { win: { A: R.c1t, B: R.c1b, D: R.c2, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "←"], cap: "Out of its stack, it gets a column of its own." },
+      { win: { D: R.c1, A: R.c2t, B: R.c2b, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "←"], cap: "On its own, one press takes it past a whole stack." },
+      { win: { A: R.c1t, B: R.c1b, D: R.c2, C: R.c3 }, focus: "D", keys: ["⇧", "Left ⌘", "→"], cap: "Past it, never into it, so nothing gets squeezed." },
+      { win: four, focus: "D", keys: ["⇧", "Left ⌘", "→"], cap: "With a column too many, it stacks beneath its neighbor: the grid again." },
+      { win: { A: R.gTL, B: R.gBL, D: R.gTR, C: R.gBR }, focus: "D", keys: ["⇧", "Left ⌘", "↑"], cap: "↑ and ↓ swap places in a stack." },
+    ]},
+    { title: "Resize & Tidy", hint: "⇧ + left ⌘ + plus, minus, 0", steps: [
+      { win: four, focus: "B", keys: [], cap: "Give the focused window more room when it needs it." },
+      { win: { A: [1.5, 2, 55.75, 39.25], B: [1.5, 44.75, 55.75, 53.25], C: [60.25, 2, 38.25, 47.25], D: [60.25, 50.75, 38.25, 47.25] }, focus: "B", keys: ["⇧", "Left ⌘", "+"], cap: "It grows, and its neighbors make space." },
+      { win: { A: [1.5, 2, 63.75, 31.25], B: [1.5, 36.75, 63.75, 61.25], C: [68.25, 2, 30.25, 47.25], D: [68.25, 50.75, 30.25, 47.25] }, focus: "B", keys: ["⇧", "Left ⌘", "+"], cap: "A bit more. Minus gives some back." },
+      { win: four, focus: "B", keys: ["⇧", "Left ⌘", "0"], cap: "Tidy puts every split back to even." },
+    ]},
+    { title: "Focus", hint: "⇧ + left ⌘ + F", steps: [
+      { win: four, focus: "A", keys: [], cap: "Need to concentrate on one window?" },
+      { win: { A: R.single, B: shelf(R.s1), C: shelf(R.s2), D: shelf(R.s3) }, focus: "A", keys: ["⇧", "Left ⌘", "F"], cap: "It takes the center. The rest wait on the Shelf, tilted out of the way." },
+      { win: { B: R.single, A: shelf(R.s1), C: shelf(R.s2), D: shelf(R.s3) }, focus: "B", keys: [], cap: "Click a card on the Shelf and it swaps into the center." },
+      { win: four, focus: "B", keys: ["⇧", "Left ⌘", "F"], cap: "⇧⌘F again brings everything back, each window in its tile." },
+    ]},
+    { title: "Workspaces", hint: "left ⌘ + 1, 2, 3", steps: [
+      { win: four, focus: "C", space: 1, keys: [], cap: "Three Workspaces to start, on left ⌘ and a number." },
+      { win: { A: away(R.gTL), B: away(R.gBL), C: away(R.gTR), D: away(R.gBR), E: R.single }, focus: "E", space: 2, keys: ["Left ⌘", "2"], cap: "Left ⌘ 2 switches instantly. No slide, no wait." },
+      { win: four, focus: "C", space: 1, keys: ["Left ⌘", "1"], cap: "Left ⌘ 1 and you're back." },
+      { win: { A: away(R.gTL), B: away(R.gBL), D: away(R.gBR), E: R.halfL, C: R.halfR }, focus: "C", space: 2, keys: ["⇧", "Left ⌘", "2"], cap: "Add ⇧ and the window comes with you." },
+      { win: { A: away(R.gTL), B: away(R.gBL), D: away(R.gBR), E: R.single }, focus: "E", space: 2, keys: ["⇧", "Left ⌘", "H"], cap: "Hide (⇧⌘H) tucks a window out of sight, still open. Summon brings it back." },
+    ]},
+    { title: "Summon tricks", hint: "⇧ then Space", steps: [
+      { win: four, focus: "B", keys: ["B", "R", "O"], launcher: { q: "bro", rows: browserRows, sel: 0 }, cap: "An app that's already open offers two choices, and its windows by name." },
+      { win: { A: R.c1t, B: R.c1b, F: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: ["⇧", "↩"], cap: "↩ goes to its window. ⇧↩ opens a new one, tiled and focused." },
+      { win: { A: R.c1t, B: R.c1b, F: R.c2, C: R.c3t, D: R.c3b }, focus: "F", keys: [], launcher: { q: "best desk lamp", rows: webRows, sel: 0 }, cap: "No match? It searches the web in your browser, as a tab in this Workspace." },
+    ]},
+    { title: "Cheat Sheet", hint: "⇧ + left ⌘ + Space", steps: [
+      { win: four, focus: "C", keys: [], cap: "Forget a shortcut? There's one to show them all." },
+      { win: four, focus: "C", keys: ["⇧", "Left ⌘", "Space"], help: { q: "" }, cap: "The Cheat Sheet: every shortcut, grouped." },
+      { win: four, focus: "C", keys: ["T", "U", "C", "K"], help: { q: "tuck" }, cap: "Search in your own words. “tuck” finds Hide." },
+      { win: four, focus: "C", keys: ["Esc"], cap: "Esc to close. Back to work." },
+    ]},
+  ];
+
+  // Walkthrough player
+  const walk = buildMac(document.getElementById("walk-mac"));
+  const list = document.getElementById("chapters");
+  const keysEl = document.getElementById("keys");
+  const capEl = document.getElementById("caption");
+  const playBtn = document.getElementById("play");
+  const playIcon = document.getElementById("play-icon");
+  let ch = 0, st = 0, playing = !reduce, timer = null, walkVisible = false;
+  const STEP_MS = 2200;
+
+  CHAPTERS.forEach((c, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chapter"; b.setAttribute("role", "tab");
+    b.innerHTML = `<span class="ct">${c.title}</span><span class="ck">${c.hint}</span><span class="progress"><b></b></span>`;
+    b.addEventListener("click", () => { ch = i; st = 0; show(); schedule(); });
+    list.appendChild(b);
+  });
+
+  function show() {
+    const c = CHAPTERS[ch], s = c.steps[st];
+    apply(walk, s);
+    const on = list.children[ch];
+    if (list.scrollWidth > list.clientWidth + 1) {
+      const left = list.scrollLeft + on.getBoundingClientRect().left - list.getBoundingClientRect().left - (list.clientWidth - on.offsetWidth) / 2;
+      list.scrollTo({ left, behavior: reduce ? "auto" : "smooth" });
+    }
+    [...list.children].forEach((b, i) => {
+      b.classList.toggle("on", i === ch);
+      b.setAttribute("aria-selected", i === ch);
+      const bar = b.querySelector(".progress b");
+      bar.style.transition = "none";
+      bar.style.width = i === ch ? ((st / c.steps.length) * 100) + "%" : "0";
+      if (i === ch && playing) requestAnimationFrame(() => { bar.style.transition = `width ${STEP_MS}ms linear`; bar.style.width = (((st + 1) / c.steps.length) * 100) + "%"; });
+    });
+    // Letters being typed sit side by side; shortcuts are joined with +.
+    keysEl.innerHTML = /^[A-Z]$/.test(s.keys[0] || "") ? s.keys.map((k) => `<span class="kc big">${k}</span>`).join("") : keyHTML(s.keys);
+    capEl.textContent = s.cap;
+    if (!reduce) {
+      const caps = keysEl.querySelectorAll(".kc");
+      caps.forEach((k, i) => setTimeout(() => k.classList.add("press"), 120 + i * 90));
+      setTimeout(() => caps.forEach((k) => k.classList.remove("press")), 700 + caps.length * 90);
+    }
+  }
+  function advance(d = 1) {
+    const c = CHAPTERS[ch];
+    st += d;
+    if (st >= c.steps.length) { st = 0; ch = (ch + 1) % CHAPTERS.length; }
+    if (st < 0) { ch = (ch - 1 + CHAPTERS.length) % CHAPTERS.length; st = CHAPTERS[ch].steps.length - 1; }
+    show();
+  }
+  function schedule() {
+    clearInterval(timer);
+    if (playing) timer = setInterval(() => { if (walkVisible) advance(1); }, STEP_MS);
+  }
+  document.getElementById("next").addEventListener("click", () => { advance(1); schedule(); });
+  document.getElementById("prev").addEventListener("click", () => { advance(-1); schedule(); });
+  playBtn.addEventListener("click", () => {
+    playing = !playing;
+    playBtn.setAttribute("aria-label", playing ? "Pause" : "Play");
+    playIcon.setAttribute("d", playing ? "M5 3v10M11 3v10" : "M5 3l8 5-8 5z");
+    show(); schedule();
+  });
+  if (!playing) { playBtn.setAttribute("aria-label", "Play"); playIcon.setAttribute("d", "M5 3l8 5-8 5z"); }
+  new IntersectionObserver(([e]) => { walkVisible = e.isIntersecting; }, { threshold: 0.35 }).observe(walk.root);
+  show(); schedule();
+})();
+</script>
+</body>
+</html>

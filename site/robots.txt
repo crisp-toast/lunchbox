@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /api/
+Disallow: /thanks.html
+Disallow: /activate.html
+
+Sitemap: https://lunchboxwm.com/sitemap.xml

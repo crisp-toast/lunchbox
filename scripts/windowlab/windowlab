@@ -1,0 +1,3 @@
+#!/bin/bash
+# windowlab <command>: sends a command to WindowLab (see WindowLab.swift).
+osascript -l JavaScript -e "ObjC.import('Foundation'); \$.NSDistributedNotificationCenter.defaultCenter.postNotificationNameObjectUserInfoDeliverImmediately('com.sentientdonut.windowlab', '$1', \$(), true)" >/dev/null

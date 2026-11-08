@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="64 64 896 896" role="img" aria-label="LunchboxWM">
+  <defs>
+    <linearGradient id="lb-box" x1="0.3" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#c9ced5"/><stop offset="0.3" stop-color="#b3b9c2"/><stop offset="0.55" stop-color="#9aa1ac"/><stop offset="0.8" stop-color="#aab0b9"/><stop offset="1" stop-color="#848c98"/>
+    </linearGradient>
+    <linearGradient id="lb-sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.3"/><stop offset="0.22" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="lb-lip" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6f7782"/><stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+    <linearGradient id="lb-tray" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1c1f24"/><stop offset="1" stop-color="#353a42"/>
+    </linearGradient>
+    <linearGradient id="lb-wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#000000" stop-opacity="0.42"/><stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="lb-shade-hi" gradientUnits="userSpaceOnUse" x1="0" y1="208" x2="0" y2="318">
+      <stop offset="0" stop-color="#000000" stop-opacity="0.34"/><stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="lb-shade-lo" gradientUnits="userSpaceOnUse" x1="0" y1="574" x2="0" y2="684">
+      <stop offset="0" stop-color="#000000" stop-opacity="0.34"/><stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="lb-lit" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/><stop offset="0.6" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#ffffff" stop-opacity="0.35"/>
+    </linearGradient>
+  </defs>
+  <!-- the box is the tile: a silver squircle -->
+  <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#lb-box)"/>
+  <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#lb-sheen)"/>
+  <rect x="68" y="68" width="888" height="888" rx="208" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="4"/>
+  <!-- the tray, pressed into the metal: its rim is shaded on top and lit below, and its dark walls are the dividers -->
+  <rect x="128" y="128" width="768" height="768" rx="148" fill="none" stroke="url(#lb-lip)" stroke-width="12"/>
+  <rect x="128" y="128" width="768" height="768" rx="148" fill="url(#lb-tray)"/>
+  <!-- three compartments: the layout LunchboxWM makes. Each is a bin: its far wall shows above its floor -->
+  <path d="M276 164 H438 A56 56 0 0 1 494 220 V804 A56 56 0 0 1 438 860 H276 A112 112 0 0 1 164 748 V276 A112 112 0 0 1 276 164 Z" fill="#c95a3c"/><path d="M276 164 H438 A56 56 0 0 1 494 220 V804 A56 56 0 0 1 438 860 H276 A112 112 0 0 1 164 748 V276 A112 112 0 0 1 276 164 Z" fill="url(#lb-wall)"/><path d="M276 208 H438 A42 42 0 0 1 480 250 V814 A42 42 0 0 1 438 856 H276 A98 98 0 0 1 178 758 V306 A98 98 0 0 1 276 208 Z" fill="#f57a5b"/><path d="M276 208 H438 A42 42 0 0 1 480 250 V814 A42 42 0 0 1 438 856 H276 A98 98 0 0 1 178 758 V306 A98 98 0 0 1 276 208 Z" fill="url(#lb-shade-hi)"/><path d="M276 164 H438 A56 56 0 0 1 494 220 V804 A56 56 0 0 1 438 860 H276 A112 112 0 0 1 164 748 V276 A112 112 0 0 1 276 164 Z" fill="none" stroke="url(#lb-lit)" stroke-width="4"/>
+  <path d="M586 164 H748 A112 112 0 0 1 860 276 V438 A56 56 0 0 1 804 494 H586 A56 56 0 0 1 530 438 V220 A56 56 0 0 1 586 164 Z" fill="#16a27a"/><path d="M586 164 H748 A112 112 0 0 1 860 276 V438 A56 56 0 0 1 804 494 H586 A56 56 0 0 1 530 438 V220 A56 56 0 0 1 586 164 Z" fill="url(#lb-wall)"/><path d="M586 208 H748 A98 98 0 0 1 846 306 V448 A42 42 0 0 1 804 490 H586 A42 42 0 0 1 544 448 V250 A42 42 0 0 1 586 208 Z" fill="#2bdea8"/><path d="M586 208 H748 A98 98 0 0 1 846 306 V448 A42 42 0 0 1 804 490 H586 A42 42 0 0 1 544 448 V250 A42 42 0 0 1 586 208 Z" fill="url(#lb-shade-hi)"/><path d="M586 164 H748 A112 112 0 0 1 860 276 V438 A56 56 0 0 1 804 494 H586 A56 56 0 0 1 530 438 V220 A56 56 0 0 1 586 164 Z" fill="none" stroke="url(#lb-lit)" stroke-width="4"/>
+  <path d="M586 530 H804 A56 56 0 0 1 860 586 V748 A112 112 0 0 1 748 860 H586 A56 56 0 0 1 530 804 V586 A56 56 0 0 1 586 530 Z" fill="#cc8d14"/><path d="M586 530 H804 A56 56 0 0 1 860 586 V748 A112 112 0 0 1 748 860 H586 A56 56 0 0 1 530 804 V586 A56 56 0 0 1 586 530 Z" fill="url(#lb-wall)"/><path d="M586 574 H804 A42 42 0 0 1 846 616 V758 A98 98 0 0 1 748 856 H586 A42 42 0 0 1 544 814 V616 A42 42 0 0 1 586 574 Z" fill="#fabb3d"/><path d="M586 574 H804 A42 42 0 0 1 846 616 V758 A98 98 0 0 1 748 856 H586 A42 42 0 0 1 544 814 V616 A42 42 0 0 1 586 574 Z" fill="url(#lb-shade-lo)"/><path d="M586 530 H804 A56 56 0 0 1 860 586 V748 A112 112 0 0 1 748 860 H586 A56 56 0 0 1 530 804 V586 A56 56 0 0 1 586 530 Z" fill="none" stroke="url(#lb-lit)" stroke-width="4"/>
+  <!-- the box's outer edge -->
+  <rect x="65.5" y="65.5" width="893" height="893" rx="210.5" fill="none" stroke="#4a525d" stroke-opacity="0.55" stroke-width="3"/>
+</svg>

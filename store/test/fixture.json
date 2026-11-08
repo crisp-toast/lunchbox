@@ -1,0 +1,14 @@
+{
+  "note": "TEST ONLY key pair: signs fixtures for the Swift and JS tests. Never used for real licenses.",
+  "privateJwk": {
+    "crv": "Ed25519",
+    "d": "ch7nXId1rMLZaR_1Ubtpew9wp50GVYOoyvSDFLW56yY",
+    "x": "in2Zr-hRDI2Ij51LDXdO0gH7joQ8FzSkypconmxWCSc",
+    "kty": "OKP"
+  },
+  "publicKey": "in2Zr+hRDI2Ij51LDXdO0gH7joQ8FzSkypconmxWCSc=",
+  "license": "lunchbox1.eyJwIjoibHVuY2hib3giLCJlIjoiYnV5ZXJAZXhhbXBsZS5jb20iLCJvIjoiY3NfdGVzdF9hMUIyYzMiLCJ0IjoxNzkyMDAwMDAwfQ.dhZTnav90YEhLUodJHs3DH6sFsrp1rqt-bpaIWKDti_2e4-jDLOiruT2mKE6rpa0iyOpC81FsaJ0ylM0SOQwBQ",
+  "email": "buyer@example.com",
+  "order": "cs_test_a1B2c3",
+  "issued": 1792000000
+}

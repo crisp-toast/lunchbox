@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="logo.svg">
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="page.css">
+<title>Lost your LunchboxWM license?</title>
+<link rel="canonical" href="https://lunchboxwm.com/recover.html">
+</head>
+<body>
+<header class="top"><a class="brand" href="./"><img src="logo.svg" alt=""><span>Lunchbox<span class="wm">WM</span></span></a></header>
+<main>
+  <h1>Lost your license?</h1>
+  <p class="lede" id="on">Enter the email you bought Lunchbox with. We'll send every license for that address to that address.</p>
+  <p class="lede" id="off" hidden>Write to <a href="mailto:support@sentientdonut.com">support@sentientdonut.com</a> from the email you bought Lunchbox with, and say roughly when you bought it. We'll send your license back.</p>
+  <form class="card" id="form" method="post" action="api/recover">
+    <input type="email" name="email" id="address" required autocomplete="email" placeholder="you@example.com" aria-label="Email you bought Lunchbox with">
+    <div class="btns"><button class="btn dark" type="submit" id="send">Email My License</button></div>
+    <p class="note" id="result" role="status"></p>
+  </form>
+  <p class="note" id="stuck">Still stuck, or bought it with an address you no longer use? Write to <a href="mailto:support@sentientdonut.com">support@sentientdonut.com</a> with roughly when you bought it.</p>
+</main>
+<footer class="foot"><span>© 2026 Sentient Donut LLC</span><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="refunds.html">Refunds</a><a href="recover.html">Lost license</a><a href="mailto:support@sentientdonut.com">support@sentientdonut.com</a></footer>
+<script>
+const form = document.getElementById("form"), send = document.getElementById("send"), result = document.getElementById("result");
+// Until the store can send email, the page doesn't offer one: it points at support instead.
+const emailOff = () => { for (const id of ["on", "form", "stuck"]) document.getElementById(id).hidden = true; document.getElementById("off").hidden = false; };
+fetch("api/recover").then((r) => r.json()).then((d) => { if (d.email === false) emailOff(); }).catch(() => {});
+// After a send, the button waits a minute, so repeat clicks don't pile up emails.
+// The wait survives a reload; without storage it simply starts over.
+const label = send.textContent;
+const countdown = (until) => {
+  const left = Math.ceil((until - Date.now()) / 1000);
+  send.disabled = left > 0;
+  send.textContent = left > 0 ? `Email Again in ${left}s` : label;
+  if (left > 0) setTimeout(() => countdown(until), 1000);
+};
+try { countdown(Number(localStorage.getItem("recoverWaitUntil")) || 0); } catch {}
+const sent = "Done. We've emailed that address its license, or a note if it doesn't have one. Check your spam folder if nothing's there in a few minutes.";
+// Back from a no-JavaScript form post.
+if (location.search === "?sent") result.textContent = sent;
+if (location.search === "?bad") result.textContent = "That doesn't look like an email address. Check it and try again.";
+if (location.search === "?support") emailOff();
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  send.disabled = true; result.textContent = "Sending…";
+  try {
+    const r = await fetch("api/recover", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: document.getElementById("address").value }) });
+    if (r.ok && (await r.json()).status === "write-to-support") return emailOff();
+    if (r.ok) {
+      result.textContent = sent;
+      const until = Date.now() + 60_000;
+      try { localStorage.setItem("recoverWaitUntil", String(until)); } catch {}
+      return countdown(until);
+    }
+    result.textContent = r.status === 400
+      ? "That doesn't look like an email address. Check it and try again."
+      : "We couldn't send that just now. Try again in a moment, or write to support@sentientdonut.com.";
+  } catch {
+    result.textContent = "We couldn't reach the server. Try again in a moment.";
+  }
+  send.disabled = false;
+});
+</script>
+</body>
+</html>
